@@ -12,6 +12,8 @@
 | `02_Landeanalyse_Japan.md` | **Kernen.** Selve landeanalysen: nøgletal, kausalkæder, hvad rapporten skal handle om |
 | `03_Problemformulering.md` | Problemstilling, problemformulering, metodeafsnit |
 | `04_Analyse_udkast.md` | Selve analysen skrevet ud som sammenhængende tekst, klar til rapporten |
+| `Landeanalyse_Japan_lang.docx` | Analysen i Word, ca. 4,2 normalsider. Formateret efter vejledningens formalia |
+| `Landeanalyse_Japan_kort.docx` | Kort version i Word, 0,9 normalside — fylder 88 pct. af én side |
 | `Japan_noegletal_OECD.xlsx` | Datasættet. Tre faner: `Nøgletal`, `Vækstbidrag` (levende formler + konsistenskontrol), `Kildekritik` (huller, klikveje, forbehold) |
 
 ---
