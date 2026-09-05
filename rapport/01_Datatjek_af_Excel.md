@@ -52,57 +52,103 @@ diskrepans. Helt normalt.
 
 ---
 
-# Fire ting I skal rette eller være opmærksomme på
+---
 
-### 1. 2024 og 2025 er fremskrivninger, ikke facit — og de er formentlig forældede
+# Hvad jeg har ændret i arket
 
-Tallene ser ud til at stamme fra en OECD Economic Outlook-årgang fra omkring
-efteråret 2023 (BNP-vækst 1,0 pct. i 2024 og 1,2 pct. i 2025, inflation 2,6 og
-2,0 pct.). I den årgang var 2024 og 2025 **prognoser**.
+Filen hedder nu `Japan_noegletal_OECD.xlsx` og er bygget om til tre faner.
 
-Japans faktisk realiserede BNP-vækst i 2024 endte markant lavere end 1,0 pct. —
-tæt på nul. Skriver I i dag, står der altså en prognose i arket, hvor der findes
-et realiseret tal.
+### Fanen `Nøgletal`
+- Titel, kildeblok og notelinje øverst — med tomme felter til **årgang og link**,
+  som I selv skal udfylde. Uden dem kan censor ikke genfinde tallene.
+- Enhed på hver eneste række i højre kolonne, jf. lærebogens tommelfingerregler.
+- Årstal udvidet med **2026**.
+- **Orange celler = 2024 og 2025.** Det er de gamle prognosetal. De er ikke
+  slettet — I kan se, hvad der stod — men de er markeret, så de ikke bliver
+  brugt som facit ved en fejl.
+- **Gule celler = tomme felter, der skal udfyldes.** Kilden står i notekolonnen.
+- Nyt afsnit 4 med rækker til løn, valutakurs, rente og demografi.
 
-**Hvad I skal gøre:**
-- Slå den nyeste Economic Outlook op og hent 2024 og 2025 som realiserede tal.
-- Behold gerne 2026 (og evt. 2027) som prognose — men marker det tydeligt i
-  tabellen, fx med en lodret streg og en note: *"2026 er OECD's fremskrivning"*.
-- Skriv **hvilken årgang** I bruger, med udgivelsesdato. Det er et krav i
-  metodeafsnittet, at kilden kan genfindes.
+### Fanen `Vækstbidrag` — ny
+Konsistenstjekket er nu bygget ind som levende formler. Retter I et tal i
+`Nøgletal`, opdaterer bidragene, summen og kontrollen sig automatisk, og
+kontrolrækken lyser grønt (OK) eller rødt (TJEK).
 
-Det her er ikke en detalje. Hvis censor kan se, at I kalder en prognose for et
-resultat, går det ud over kildekritikken.
+Fanen beregner også nominel BNP-vækst og ændringen i gældskvoten side om side —
+det er kæde D — og den afledte reale disponible indkomst, som er belægget for
+reallønsfaldet i kæde B.
 
-### 2. Filnavnet er misvisende
+**Det betyder, at I har et automatisk alarmsystem:** hvis I kommer til at hente
+tal fra to forskellige årgange, holder regnestykket op med at gå op, og
+kontrolrækken skifter til TJEK.
 
-Filen hedder `Betalingsbalance.xlsx`, men betalingsbalancen er én række ud af 20.
-Arket indeholder en hel forsyningsbalance plus nøgletal. Døb det om til noget i
-retning af `Japan_noegletal_OECD.xlsx` — ellers roder I selv rundt i det om tre uger.
+### Fanen `Kildekritik` — ny
+Præcis navigation til hver manglende talserie, fem konkrete kildekritiske
+forbehold til metodeafsnittet, og de tal, jeg fandt ved søgning — tydeligt
+markeret som **ikke verificerede**.
 
-### 3. Der mangler tre talserier, som analysen ikke kan undvære
+---
 
-Lærebogens tabel 21.1 lister de nøgletal, en makroøkonomisk landeanalyse skal
-bygge på. I har dækket økonomisk vækst, arbejdsløshed, betalingsbalance,
-eksport/import, offentlige finanser og inflation. **I mangler løn og rente** —
-og dertil valutakursen, som er helt central, når forløbet handler om handel og
-konkurrenceevne.
+# Det jeg ikke kunne gøre — og hvorfor
 
-| Række I skal tilføje | Hvorfor den er nødvendig | Hvor |
+**Jeg kunne ikke hente de rigtige 2024- og 2025-tal.** Miljøet her blokerer for
+oecd.org, imf.org, worldbank.org, boj.or.jp og stat.go.jp — alle
+statistikkilderne. Jeg kunne kun søge, ikke åbne siderne.
+
+Og jeg vil ikke fylde tal i jeres ark, som jeg har samlet fra søgeresultater.
+Grunden er den samme, som gør arket godt i dag: **det hænger sammen, fordi alle
+tal kommer fra én tabel.** Hvis jeg havde hentet BNP-væksten ét sted,
+investeringerne et andet og eksporten et tredje, ville summen af vækstbidragene
+holde op med at ramme BNP-væksten — og så havde jeg ødelagt netop den egenskab,
+jeg roste arket for.
+
+## Til gengæld fandt søgningen noget, I skal bruge
+
+Jeg fandt følgende tal for Japans offentlige finanser i 2024:
+
+| | IMF | OECD (jeres ark) |
 |---|---|---|
-| **Nominel lønudvikling (pct.)** | Uden den kan I ikke dokumentere reallønsfaldet, som hele forbrugshistorien hviler på | OECD.Stat, "Average annual wages" / Japans Ministry of Health, Labour and Welfare |
-| **Valutakurs JPY/USD + effektiv kronekurs** | Yenens fald er selve konkurrenceevne-mekanismen i jeres analyse | Bank of Japan, eller OECD "Exchange rates" |
-| **Pengepolitisk rente + 10-årig statsobligationsrente** | Bærer hele gældsdiskussionen. Uden den kan I ikke vurdere risikoen ved 244 pct. gæld | Bank of Japan / OECD "Long-term interest rates" |
+| Offentlig gæld | ca. **237** pct. af BNP | ca. **245** pct. af BNP |
+| Offentligt underskud | ca. **2,5** pct. af BNP | ca. **4,4** pct. af BNP |
 
-Overvej også en række for **befolkningsudvikling eller arbejdsstyrke**, da den
-forklarer, hvorfor ledigheden kan være 2,4 pct. uden lønpres.
+Underskuddet er altså næsten **dobbelt så stort** i den ene opgørelse som i den
+anden. Begge er korrekte — de måler bare ikke det samme. Brutto- kontra
+nettogæld, og forskellige afgrænsninger af, hvad "den offentlige sektor" er.
 
-### 4. Formalia i selve arket
+**Det er guld værd til jeres metodeafsnit.** Vejledningen kræver, at I forholder
+jer kildekritisk, og eksempel 1 i `Metode_eksempler.docx` nævner netop, at
+nøgletal kan variere mellem kilder. Her har I et konkret, dokumenteret tilfælde
+fra jeres eget land — ikke en generisk sætning om, at man skal være kritisk.
 
-Lærebogens tommelfingerregler for tabeller: overskrift, enhed, kildehenvisning,
-evt. forklaringsnote. Arket mangler kildehenvisningen. Skriv nederst:
+Det er også et argument til diskussionen: bruttogælden på 245 pct. overdriver
+problemet, fordi staten selv ejer store finansielle aktiver, og Bank of Japan
+ejer en meget stor del af statsobligationerne.
 
-> Kilde: OECD, *Economic Outlook* nr. XX, [måned] [år], [link].
-> Note: Tal for 20XX og frem er OECD's fremskrivning.
+---
 
-Det skal med, hver gang tabellen optræder i rapporten — ikke bare én gang.
+# Hvad du selv skal hente — 20 minutter
+
+Alt står i fanen `Kildekritik` med klikvej. Det vigtigste først:
+
+1. **Hele forsyningsbalancen for 2024, 2025 og 2026** fra den nyeste OECD
+   Economic Outlook. Tag alle rækker fra **samme tabel** — det er hele pointen.
+   Landekapitlet for Japan hedder "Japan: Demand, output and prices".
+2. **10-årig statsobligationsrente** — bærer hele gældsdiskussionen.
+3. **Nominel løn og realløn** — så I kan dokumentere reallønsfaldet direkte i
+   stedet for at aflede det.
+4. **Effektiv valutakurs** fra Bank of Japan.
+
+Når afsnit 1-3 er udfyldt fra én årgang, skal kontrolrækken i fanen
+`Vækstbidrag` stå grøn hele vejen. Gør den ikke det, er der blandet kilder.
+
+## Det jeg fik indsat — men som skal verificeres
+
+| Række | Hvad | Kilde |
+|---|---|---|
+| 35 | Valutakurs JPY/USD 2021-2025: 109,8 · 131,5 · 140,5 · 151,5 · 149,6 | FRED, serie AEXJPUS |
+| 42 | Shunto-lønstigninger 2024 og 2025: ca. 5,1 og 5,3 pct. | Rengo |
+| 45 | BoJ's styringsrente: −0,10 pct. 2020-2023, 0,25 pct. ultimo 2024 | Bank of Japan |
+
+Valutakursrækken er værd at bemærke med det samme: **yennen svækkedes fra ca.
+110 til ca. 151 yen pr. dollar fra 2021 til 2024 — omkring 27 pct.** Det er
+selve motoren i kæde B og hele forudsætningen for problemstillingen.

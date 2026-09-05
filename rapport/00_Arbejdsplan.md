@@ -11,6 +11,7 @@
 | `01_Datatjek_af_Excel.md` | Kvalitetstjek af regnearket + hvad der skal rettes |
 | `02_Landeanalyse_Japan.md` | **Kernen.** Selve landeanalysen: nøgletal, kausalkæder, hvad rapporten skal handle om |
 | `03_Problemformulering.md` | Problemstilling, problemformulering, metodeafsnit |
+| `Japan_noegletal_OECD.xlsx` | Datasættet. Tre faner: `Nøgletal`, `Vækstbidrag` (levende formler + konsistenskontrol), `Kildekritik` (huller, klikveje, forbehold) |
 
 ---
 
@@ -24,7 +25,7 @@ tvinge analysen ind i en ramme, der ikke passer.
 | # | Trin | Status | Hvorfor her |
 |---|---|---|---|
 | 1 | **Landeanalysen i råform** | ✅ udkast findes | Vi skal vide, hvad historien er, før vi kan formulere spørgsmålet |
-| 2 | **Skaf de manglende talserier** | ⬜ næste | Løn, valutakurs og rente. Analysen kan ikke færdiggøres uden |
+| 2 | **Skaf de manglende talserier** | 🟡 delvist | Valutakurs, shunto og styringsrente er indsat (skal verificeres). Mangler: forsyningsbalancen 2024-26, 10-årig rente, løn, effektiv valutakurs. Se fanen `Kildekritik` |
 | 3 | **Lås problemstilling + problemformulering** | ⬜ udkast findes | Følger af trin 1. Alt andet hænger på den |
 | 4 | **Metodeafsnit, første udkast** | ⬜ | Skrives tidligt, redigeres løbende, færdiggøres til sidst |
 | 5 | **Redegørelsen** | ⬜ | Skrives *efter* analysen er tænkt færdig — så ved vi, hvad læseren skal vide på forhånd |
