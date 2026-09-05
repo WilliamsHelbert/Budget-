@@ -11,6 +11,7 @@
 | `01_Datatjek_af_Excel.md` | Kvalitetstjek af regnearket + hvad der skal rettes |
 | `02_Landeanalyse_Japan.md` | **Kernen.** Selve landeanalysen: nøgletal, kausalkæder, hvad rapporten skal handle om |
 | `03_Problemformulering.md` | Problemstilling, problemformulering, metodeafsnit |
+| `04_Analyse_udkast.md` | Selve analysen skrevet ud som sammenhængende tekst, klar til rapporten |
 | `Japan_noegletal_OECD.xlsx` | Datasættet. Tre faner: `Nøgletal`, `Vækstbidrag` (levende formler + konsistenskontrol), `Kildekritik` (huller, klikveje, forbehold) |
 
 ---
@@ -29,7 +30,7 @@ tvinge analysen ind i en ramme, der ikke passer.
 | 3 | **Lås problemstilling + problemformulering** | ⬜ udkast findes | Følger af trin 1. Alt andet hænger på den |
 | 4 | **Metodeafsnit, første udkast** | ⬜ | Skrives tidligt, redigeres løbende, færdiggøres til sidst |
 | 5 | **Redegørelsen** | ⬜ | Skrives *efter* analysen er tænkt færdig — så ved vi, hvad læseren skal vide på forhånd |
-| 6 | **Analysen** | ⬜ | Renskrivning af landeanalysen med figurer |
+| 6 | **Analysen** | 🟡 udkast findes | Se `04_Analyse_udkast.md`. Mangler kildehenvisninger og de tre figurer |
 | 7 | **Diskussion og vurdering** | ⬜ | |
 | 8 | **Konklusion** | ⬜ | Svar på problemformuleringens punkter, ét for ét |
 | 9 | **Indledningen** | ⬜ | Næstsidst. Nu ved vi, hvad vi indleder til |
