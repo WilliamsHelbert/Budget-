@@ -1,0 +1,300 @@
+<title>Shortbogen 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --ground:#eceeed; --surface:#fbfcfb; --surface-2:#f2f4f3;
+  --ink:#13181b; --ink-2:#3c484f; --muted:#6c787f; --rule:#d2d8d7; --rule-strong:#b6bfbe;
+  --short:#c9501f; --es:#2a78d6; --pos:#17724a; --neg:#a83a30; --flat:#8a9499;
+  --shadow:0 1px 2px rgba(19,24,27,.06), 0 8px 24px -16px rgba(19,24,27,.28);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --ground:#0e1214; --surface:#161b1e; --surface-2:#1c2225;
+  --ink:#e5e9e8; --ink-2:#a9b5bb; --muted:#7d8a91; --rule:#242c30; --rule-strong:#333e43;
+  --short:#e4713c; --es:#3987e5; --pos:#38a877; --neg:#e07068; --flat:#6d7a80;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0e1214; --surface:#161b1e; --surface-2:#1c2225;
+  --ink:#e5e9e8; --ink-2:#a9b5bb; --muted:#7d8a91; --rule:#242c30; --rule-strong:#333e43;
+  --short:#e4713c; --es:#3987e5; --pos:#38a877; --neg:#e07068; --flat:#6d7a80;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{margin:0; background:var(--ground); color:var(--ink);
+  font-family:"Source Serif 4",Georgia,serif; font-size:17px; line-height:1.6;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:900px; margin:0 auto; padding-inline:20px; padding-block:0 72px}
+h1{font-family:Archivo,"Helvetica Neue",Arial,sans-serif; font-size:clamp(1.9rem,5.5vw,2.9rem);
+  line-height:1.05; font-weight:700; letter-spacing:-.028em; margin:0; text-wrap:balance}
+h2{font-family:Archivo,sans-serif; font-size:1.15rem; font-weight:600; letter-spacing:-.012em; margin:0}
+.eyebrow{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:.66rem; font-weight:500;
+  letter-spacing:.17em; text-transform:uppercase; color:var(--muted)}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+.num{font-family:"JetBrains Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums; font-weight:500}
+.pos{color:var(--pos)} .neg{color:var(--neg)} .flat{color:var(--flat)}
+
+header{border-bottom:1px solid var(--rule-strong); padding-block:46px 0;
+  display:flex; flex-direction:column; gap:14px}
+.meta{display:flex; flex-wrap:wrap; border-top:1px solid var(--rule); margin-top:22px}
+.meta div{flex:1 1 118px; padding:13px 16px 16px 0; border-right:1px solid var(--rule)}
+.meta div:last-child{border-right:0}
+.meta dt{font-family:"JetBrains Mono",monospace; font-size:.6rem; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--muted); margin-bottom:5px}
+.meta dd{margin:0; font-family:Archivo,sans-serif; font-weight:600; font-size:1rem; letter-spacing:-.01em}
+
+section{padding-block:36px 0}
+.sechead{display:flex; align-items:baseline; gap:12px; border-bottom:1px solid var(--rule);
+  padding-bottom:8px; margin-bottom:0}
+.sechead h2{flex:1}
+
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse; width:100%; font-size:.83rem}
+table.mtab{min-width:520px}
+table.bog{min-width:700px}
+thead th{position:sticky; top:0; z-index:3; background:var(--ground);
+  font-family:Archivo,sans-serif; font-weight:600; font-size:.62rem; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--muted); text-align:right; padding:11px 9px 9px;
+  border-bottom:1px solid var(--rule-strong); white-space:nowrap}
+table.bog thead th:nth-child(-n+3){text-align:left}
+table.mtab thead th:first-child{text-align:left}
+td{padding:9px; border-bottom:1px solid var(--rule); text-align:right;
+  vertical-align:top; white-space:nowrap}
+table.bog td:nth-child(-n+3){text-align:left}
+td.sep, th.sep{border-left:1px solid var(--rule)}
+td.mnd{text-align:left; font-family:Archivo,sans-serif; font-weight:600}
+tr.sum td{border-top:2px solid var(--rule-strong); border-bottom:0;
+  font-weight:700; background:var(--surface-2)}
+td.big{font-size:1rem; font-weight:700}
+tbody tr:not(.msep):hover{background:var(--surface-2)}
+
+tr.msep td{padding:0; border-bottom:1px solid var(--rule-strong); background:var(--surface-2)}
+.ms{display:flex; align-items:baseline; gap:13px; padding:14px 9px 11px; flex-wrap:wrap}
+.mn{font-family:Archivo,sans-serif; font-weight:600; font-size:1.02rem; letter-spacing:-.01em}
+.mm{font-family:"JetBrains Mono",monospace; font-size:.69rem; color:var(--muted)}
+.mx{font-size:.69rem; color:var(--muted); flex:1}
+.mt{font-size:1.12rem; font-weight:700; letter-spacing:-.02em}
+.mt small{font-family:Archivo,sans-serif; font-weight:500; font-size:.6rem;
+  color:var(--muted); margin-left:4px}
+
+td.dd{font-weight:600}
+td.tid{font-weight:700; font-size:.9rem}
+.sw{display:block; font-family:"JetBrains Mono",monospace; font-size:.62rem;
+  color:var(--muted); font-weight:400; margin-top:2px; letter-spacing:-.02em}
+td.sd{color:var(--muted)}
+td.udf{text-align:left}
+.chip{display:inline-block; font-family:Archivo,sans-serif; font-size:.66rem; font-weight:600;
+  padding:2px 7px 3px; border:1px solid currentColor; border-radius:2px; line-height:1.3}
+.chip.t-nq{color:var(--short); border-style:dashed}
+.chip.t-es{color:var(--es); border-style:dashed}
+.chip.r-tp{color:var(--pos); background:color-mix(in srgb,var(--pos) 10%, transparent); border-color:transparent}
+.chip.r-sl{color:var(--neg); background:color-mix(in srgb,var(--neg) 10%, transparent); border-color:transparent}
+.chip.r-be{color:var(--flat); background:color-mix(in srgb,var(--flat) 14%, transparent); border-color:transparent}
+.bedot{display:inline-block; width:5px; height:5px; border-radius:50%;
+  background:var(--flat); margin-left:5px; vertical-align:middle}
+footer{margin-top:44px; border-top:1px solid var(--rule); padding-top:16px;
+  color:var(--muted); font-size:.78rem; font-family:Archivo,sans-serif}
+@media (max-width:560px){ body{font-size:16px} .ms{gap:7px 11px} .mx{flex:1 1 100%; order:3} }
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">EQ-konfluens · kun shorts · NQ</span>
+  <h1>Shortbogen 2026</h1>
+  <div class="meta">
+    <div><dt>Periode</dt><dd>1. jan – 11. sep</dd></div>
+    <div><dt>Vindue</dt><dd>15:30–16:30</dd></div>
+    <div><dt>Handler</dt><dd>117</dd></div>
+    <div><dt>Handelsdage</dt><dd>83</dd></div>
+    <div><dt>Resultat</dt><dd class="pos">+55,65 R</dd></div>
+  </div>
+</header>
+
+<section>
+  <div class="sechead"><h2>Måned for måned</h2></div>
+  <div class="tblwrap">
+    <table class="mtab">
+      <thead><tr><th>Måned</th><th>Handler</th><th>Dage</th>
+        <th class="sep">TP</th><th>SL</th><th>BE</th><th>R</th></tr></thead>
+      <tbody><tr><td class="mnd">Januar</td><td class="num">19</td><td class="num">14</td><td class="num sep">2</td><td class="num">10</td><td class="num">7</td><td class="num big neg">−9,23</td></tr>
+<tr><td class="mnd">Februar</td><td class="num">16</td><td class="num">11</td><td class="num sep">3</td><td class="num">6</td><td class="num">7</td><td class="num big pos">+9,07</td></tr>
+<tr><td class="mnd">Marts</td><td class="num">10</td><td class="num">5</td><td class="num sep">1</td><td class="num">4</td><td class="num">5</td><td class="num big neg">−2,48</td></tr>
+<tr><td class="mnd">April</td><td class="num">14</td><td class="num">12</td><td class="num sep">2</td><td class="num">4</td><td class="num">8</td><td class="num big pos">+7,03</td></tr>
+<tr><td class="mnd">Maj</td><td class="num">14</td><td class="num">9</td><td class="num sep">2</td><td class="num">1</td><td class="num">11</td><td class="num big pos">+14,75</td></tr>
+<tr><td class="mnd">Juni</td><td class="num">7</td><td class="num">6</td><td class="num sep">3</td><td class="num">2</td><td class="num">2</td><td class="num big pos">+16,52</td></tr>
+<tr><td class="mnd">Juli</td><td class="num">11</td><td class="num">9</td><td class="num sep">3</td><td class="num">4</td><td class="num">4</td><td class="num big pos">+10,72</td></tr>
+<tr><td class="mnd">August</td><td class="num">16</td><td class="num">11</td><td class="num sep">4</td><td class="num">6</td><td class="num">6</td><td class="num big pos">+14,95</td></tr>
+<tr><td class="mnd">September</td><td class="num">10</td><td class="num">6</td><td class="num sep">0</td><td class="num">2</td><td class="num">8</td><td class="num big neg">−5,70</td></tr>
+<tr class="sum"><td class="mnd">I alt</td><td class="num">117</td><td class="num">83</td><td class="num sep">20</td><td class="num">39</td><td class="num">58</td><td class="num big pos">+55,65</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="sechead"><h2>Alle handler</h2><span class="eyebrow">117 shorts</span></div>
+  <div class="tblwrap">
+    <table class="bog">
+      <thead><tr>
+        <th>Dato</th><th>Entry</th><th>Sweep</th>
+        <th>Indgang</th><th>Stop</th><th>Stop pts</th><th>Mål</th>
+        <th>Udfald</th><th>R</th>
+      </tr></thead>
+<tbody>
+<tr class="msep"><td colspan="9"><div class="ms"><span class="mn">Januar</span><span class="mm">19 handler · 14 dage</span><span class="mx mono">2 TP · 10 SL · 7 BE</span><span class="mt num neg">−9,23<small>R</small></span></div></td></tr>
+<tr><td class="dd mono">6/1<span class="sw">tir</span></td><td class="tid mono">16:09<span class="sw">16:10</span></td><td><span class="chip t-es">ES</span></td><td class="num">25738,50</td><td class="num">25766,75</td><td class="num sd">28,25</td><td class="num">25663,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">7/1<span class="sw">ons</span></td><td class="tid mono">15:32<span class="sw">15:33</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25780,75</td><td class="num">25810,75</td><td class="num sd">30,00</td><td class="num">25705,75</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−3,00</td></tr>
+<tr><td class="dd mono">8/1<span class="sw">tor</span></td><td class="tid mono">16:20<span class="sw">16:24</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25684,25</td><td class="num">25699,75</td><td class="num sd">15,50</td><td class="num">25609,25</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−1,55</td></tr>
+<tr><td class="dd mono">12/1<span class="sw">man</span></td><td class="tid mono">16:17<span class="sw">16:20</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25895,00</td><td class="num">25911,75</td><td class="num sd">16,75</td><td class="num">25820,00</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−1,68</td></tr>
+<tr><td class="dd mono">12/1<span class="sw">man</span></td><td class="tid mono">16:27<span class="sw">16:59</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25916,25</td><td class="num">25932,25</td><td class="num sd">16,00</td><td class="num">25841,25</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">13/1<span class="sw">tir</span></td><td class="tid mono">15:32<span class="sw">15:34</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25946,00</td><td class="num">25975,25</td><td class="num sd">29,25</td><td class="num">25871,00</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−2,92</td></tr>
+<tr><td class="dd mono">14/1<span class="sw">ons</span></td><td class="tid mono">16:27<span class="sw">16:31</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25658,50</td><td class="num">25669,50</td><td class="num sd">11,00</td><td class="num">25583,50</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">15/1<span class="sw">tor</span></td><td class="tid mono">15:30<span class="sw">15:44</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25913,50</td><td class="num">25949,00</td><td class="num sd">35,50</td><td class="num">25838,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">15/1<span class="sw">tor</span></td><td class="tid mono">16:27<span class="sw">16:30</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25871,00</td><td class="num">25899,50</td><td class="num sd">28,50</td><td class="num">25796,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">16/1<span class="sw">fre</span></td><td class="tid mono">15:33<span class="sw">15:36</span></td><td><span class="chip t-es">ES</span></td><td class="num">25839,25</td><td class="num">25876,50</td><td class="num sd">37,25</td><td class="num">25764,25</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−3,73</td></tr>
+<tr><td class="dd mono">19/1<span class="sw">man</span></td><td class="tid mono">15:31<span class="sw">15:52</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25282,00</td><td class="num">25297,00</td><td class="num sd">15,00</td><td class="num">25207,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">19/1<span class="sw">man</span></td><td class="tid mono">15:53<span class="sw">15:54</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25275,25</td><td class="num">25284,50</td><td class="num sd">9,25</td><td class="num">25200,25</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−0,93</td></tr>
+<tr><td class="dd mono">19/1<span class="sw">man</span></td><td class="tid mono">16:13<span class="sw">16:26</span></td><td><span class="chip t-es">ES</span></td><td class="num">25318,00</td><td class="num">25338,50</td><td class="num sd">20,50</td><td class="num">25243,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">21/1<span class="sw">ons</span></td><td class="tid mono">16:05<span class="sw">16:15</span></td><td><span class="chip t-es">ES</span></td><td class="num">25313,50</td><td class="num">25339,25</td><td class="num sd">25,75</td><td class="num">25238,50</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−2,58</td></tr>
+<tr><td class="dd mono">22/1<span class="sw">tor</span></td><td class="tid mono">15:34<span class="sw">15:48</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25666,50</td><td class="num">25698,00</td><td class="num sd">31,50</td><td class="num">25591,50</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">23/1<span class="sw">fre</span></td><td class="tid mono">15:38<span class="sw">15:41</span></td><td><span class="chip t-es">ES</span></td><td class="num">25577,50</td><td class="num">25615,25</td><td class="num sd">37,75</td><td class="num">25502,50</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−3,77</td></tr>
+<tr><td class="dd mono">27/1<span class="sw">tir</span></td><td class="tid mono">15:30<span class="sw">15:31</span></td><td><span class="chip t-es">ES</span></td><td class="num">25971,75</td><td class="num">26001,25</td><td class="num sd">29,50</td><td class="num">25896,75</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−2,95</td></tr>
+<tr><td class="dd mono">28/1<span class="sw">ons</span></td><td class="tid mono">16:00<span class="sw">16:02</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">26258,25</td><td class="num">26277,00</td><td class="num sd">18,75</td><td class="num">26183,25</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">28/1<span class="sw">ons</span></td><td class="tid mono">16:05<span class="sw">16:06</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">26251,00</td><td class="num">26262,25</td><td class="num sd">11,25</td><td class="num">26176,00</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−1,12</td></tr>
+</tbody>
+<tbody>
+<tr class="msep"><td colspan="9"><div class="ms"><span class="mn">Februar</span><span class="mm">16 handler · 11 dage</span><span class="mx mono">3 TP · 6 SL · 7 BE</span><span class="mt num pos">+9,07<small>R</small></span></div></td></tr>
+<tr><td class="dd mono">2/2<span class="sw">man</span></td><td class="tid mono">15:57<span class="sw">16:00</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25759,25</td><td class="num">25780,25</td><td class="num sd">21,00</td><td class="num">25684,25</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">2/2<span class="sw">man</span></td><td class="tid mono">16:21<span class="sw">16:37</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25890,50</td><td class="num">25912,25</td><td class="num sd">21,75</td><td class="num">25815,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">4/2<span class="sw">ons</span></td><td class="tid mono">16:17<span class="sw">16:20</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25195,25</td><td class="num">25231,75</td><td class="num sd">36,50</td><td class="num">25120,25</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−3,65</td></tr>
+<tr><td class="dd mono">10/2<span class="sw">tir</span></td><td class="tid mono">16:00<span class="sw">16:02</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25388,50</td><td class="num">25406,75</td><td class="num sd">18,25</td><td class="num">25313,50</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−1,82</td></tr>
+<tr><td class="dd mono">10/2<span class="sw">tir</span></td><td class="tid mono">16:29<span class="sw">16:30</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25403,25</td><td class="num">25416,75</td><td class="num sd">13,50</td><td class="num">25328,25</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−1,35</td></tr>
+<tr><td class="dd mono">16/2<span class="sw">man</span></td><td class="tid mono">15:35<span class="sw">15:38</span></td><td><span class="chip t-es">ES</span></td><td class="num">24755,50</td><td class="num">24776,50</td><td class="num sd">21,00</td><td class="num">24680,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">16/2<span class="sw">man</span></td><td class="tid mono">15:40<span class="sw">15:50</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">24736,50</td><td class="num">24755,75</td><td class="num sd">19,25</td><td class="num">24661,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">16/2<span class="sw">man</span></td><td class="tid mono">16:20<span class="sw">17:10</span></td><td><span class="chip t-es">ES</span></td><td class="num">24744,00</td><td class="num">24771,00</td><td class="num sd">27,00</td><td class="num">24669,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">17/2<span class="sw">tir</span></td><td class="tid mono">15:42<span class="sw">15:44</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">24781,25</td><td class="num">24810,00</td><td class="num sd">28,75</td><td class="num">24706,25</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">18/2<span class="sw">ons</span></td><td class="tid mono">16:12<span class="sw">16:12</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25009,75</td><td class="num">25027,75</td><td class="num sd">18,00</td><td class="num">24934,75</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−1,80</td></tr>
+<tr><td class="dd mono">18/2<span class="sw">ons</span></td><td class="tid mono">16:24<span class="sw">16:25</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25048,75</td><td class="num">25066,25</td><td class="num sd">17,50</td><td class="num">24973,75</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">19/2<span class="sw">tor</span></td><td class="tid mono">15:33<span class="sw">15:36</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">24838,50</td><td class="num">24876,25</td><td class="num sd">37,75</td><td class="num">24763,50</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">24/2<span class="sw">tir</span></td><td class="tid mono">15:54<span class="sw">16:00</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">24912,50</td><td class="num">24934,75</td><td class="num sd">22,25</td><td class="num">24837,50</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">25/2<span class="sw">ons</span></td><td class="tid mono">15:56<span class="sw">15:57</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25325,75</td><td class="num">25340,75</td><td class="num sd">15,00</td><td class="num">25250,75</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">26/2<span class="sw">tor</span></td><td class="tid mono">15:49<span class="sw">15:50</span></td><td><span class="chip t-es">ES</span></td><td class="num">25215,25</td><td class="num">25245,00</td><td class="num sd">29,75</td><td class="num">25140,25</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−2,98</td></tr>
+<tr><td class="dd mono">27/2<span class="sw">fre</span></td><td class="tid mono">16:22<span class="sw">16:23</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">24955,25</td><td class="num">24973,50</td><td class="num sd">18,25</td><td class="num">24880,25</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−1,82</td></tr>
+</tbody>
+<tbody>
+<tr class="msep"><td colspan="9"><div class="ms"><span class="mn">Marts</span><span class="mm">10 handler · 5 dage</span><span class="mx mono">1 TP · 4 SL · 5 BE</span><span class="mt num neg">−2,48<small>R</small></span></div></td></tr>
+<tr><td class="dd mono">2/3<span class="sw">man</span></td><td class="tid mono">16:15<span class="sw">16:17</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">24918,50</td><td class="num">24942,50</td><td class="num sd">24,00</td><td class="num">24843,50</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−2,40</td></tr>
+<tr><td class="dd mono">2/3<span class="sw">man</span></td><td class="tid mono">16:20<span class="sw">16:23</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">24915,00</td><td class="num">24946,00</td><td class="num sd">31,00</td><td class="num">24840,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">2/3<span class="sw">man</span></td><td class="tid mono">16:27<span class="sw">16:30</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">24895,50</td><td class="num">24920,50</td><td class="num sd">25,00</td><td class="num">24820,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">10/3<span class="sw">tir</span></td><td class="tid mono">14:52<span class="sw">14:58</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25025,25</td><td class="num">25045,00</td><td class="num sd">19,75</td><td class="num">24950,25</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">11/3<span class="sw">ons</span></td><td class="tid mono">14:47<span class="sw">14:47</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25068,00</td><td class="num">25087,25</td><td class="num sd">19,25</td><td class="num">24993,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">11/3<span class="sw">ons</span></td><td class="tid mono">14:49<span class="sw">14:53</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25046,50</td><td class="num">25075,25</td><td class="num sd">28,75</td><td class="num">24971,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">17/3<span class="sw">tir</span></td><td class="tid mono">14:58<span class="sw">15:00</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25080,75</td><td class="num">25098,00</td><td class="num sd">17,25</td><td class="num">25005,75</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−1,73</td></tr>
+<tr><td class="dd mono">17/3<span class="sw">tir</span></td><td class="tid mono">15:25<span class="sw">15:28</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25051,00</td><td class="num">25071,25</td><td class="num sd">20,25</td><td class="num">24976,00</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−2,02</td></tr>
+<tr><td class="dd mono">19/3<span class="sw">tor</span></td><td class="tid mono">14:36<span class="sw">14:36</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">24332,50</td><td class="num">24359,00</td><td class="num sd">26,50</td><td class="num">24257,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">19/3<span class="sw">tor</span></td><td class="tid mono">14:57<span class="sw">15:00</span></td><td><span class="chip t-es">ES</span></td><td class="num">24479,00</td><td class="num">24517,25</td><td class="num sd">38,25</td><td class="num">24404,00</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−3,83</td></tr>
+</tbody>
+<tbody>
+<tr class="msep"><td colspan="9"><div class="ms"><span class="mn">April</span><span class="mm">14 handler · 12 dage</span><span class="mx mono">2 TP · 4 SL · 8 BE</span><span class="mt num pos">+7,03<small>R</small></span></div></td></tr>
+<tr><td class="dd mono">2/4<span class="sw">tor</span></td><td class="tid mono">16:05<span class="sw">16:05</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">23876,25</td><td class="num">23891,75</td><td class="num sd">15,50</td><td class="num">23801,25</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">6/4<span class="sw">man</span></td><td class="tid mono">15:55<span class="sw">15:59</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">24375,50</td><td class="num">24403,00</td><td class="num sd">27,50</td><td class="num">24300,50</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−2,75</td></tr>
+<tr><td class="dd mono">7/4<span class="sw">tir</span></td><td class="tid mono">15:41<span class="sw">15:42</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">24204,25</td><td class="num">24232,50</td><td class="num sd">28,25</td><td class="num">24129,25</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">9/4<span class="sw">tor</span></td><td class="tid mono">15:48<span class="sw">16:16</span></td><td><span class="chip t-es">ES</span></td><td class="num">25069,00</td><td class="num">25092,75</td><td class="num sd">23,75</td><td class="num">24994,00</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">14/4<span class="sw">tir</span></td><td class="tid mono">15:58<span class="sw">16:05</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">25728,00</td><td class="num">25740,00</td><td class="num sd">12,00</td><td class="num">25653,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">17/4<span class="sw">fre</span></td><td class="tid mono">16:20<span class="sw">16:30</span></td><td><span class="chip t-es">ES</span></td><td class="num">26734,50</td><td class="num">26756,25</td><td class="num sd">21,75</td><td class="num">26659,50</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−2,17</td></tr>
+<tr><td class="dd mono">20/4<span class="sw">man</span></td><td class="tid mono">16:00<span class="sw">16:02</span></td><td><span class="chip t-es">ES</span></td><td class="num">26777,00</td><td class="num">26801,75</td><td class="num sd">24,75</td><td class="num">26702,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">21/4<span class="sw">tir</span></td><td class="tid mono">16:04<span class="sw">16:05</span></td><td><span class="chip t-es">ES</span></td><td class="num">26822,25</td><td class="num">26839,50</td><td class="num sd">17,25</td><td class="num">26747,25</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−1,73</td></tr>
+<tr><td class="dd mono">21/4<span class="sw">tir</span></td><td class="tid mono">16:19<span class="sw">16:19</span></td><td><span class="chip t-es">ES</span></td><td class="num">26854,50</td><td class="num">26875,00</td><td class="num sd">20,50</td><td class="num">26779,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">23/4<span class="sw">tor</span></td><td class="tid mono">15:34<span class="sw">15:35</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">27002,75</td><td class="num">27016,00</td><td class="num sd">13,25</td><td class="num">26927,75</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−1,32</td></tr>
+<tr><td class="dd mono">27/4<span class="sw">man</span></td><td class="tid mono">16:09<span class="sw">16:12</span></td><td><span class="chip t-es">ES</span></td><td class="num">27376,50</td><td class="num">27392,00</td><td class="num sd">15,50</td><td class="num">27301,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">27/4<span class="sw">man</span></td><td class="tid mono">16:17<span class="sw">16:35</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">27367,00</td><td class="num">27393,25</td><td class="num sd">26,25</td><td class="num">27292,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">28/4<span class="sw">tir</span></td><td class="tid mono">15:51<span class="sw">15:56</span></td><td><span class="chip t-es">ES</span></td><td class="num">27220,50</td><td class="num">27236,75</td><td class="num sd">16,25</td><td class="num">27145,50</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">29/4<span class="sw">ons</span></td><td class="tid mono">15:30<span class="sw">15:42</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">27197,50</td><td class="num">27220,00</td><td class="num sd">22,50</td><td class="num">27122,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+</tbody>
+<tbody>
+<tr class="msep"><td colspan="9"><div class="ms"><span class="mn">Maj</span><span class="mm">14 handler · 9 dage</span><span class="mx mono">2 TP · 1 SL · 11 BE</span><span class="mt num pos">+14,75<small>R</small></span></div></td></tr>
+<tr><td class="dd mono">1/5<span class="sw">fre</span></td><td class="tid mono">15:46<span class="sw">15:48</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">27768,00</td><td class="num">27790,75</td><td class="num sd">22,75</td><td class="num">27693,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">4/5<span class="sw">man</span></td><td class="tid mono">16:28<span class="sw">16:29</span></td><td><span class="chip t-es">ES</span></td><td class="num">27893,25</td><td class="num">27908,00</td><td class="num sd">14,75</td><td class="num">27818,25</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">5/5<span class="sw">tir</span></td><td class="tid mono">15:53<span class="sw">15:58</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">28093,50</td><td class="num">28110,00</td><td class="num sd">16,50</td><td class="num">28018,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">5/5<span class="sw">tir</span></td><td class="tid mono">16:12<span class="sw">16:18</span></td><td><span class="chip t-es">ES</span></td><td class="num">28085,00</td><td class="num">28109,25</td><td class="num sd">24,25</td><td class="num">28010,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">12/5<span class="sw">tir</span></td><td class="tid mono">16:21<span class="sw">16:28</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29199,75</td><td class="num">29228,25</td><td class="num sd">28,50</td><td class="num">29124,75</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">18/5<span class="sw">man</span></td><td class="tid mono">16:22<span class="sw">16:26</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29227,25</td><td class="num">29254,25</td><td class="num sd">27,00</td><td class="num">29152,25</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">21/5<span class="sw">tor</span></td><td class="tid mono">15:49<span class="sw">15:51</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29211,25</td><td class="num">29250,50</td><td class="num sd">39,25</td><td class="num">29136,25</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">21/5<span class="sw">tor</span></td><td class="tid mono">16:07<span class="sw">16:07</span></td><td><span class="chip t-es">ES</span></td><td class="num">29287,50</td><td class="num">29310,00</td><td class="num sd">22,50</td><td class="num">29212,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">21/5<span class="sw">tor</span></td><td class="tid mono">16:12<span class="sw">16:14</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29294,75</td><td class="num">29323,75</td><td class="num sd">29,00</td><td class="num">29219,75</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">25/5<span class="sw">man</span></td><td class="tid mono">15:54<span class="sw">15:54</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29984,00</td><td class="num">29986,50</td><td class="num sd">2,50</td><td class="num">29909,00</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−0,25</td></tr>
+<tr><td class="dd mono">25/5<span class="sw">man</span></td><td class="tid mono">16:11<span class="sw">17:10</span></td><td><span class="chip t-es">ES</span></td><td class="num">29961,75</td><td class="num">29986,00</td><td class="num sd">24,25</td><td class="num">29886,75</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">28/5<span class="sw">tor</span></td><td class="tid mono">15:32<span class="sw">15:35</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">30072,25</td><td class="num">30112,00</td><td class="num sd">39,75</td><td class="num">29997,25</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">29/5<span class="sw">fre</span></td><td class="tid mono">16:05<span class="sw">16:06</span></td><td><span class="chip t-es">ES</span></td><td class="num">30506,00</td><td class="num">30534,75</td><td class="num sd">28,75</td><td class="num">30431,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">29/5<span class="sw">fre</span></td><td class="tid mono">16:08<span class="sw">16:12</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">30499,50</td><td class="num">30519,75</td><td class="num sd">20,25</td><td class="num">30424,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+</tbody>
+<tbody>
+<tr class="msep"><td colspan="9"><div class="ms"><span class="mn">Juni</span><span class="mm">7 handler · 6 dage</span><span class="mx mono">3 TP · 2 SL · 2 BE</span><span class="mt num pos">+16,52<small>R</small></span></div></td></tr>
+<tr><td class="dd mono">1/6<span class="sw">man</span></td><td class="tid mono">15:49<span class="sw">15:55</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">30438,50</td><td class="num">30465,50</td><td class="num sd">27,00</td><td class="num">30363,50</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">2/6<span class="sw">tir</span></td><td class="tid mono">16:22<span class="sw">16:34</span></td><td><span class="chip t-es">ES</span></td><td class="num">30604,75</td><td class="num">30629,00</td><td class="num sd">24,25</td><td class="num">30529,75</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">4/6<span class="sw">tor</span></td><td class="tid mono">16:20<span class="sw">16:21</span></td><td><span class="chip t-es">ES</span></td><td class="num">30260,00</td><td class="num">30285,75</td><td class="num sd">25,75</td><td class="num">30185,00</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−2,58</td></tr>
+<tr><td class="dd mono">16/6<span class="sw">tir</span></td><td class="tid mono">15:45<span class="sw">15:46</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">30816,00</td><td class="num">30850,00</td><td class="num sd">34,00</td><td class="num">30741,00</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−3,40</td></tr>
+<tr><td class="dd mono">17/6<span class="sw">ons</span></td><td class="tid mono">15:38<span class="sw">15:40</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">30437,00</td><td class="num">30474,25</td><td class="num sd">37,25</td><td class="num">30362,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">17/6<span class="sw">ons</span></td><td class="tid mono">15:56<span class="sw">15:57</span></td><td><span class="chip t-es">ES</span></td><td class="num">30438,50</td><td class="num">30477,50</td><td class="num sd">39,00</td><td class="num">30363,50</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">22/6<span class="sw">man</span></td><td class="tid mono">16:12<span class="sw">16:20</span></td><td><span class="chip t-es">ES</span></td><td class="num">30922,00</td><td class="num">30957,00</td><td class="num sd">35,00</td><td class="num">30847,00</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+</tbody>
+<tbody>
+<tr class="msep"><td colspan="9"><div class="ms"><span class="mn">Juli</span><span class="mm">11 handler · 9 dage</span><span class="mx mono">3 TP · 4 SL · 4 BE</span><span class="mt num pos">+10,72<small>R</small></span></div></td></tr>
+<tr><td class="dd mono">7/7<span class="sw">tir</span></td><td class="tid mono">15:50<span class="sw">15:51</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29510,00</td><td class="num">29550,00</td><td class="num sd">40,00</td><td class="num">29435,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">8/7<span class="sw">ons</span></td><td class="tid mono">16:07<span class="sw">16:15</span></td><td><span class="chip t-es">ES</span></td><td class="num">29310,25</td><td class="num">29348,00</td><td class="num sd">37,75</td><td class="num">29235,25</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">9/7<span class="sw">tor</span></td><td class="tid mono">16:03<span class="sw">16:03</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29896,25</td><td class="num">29913,50</td><td class="num sd">17,25</td><td class="num">29821,25</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−1,73</td></tr>
+<tr><td class="dd mono">9/7<span class="sw">tor</span></td><td class="tid mono">16:05<span class="sw">16:10</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29904,25</td><td class="num">29922,25</td><td class="num sd">18,00</td><td class="num">29829,25</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">14/7<span class="sw">tir</span></td><td class="tid mono">15:33<span class="sw">15:35</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29731,75</td><td class="num">29771,50</td><td class="num sd">39,75</td><td class="num">29656,75</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">14/7<span class="sw">tir</span></td><td class="tid mono">16:25<span class="sw">16:26</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29666,00</td><td class="num">29698,75</td><td class="num sd">32,75</td><td class="num">29591,00</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−3,27</td></tr>
+<tr><td class="dd mono">16/7<span class="sw">tor</span></td><td class="tid mono">16:18<span class="sw">16:19</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29463,25</td><td class="num">29493,50</td><td class="num sd">30,25</td><td class="num">29388,25</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">22/7<span class="sw">ons</span></td><td class="tid mono">15:48<span class="sw">15:51</span></td><td><span class="chip t-es">ES</span></td><td class="num">29164,50</td><td class="num">29204,00</td><td class="num sd">39,50</td><td class="num">29089,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">23/7<span class="sw">tor</span></td><td class="tid mono">16:27<span class="sw">16:28</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">28700,50</td><td class="num">28737,25</td><td class="num sd">36,75</td><td class="num">28625,50</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−3,67</td></tr>
+<tr><td class="dd mono">27/7<span class="sw">man</span></td><td class="tid mono">15:30<span class="sw">15:33</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">28575,25</td><td class="num">28609,00</td><td class="num sd">33,75</td><td class="num">28500,25</td><td class="udf"><span class="chip r-tp">TP</span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">29/7<span class="sw">ons</span></td><td class="tid mono">15:43<span class="sw">15:44</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">27874,00</td><td class="num">27905,00</td><td class="num sd">31,00</td><td class="num">27799,00</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−3,10</td></tr>
+</tbody>
+<tbody>
+<tr class="msep"><td colspan="9"><div class="ms"><span class="mn">August</span><span class="mm">16 handler · 11 dage</span><span class="mx mono">4 TP · 6 SL · 6 BE</span><span class="mt num pos">+14,95<small>R</small></span></div></td></tr>
+<tr><td class="dd mono">7/8<span class="sw">fre</span></td><td class="tid mono">15:42<span class="sw">15:43</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29720,50</td><td class="num">29754,50</td><td class="num sd">34,00</td><td class="num">29645,50</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−3,40</td></tr>
+<tr><td class="dd mono">12/8<span class="sw">ons</span></td><td class="tid mono">16:03<span class="sw">16:05</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29879,00</td><td class="num">29903,25</td><td class="num sd">24,25</td><td class="num">29804,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">13/8<span class="sw">tor</span></td><td class="tid mono">16:00<span class="sw">16:00</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">30162,75</td><td class="num">30180,75</td><td class="num sd">18,00</td><td class="num">30087,75</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−1,80</td></tr>
+<tr><td class="dd mono">13/8<span class="sw">tor</span></td><td class="tid mono">16:07<span class="sw">16:09</span></td><td><span class="chip t-es">ES</span></td><td class="num">30163,25</td><td class="num">30183,50</td><td class="num sd">20,25</td><td class="num">30088,25</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−2,02</td></tr>
+<tr><td class="dd mono">14/8<span class="sw">fre</span></td><td class="tid mono">15:56<span class="sw">16:02</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">30236,50</td><td class="num">30254,00</td><td class="num sd">17,50</td><td class="num">30161,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">14/8<span class="sw">fre</span></td><td class="tid mono">16:09<span class="sw">16:12</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">30242,75</td><td class="num">30262,50</td><td class="num sd">19,75</td><td class="num">30167,75</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">14/8<span class="sw">fre</span></td><td class="tid mono">16:16<span class="sw">16:28</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">30214,25</td><td class="num">30241,50</td><td class="num sd">27,25</td><td class="num">30139,25</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">17/8<span class="sw">man</span></td><td class="tid mono">15:32<span class="sw">15:33</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">30239,00</td><td class="num">30266,00</td><td class="num sd">27,00</td><td class="num">30164,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">18/8<span class="sw">tir</span></td><td class="tid mono">16:22<span class="sw">16:24</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29606,75</td><td class="num">29645,50</td><td class="num sd">38,75</td><td class="num">29531,75</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−3,88</td></tr>
+<tr><td class="dd mono">20/8<span class="sw">tor</span></td><td class="tid mono">15:45<span class="sw">15:49</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29426,00</td><td class="num">29457,00</td><td class="num sd">31,00</td><td class="num">29351,00</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">25/8<span class="sw">tir</span></td><td class="tid mono">15:30<span class="sw">15:30</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29292,00</td><td class="num">29312,50</td><td class="num sd">20,50</td><td class="num">29217,00</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−2,05</td></tr>
+<tr><td class="dd mono">25/8<span class="sw">tir</span></td><td class="tid mono">15:50<span class="sw">15:56</span></td><td><span class="chip t-es">ES</span></td><td class="num">29379,00</td><td class="num">29414,75</td><td class="num sd">35,75</td><td class="num">29304,00</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">26/8<span class="sw">ons</span></td><td class="tid mono">16:08<span class="sw">16:21</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29292,00</td><td class="num">29310,00</td><td class="num sd">18,00</td><td class="num">29217,00</td><td class="udf"><span class="chip r-tp">TP</span><span class="bedot" title="break-even naaet"></span></td><td class="num big pos">+7,50</td></tr>
+<tr><td class="dd mono">27/8<span class="sw">tor</span></td><td class="tid mono">16:22<span class="sw">16:23</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29576,00</td><td class="num">29595,00</td><td class="num sd">19,00</td><td class="num">29501,00</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−1,90</td></tr>
+<tr><td class="dd mono">31/8<span class="sw">man</span></td><td class="tid mono">16:00<span class="sw">16:00</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29435,75</td><td class="num">29449,75</td><td class="num sd">14,00</td><td class="num">29360,75</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">31/8<span class="sw">man</span></td><td class="tid mono">16:01<span class="sw">16:18</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29424,75</td><td class="num">29447,75</td><td class="num sd">23,00</td><td class="num">29349,75</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+</tbody>
+<tbody>
+<tr class="msep"><td colspan="9"><div class="ms"><span class="mn">September</span><span class="mm">10 handler · 6 dage</span><span class="mx mono">0 TP · 2 SL · 8 BE</span><span class="mt num neg">−5,70<small>R</small></span></div></td></tr>
+<tr><td class="dd mono">1/9<span class="sw">tir</span></td><td class="tid mono">15:30<span class="sw">15:35</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29096,00</td><td class="num">29122,75</td><td class="num sd">26,75</td><td class="num">29021,00</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−2,67</td></tr>
+<tr><td class="dd mono">2/9<span class="sw">ons</span></td><td class="tid mono">15:36<span class="sw">15:37</span></td><td><span class="chip t-es">ES</span></td><td class="num">29059,00</td><td class="num">29090,50</td><td class="num sd">31,50</td><td class="num">28984,00</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">2/9<span class="sw">ons</span></td><td class="tid mono">15:49<span class="sw">15:51</span></td><td><span class="chip t-es">ES</span></td><td class="num">29043,75</td><td class="num">29082,50</td><td class="num sd">38,75</td><td class="num">28968,75</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">2/9<span class="sw">ons</span></td><td class="tid mono">15:55<span class="sw">15:55</span></td><td><span class="chip t-es">ES</span></td><td class="num">29029,75</td><td class="num">29063,75</td><td class="num sd">34,00</td><td class="num">28954,75</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">4/9<span class="sw">fre</span></td><td class="tid mono">15:41<span class="sw">15:43</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29614,25</td><td class="num">29641,00</td><td class="num sd">26,75</td><td class="num">29539,25</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">7/9<span class="sw">man</span></td><td class="tid mono">15:41<span class="sw">16:12</span></td><td><span class="chip t-es">ES</span></td><td class="num">29608,25</td><td class="num">29640,25</td><td class="num sd">32,00</td><td class="num">29533,25</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">7/9<span class="sw">man</span></td><td class="tid mono">16:12<span class="sw">16:20</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29611,25</td><td class="num">29619,75</td><td class="num sd">8,50</td><td class="num">29536,25</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">10/9<span class="sw">tor</span></td><td class="tid mono">16:15<span class="sw">16:18</span></td><td><span class="chip t-es">ES</span></td><td class="num">29135,50</td><td class="num">29168,50</td><td class="num sd">33,00</td><td class="num">29060,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">11/9<span class="sw">fre</span></td><td class="tid mono">15:40<span class="sw">15:40</span></td><td><span class="chip t-nq">NQ</span></td><td class="num">29392,50</td><td class="num">29413,75</td><td class="num sd">21,25</td><td class="num">29317,50</td><td class="udf"><span class="chip r-be">BE</span><span class="bedot" title="break-even naaet"></span></td><td class="num big flat">0,00</td></tr>
+<tr><td class="dd mono">11/9<span class="sw">fre</span></td><td class="tid mono">16:17<span class="sw">16:18</span></td><td><span class="chip t-es">ES</span></td><td class="num">29375,75</td><td class="num">29406,00</td><td class="num sd">30,25</td><td class="num">29300,75</td><td class="udf"><span class="chip r-sl">SL</span></td><td class="num big neg">−3,02</td></tr>
+</tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  1 R = 10 NQ-point · mål 75 point · stop på EQ-anchoren · dagsstop &minus;2,5 R / dagsmål +3,75 R ·
+  longs spærrer pladsen men handles ikke · 15s-barer fra NinjaTrader-ticks · 11. juni udeladt
+</footer>
+
+</div>

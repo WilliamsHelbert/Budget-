@@ -1,0 +1,276 @@
+<title>EQ-revision</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style id="css">
+:root{
+  color-scheme:light;
+  --ground:#e9ecec; --surface:#fbfcfb; --surface-2:#f2f4f4; --raise:#ffffff;
+  --ink:#13181b; --ink-2:#3f4b52; --muted:#6b777e;
+  --rule:#d4dad9; --rule-strong:#b3bcbb;
+  --es:#2a78d6; --nq:#d9561f; --ok:#16704a; --no:#a63a30; --flag:#8f6100;
+  --okbg:rgba(22,112,74,.12); --nobg:rgba(166,58,48,.12); --flagbg:rgba(143,97,0,.13);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --ground:#0d1113; --surface:#161b1e; --surface-2:#1b2124; --raise:#1f262a;
+  --ink:#e6eae9; --ink-2:#a7b3b9; --muted:#7c898f;
+  --rule:#242c30; --rule-strong:#364247;
+  --es:#4a90e8; --nq:#e2693a; --ok:#3aa87a; --no:#e0716a; --flag:#c99a2e;
+  --okbg:rgba(58,168,122,.16); --nobg:rgba(224,113,106,.16); --flagbg:rgba(201,154,46,.16);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0d1113; --surface:#161b1e; --surface-2:#1b2124; --raise:#1f262a;
+  --ink:#e6eae9; --ink-2:#a7b3b9; --muted:#7c898f;
+  --rule:#242c30; --rule-strong:#364247;
+  --es:#4a90e8; --nq:#e2693a; --ok:#3aa87a; --no:#e0716a; --flag:#c99a2e;
+  --okbg:rgba(58,168,122,.16); --nobg:rgba(224,113,106,.16); --flagbg:rgba(201,154,46,.16);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:20px;padding-block:0 64px}
+
+header{padding-block:38px 0}
+.eyebrow{font-family:"JetBrains Mono",monospace;font-size:.66rem;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--muted)}
+h1{font-size:clamp(1.7rem,4.4vw,2.5rem);line-height:1.08;letter-spacing:-.022em;
+  font-weight:700;margin:.35em 0 0;text-wrap:balance}
+.lede{font-family:"Source Serif 4",Georgia,serif;font-size:1.05rem;line-height:1.6;
+  color:var(--ink-2);max-width:62ch;margin-top:14px}
+
+.funnel{display:flex;flex-wrap:wrap;gap:0;margin-top:28px;border-top:1px solid var(--rule);
+  border-bottom:1px solid var(--rule)}
+.funnel div{flex:1 1 150px;padding:15px 18px 16px 0;border-right:1px solid var(--rule)}
+.funnel div:last-child{border-right:0}
+.funnel dt{font-family:"JetBrains Mono",monospace;font-size:.6rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted)}
+.funnel dd{margin:5px 0 0;font-family:"JetBrains Mono",monospace;font-weight:700;
+  font-size:1.22rem;letter-spacing:-.02em}
+.funnel .sub{font-size:.72rem;color:var(--muted);font-weight:400;font-family:Archivo,sans-serif;
+  letter-spacing:0;margin-top:2px}
+
+.bar{position:sticky;top:0;z-index:20;background:var(--ground);
+  padding-block:14px 12px;border-bottom:1px solid var(--rule-strong);margin-top:30px}
+.progress{height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;
+  border:1px solid var(--rule)}
+.progress i{display:block;height:100%;background:var(--ok);transition:width .25s}
+.barrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:11px}
+.count{font-family:"JetBrains Mono",monospace;font-size:.82rem;font-weight:700;
+  white-space:nowrap;margin-right:4px}
+.count span{color:var(--muted);font-weight:400}
+.chip{appearance:none;border:1px solid var(--rule-strong);background:var(--surface);
+  color:var(--ink-2);font:inherit;font-size:.76rem;padding:5px 11px;border-radius:2px;
+  cursor:pointer;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.chip b{font-family:"JetBrains Mono",monospace;font-weight:700}
+
+.day{margin-top:30px}
+.dayhead{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--rule-strong);
+  padding-bottom:7px;margin-bottom:2px}
+.dayhead h2{font-size:1rem;font-weight:700;letter-spacing:-.01em;margin:0}
+.dayhead .n{font-family:"JetBrains Mono",monospace;font-size:.72rem;color:var(--muted)}
+
+.row{border-bottom:1px solid var(--rule);padding:14px 0;display:grid;gap:12px;
+  grid-template-columns:1fr;align-items:start}
+@media(min-width:760px){.row{grid-template-columns:1fr 210px}}
+.row.done{opacity:.5}
+.rowhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:9px}
+.tid{font-family:"JetBrains Mono",monospace;font-weight:700;font-size:.94rem}
+.sym{font-family:"JetBrains Mono",monospace;font-size:.68rem;font-weight:700;letter-spacing:.05em;
+  padding:2px 6px;border-radius:2px;color:#fff}
+.sym.ES{background:var(--es)} .sym.NQ{background:var(--nq)}
+.dir{font-size:.76rem;font-weight:600;letter-spacing:.04em}
+.tag{font-size:.68rem;font-weight:600;padding:2px 8px;border-radius:2px;letter-spacing:.02em}
+.tag.taget{background:var(--okbg);color:var(--ok)}
+.tag.tynd-luk{background:var(--nobg);color:var(--no)}
+.tag.loft-kant{background:var(--flagbg);color:var(--flag)}
+.tag.formregel{background:var(--flagbg);color:var(--flag)}
+.verdict{font-size:.88rem;color:var(--ink-2);margin-top:7px;max-width:64ch}
+.verdict b{color:var(--ink)}
+.nums{display:flex;flex-wrap:wrap;gap:5px 20px;margin-top:9px;
+  font-family:"JetBrains Mono",monospace;font-size:.76rem;color:var(--muted)}
+.nums b{color:var(--ink);font-weight:500}
+.acts{display:flex;flex-direction:column;gap:7px}
+.btns{display:flex;gap:7px}
+.btn{flex:1;appearance:none;border:1px solid var(--rule-strong);background:var(--surface);
+  color:var(--ink-2);font:inherit;font-size:.8rem;font-weight:600;padding:7px 4px;
+  border-radius:2px;cursor:pointer}
+.btn:hover{border-color:var(--ink-2)}
+.btn[aria-pressed="true"].ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn[aria-pressed="true"].no{background:var(--no);border-color:var(--no);color:#fff}
+.note{width:100%;font:inherit;font-size:.8rem;padding:7px 9px;border:1px solid var(--rule-strong);
+  border-radius:2px;background:var(--surface);color:var(--ink);resize:vertical;min-height:52px}
+.note::placeholder{color:var(--muted)}
+
+.ro{margin-top:12px;padding:10px 14px;border-left:3px solid var(--flag);background:var(--surface);
+  font-size:.85rem;color:var(--ink-2)}
+footer{margin-top:52px;border-top:1px solid var(--rule-strong);padding-top:22px;
+  font-size:.86rem;color:var(--ink-2);max-width:66ch}
+footer p+p{margin-top:10px}
+footer b{color:var(--ink)}
+:focus-visible{outline:2px solid var(--es);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<div id="app"></div>
+<script id="code">
+// STATE-START
+let MARKS = {};
+// STATE-END
+const TOT = {"raids": 660, "dage": 23, "taget": 18, "fem_s": 560, "klar": 95, "form": 5};
+const DATA = [{"id": "c6", "tid": "2026-08-12 15:37:00", "dag": "2026-08-12", "asset": "ES", "retning": "LONG", "linje": 7777.75, "anker": 7775.0, "luk": 7778.0, "forbi": -0.25, "afgjort": "15s formregel", "status": "4. en af dem lukkede igennem sin EQ efter raidet", "kat": "formregel", "note": "Ingen 5s-data her. Raidet er afgjort af barens form — er det et rigtigt raid?"}, {"id": "c17", "tid": "2026-08-12 15:51:15", "dag": "2026-08-12", "asset": "ES", "retning": "LONG", "linje": 7775.625, "anker": 7770.0, "luk": 7775.5, "forbi": 0.125, "afgjort": "15s klar", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c36", "tid": "2026-08-13 15:54:00", "dag": "2026-08-13", "asset": "ES", "retning": "SHORT", "linje": 7813.5, "anker": 7814.25, "luk": 7813.75, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c43", "tid": "2026-08-14 15:32:30", "dag": "2026-08-14", "asset": "ES", "retning": "LONG", "linje": 7824.625, "anker": 7821.5, "luk": 7824.5, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c53", "tid": "2026-08-14 15:42:00", "dag": "2026-08-14", "asset": "ES", "retning": "LONG", "linje": 7822.75, "anker": 7821.0, "luk": 7823.75, "forbi": -1.0, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7823.75, "ES_stopafst": 2.75, "ES_beafst": 1.5, "NQ_entry": 30230.25, "NQ_stopafst": 35.25, "NQ_beafst": -8.25}, {"id": "c54", "tid": "2026-08-14 15:46:15", "dag": "2026-08-14", "asset": "ES", "retning": "LONG", "linje": 7825.625, "anker": 7822.75, "luk": 7825.5, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c66", "tid": "2026-08-14 15:55:45", "dag": "2026-08-14", "asset": "NQ", "retning": "SHORT", "linje": 30241.5, "anker": 30254.0, "luk": 30238.75, "forbi": -2.75, "afgjort": "15s klar", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7825.5, "ES_stopafst": 3.0, "ES_beafst": 5.25, "NQ_entry": 30236.5, "NQ_stopafst": 17.5, "NQ_beafst": 18.0}, {"id": "c79", "tid": "2026-08-17 15:32:00", "dag": "2026-08-17", "asset": "NQ", "retning": "SHORT", "linje": 30248.5, "anker": 30266.0, "luk": 30240.0, "forbi": -8.5, "afgjort": "15s klar", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7804.5, "ES_stopafst": 5.0, "ES_beafst": 1.75, "NQ_entry": 30240.0, "NQ_stopafst": 26.0, "NQ_beafst": 32.0}, {"id": "c86", "tid": "2026-08-17 15:37:45", "dag": "2026-08-17", "asset": "ES", "retning": "LONG", "linje": 7797.375, "anker": 7794.5, "luk": 7797.25, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c89", "tid": "2026-08-17 15:41:00", "dag": "2026-08-17", "asset": "ES", "retning": "LONG", "linje": 7796.625, "anker": 7795.25, "luk": 7796.5, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c93", "tid": "2026-08-17 15:44:30", "dag": "2026-08-17", "asset": "ES", "retning": "SHORT", "linje": 7797.625, "anker": 7799.5, "luk": 7797.75, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c98", "tid": "2026-08-17 15:51:00", "dag": "2026-08-17", "asset": "NQ", "retning": "SHORT", "linje": 30222.0, "anker": 30233.25, "luk": 30223.0, "forbi": 1.0, "afgjort": "15s formregel", "status": "1. raid lukkede igennem EQ-linjen", "kat": "formregel", "note": "Ingen 5s-data her. Raidet er afgjort af barens form — er det et rigtigt raid?"}, {"id": "c103", "tid": "2026-08-17 15:54:00", "dag": "2026-08-17", "asset": "ES", "retning": "LONG", "linje": 7798.0, "anker": 7797.0, "luk": 7797.75, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c116", "tid": "2026-08-18 15:35:45", "dag": "2026-08-18", "asset": "ES", "retning": "LONG", "linje": 7725.5, "anker": 7719.75, "luk": 7725.5, "forbi": 0.0, "afgjort": "5s", "status": "5. kasseret af lofterne: stop>40 (NQ); BE>40 (NQ)", "kat": "loft-kant", "note": "Kasseret af afstandsloftet, men lige på grænsen. Tjek stop- og BE-afstanden.", "ES_entry": 7727.0, "ES_stopafst": 7.25, "ES_beafst": 7.75, "NQ_entry": 29701.5, "NQ_stopafst": 70.25, "NQ_beafst": 53.75}, {"id": "c120", "tid": "2026-08-18 15:39:30", "dag": "2026-08-18", "asset": "ES", "retning": "LONG", "linje": 7727.375, "anker": 7723.0, "luk": 7731.25, "forbi": -3.875, "afgjort": "5s", "status": "5. kasseret af lofterne: stop>8 (ES); stop>40 (NQ)", "kat": "loft-kant", "note": "Kasseret af afstandsloftet, men lige på grænsen. Tjek stop- og BE-afstanden.", "ES_entry": 7731.25, "ES_stopafst": 8.25, "ES_beafst": 3.5, "NQ_entry": 29736.25, "NQ_stopafst": 63.0, "NQ_beafst": 19.0}, {"id": "c124", "tid": "2026-08-18 15:44:00", "dag": "2026-08-18", "asset": "ES", "retning": "SHORT", "linje": 7731.25, "anker": 7732.75, "luk": 7730.75, "forbi": -0.5, "afgjort": "5s", "status": "5. kasseret af lofterne: stop>40 (NQ)", "kat": "loft-kant", "note": "Kasseret af afstandsloftet, men lige på grænsen. Tjek stop- og BE-afstanden.", "ES_entry": 7730.75, "ES_stopafst": 2.0, "ES_beafst": 8.0, "NQ_entry": 29712.75, "NQ_stopafst": 54.25, "NQ_beafst": 39.5}, {"id": "c134", "tid": "2026-08-18 15:53:00", "dag": "2026-08-18", "asset": "ES", "retning": "SHORT", "linje": 7723.5, "anker": 7725.0, "luk": 7723.75, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c141", "tid": "2026-08-18 15:59:15", "dag": "2026-08-18", "asset": "NQ", "retning": "LONG", "linje": 29649.0, "anker": 29632.75, "luk": 29649.0, "forbi": 0.0, "afgjort": "15s formregel", "status": "2. ES havde ingen aktiv EQ samme vej", "kat": "formregel", "note": "Ingen 5s-data her. Raidet er afgjort af barens form — er det et rigtigt raid?"}, {"id": "c148", "tid": "2026-08-19 15:34:15", "dag": "2026-08-19", "asset": "ES", "retning": "SHORT", "linje": 7741.375, "anker": 7744.5, "luk": 7741.5, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c180", "tid": "2026-08-20 15:44:00", "dag": "2026-08-20", "asset": "NQ", "retning": "LONG", "linje": 29442.75, "anker": 29430.5, "luk": 29450.0, "forbi": -7.25, "afgjort": "15s formregel", "status": "4. en af dem lukkede igennem sin EQ efter raidet", "kat": "formregel", "note": "Ingen 5s-data her. Raidet er afgjort af barens form — er det et rigtigt raid?"}, {"id": "c181", "tid": "2026-08-20 15:45:00", "dag": "2026-08-20", "asset": "NQ", "retning": "SHORT", "linje": 29447.375, "anker": 29457.0, "luk": 29443.5, "forbi": -3.875, "afgjort": "15s klar", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7712.25, "ES_stopafst": 4.0, "ES_beafst": 7.25, "NQ_entry": 29426.0, "NQ_stopafst": 31.0, "NQ_beafst": 36.0}, {"id": "c185", "tid": "2026-08-20 15:49:15", "dag": "2026-08-20", "asset": "ES", "retning": "SHORT", "linje": 7707.625, "anker": 7710.25, "luk": 7707.75, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c203", "tid": "2026-08-21 15:38:15", "dag": "2026-08-21", "asset": "ES", "retning": "LONG", "linje": 7684.75, "anker": 7682.5, "luk": 7684.5, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c205", "tid": "2026-08-21 15:40:45", "dag": "2026-08-21", "asset": "NQ", "retning": "LONG", "linje": 29338.375, "anker": 29320.75, "luk": 29341.0, "forbi": -2.625, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7686.5, "ES_stopafst": 5.25, "ES_beafst": 0.5, "NQ_entry": 29353.0, "NQ_stopafst": 32.25, "NQ_beafst": 20.5}, {"id": "c209", "tid": "2026-08-21 15:45:00", "dag": "2026-08-21", "asset": "NQ", "retning": "LONG", "linje": 29330.125, "anker": 29314.0, "luk": 29335.75, "forbi": -5.625, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7688.25, "ES_stopafst": 5.5, "ES_beafst": 0.0, "NQ_entry": 29335.75, "NQ_stopafst": 21.75, "NQ_beafst": 24.5}, {"id": "c211", "tid": "2026-08-21 15:47:00", "dag": "2026-08-21", "asset": "ES", "retning": "LONG", "linje": 7686.875, "anker": 7685.25, "luk": 7686.75, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c219", "tid": "2026-08-21 15:57:00", "dag": "2026-08-21", "asset": "ES", "retning": "LONG", "linje": 7681.375, "anker": 7679.0, "luk": 7681.25, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c223", "tid": "2026-08-24 15:31:30", "dag": "2026-08-24", "asset": "ES", "retning": "SHORT", "linje": 7675.875, "anker": 7682.75, "luk": 7676.0, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c228", "tid": "2026-08-24 15:35:45", "dag": "2026-08-24", "asset": "ES", "retning": "SHORT", "linje": 7671.0, "anker": 7676.25, "luk": 7670.75, "forbi": -0.25, "afgjort": "5s", "status": "5. kasseret af lofterne: stop>40 (NQ); BE>40 (NQ)", "kat": "loft-kant", "note": "Kasseret af afstandsloftet, men lige på grænsen. Tjek stop- og BE-afstanden.", "ES_entry": 7669.75, "ES_stopafst": 6.5, "ES_beafst": 3.5, "NQ_entry": 29126.5, "NQ_stopafst": 116.5, "NQ_beafst": 43.25}, {"id": "c239", "tid": "2026-08-24 15:46:15", "dag": "2026-08-24", "asset": "ES", "retning": "SHORT", "linje": 7662.25, "anker": 7669.5, "luk": 7662.25, "forbi": 0.0, "afgjort": "5s", "status": "5. kasseret af lofterne: stop>40 (NQ)", "kat": "loft-kant", "note": "Kasseret af afstandsloftet, men lige på grænsen. Tjek stop- og BE-afstanden.", "ES_entry": 7662.0, "ES_stopafst": 7.5, "ES_beafst": 6.25, "NQ_entry": 28985.5, "NQ_stopafst": 257.5, "NQ_beafst": 10.0}, {"id": "c241", "tid": "2026-08-24 15:51:30", "dag": "2026-08-24", "asset": "ES", "retning": "SHORT", "linje": 7666.75, "anker": 7670.25, "luk": 7664.75, "forbi": -2.0, "afgjort": "5s", "status": "5. kasseret af lofterne: stop>40 (NQ); BE>8 (ES)", "kat": "loft-kant", "note": "Kasseret af afstandsloftet, men lige på grænsen. Tjek stop- og BE-afstanden.", "ES_entry": 7664.75, "ES_stopafst": 5.5, "ES_beafst": 9.75, "NQ_entry": 28992.75, "NQ_stopafst": 250.25, "NQ_beafst": 39.25}, {"id": "c243", "tid": "2026-08-24 15:52:30", "dag": "2026-08-24", "asset": "ES", "retning": "LONG", "linje": 7662.625, "anker": 7655.0, "luk": 7662.5, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c244", "tid": "2026-08-24 15:53:15", "dag": "2026-08-24", "asset": "ES", "retning": "SHORT", "linje": 7663.875, "anker": 7665.75, "luk": 7664.0, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c246", "tid": "2026-08-24 15:58:15", "dag": "2026-08-24", "asset": "ES", "retning": "SHORT", "linje": 7668.625, "anker": 7670.5, "luk": 7668.75, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c248", "tid": "2026-08-25 15:30:00", "dag": "2026-08-25", "asset": "NQ", "retning": "SHORT", "linje": 29295.875, "anker": 29312.5, "luk": 29292.75, "forbi": -3.125, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7694.25, "ES_stopafst": 3.0, "ES_beafst": -0.5, "NQ_entry": 29292.75, "NQ_stopafst": 19.75, "NQ_beafst": -1.75}, {"id": "c256", "tid": "2026-08-25 15:37:00", "dag": "2026-08-25", "asset": "ES", "retning": "SHORT", "linje": 7697.25, "anker": 7699.25, "luk": 7697.5, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c261", "tid": "2026-08-25 15:40:00", "dag": "2026-08-25", "asset": "ES", "retning": "SHORT", "linje": 7696.0, "anker": 7697.75, "luk": 7696.25, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c263", "tid": "2026-08-25 15:41:30", "dag": "2026-08-25", "asset": "ES", "retning": "LONG", "linje": 7697.0, "anker": 7694.25, "luk": 7697.0, "forbi": 0.0, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7697.25, "ES_stopafst": 3.0, "ES_beafst": 3.25, "NQ_entry": 29353.25, "NQ_stopafst": 38.25, "NQ_beafst": 22.75}, {"id": "c271", "tid": "2026-08-25 15:49:45", "dag": "2026-08-25", "asset": "NQ", "retning": "LONG", "linje": 29393.25, "anker": 29371.75, "luk": 29393.0, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c272", "tid": "2026-08-25 15:50:30", "dag": "2026-08-25", "asset": "ES", "retning": "SHORT", "linje": 7697.75, "anker": 7700.5, "luk": 7696.75, "forbi": -1.0, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7696.75, "ES_stopafst": 3.75, "ES_beafst": 2.25, "NQ_entry": 29379.0, "NQ_stopafst": 35.75, "NQ_beafst": 36.25}, {"id": "c285", "tid": "2026-08-26 15:33:00", "dag": "2026-08-26", "asset": "NQ", "retning": "SHORT", "linje": 29265.875, "anker": 29278.0, "luk": 29255.5, "forbi": -10.375, "afgjort": "5s", "status": "5. kasseret af lofterne: BE>40 (NQ)", "kat": "loft-kant", "note": "Kasseret af afstandsloftet, men lige på grænsen. Tjek stop- og BE-afstanden.", "ES_entry": 7684.5, "ES_stopafst": 3.5, "ES_beafst": 6.25, "NQ_entry": 29240.75, "NQ_stopafst": 37.25, "NQ_beafst": 85.25}, {"id": "c291", "tid": "2026-08-26 15:37:45", "dag": "2026-08-26", "asset": "NQ", "retning": "LONG", "linje": 29242.375, "anker": 29209.25, "luk": 29265.25, "forbi": -22.875, "afgjort": "5s", "status": "5. kasseret af lofterne: stop>8 (ES); stop>40 (NQ)", "kat": "loft-kant", "note": "Kasseret af afstandsloftet, men lige på grænsen. Tjek stop- og BE-afstanden.", "ES_entry": 7689.0, "ES_stopafst": 8.5, "ES_beafst": 1.75, "NQ_entry": 29265.25, "NQ_stopafst": 56.0, "NQ_beafst": 17.75}, {"id": "c312", "tid": "2026-08-27 15:35:30", "dag": "2026-08-27", "asset": "ES", "retning": "SHORT", "linje": 7706.5, "anker": 7710.25, "luk": 7706.75, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c326", "tid": "2026-08-27 15:55:00", "dag": "2026-08-27", "asset": "ES", "retning": "SHORT", "linje": 7723.0, "anker": 7725.25, "luk": 7720.75, "forbi": -2.25, "afgjort": "5s", "status": "5. kasseret af lofterne: stop>40 (NQ); BE>8 (ES); BE>40 (NQ)", "kat": "loft-kant", "note": "Kasseret af afstandsloftet, men lige på grænsen. Tjek stop- og BE-afstanden.", "ES_entry": 7720.75, "ES_stopafst": 4.5, "ES_beafst": 8.75, "NQ_entry": 29523.5, "NQ_stopafst": 43.75, "NQ_beafst": 46.5}, {"id": "c354", "tid": "2026-08-28 15:57:00", "dag": "2026-08-28", "asset": "NQ", "retning": "LONG", "linje": 29643.375, "anker": 29631.75, "luk": 29650.5, "forbi": -7.125, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7749.75, "ES_stopafst": 3.5, "ES_beafst": 1.25, "NQ_entry": 29648.75, "NQ_stopafst": 17.0, "NQ_beafst": 20.75}, {"id": "c381", "tid": "2026-08-31 15:50:00", "dag": "2026-08-31", "asset": "ES", "retning": "SHORT", "linje": 7689.5, "anker": 7692.0, "luk": 7689.75, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c395", "tid": "2026-09-01 15:30:00", "dag": "2026-09-01", "asset": "NQ", "retning": "SHORT", "linje": 29107.875, "anker": 29122.75, "luk": 29096.0, "forbi": -11.875, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7641.0, "ES_stopafst": 7.75, "ES_beafst": -3.75, "NQ_entry": 29096.0, "NQ_stopafst": 26.75, "NQ_beafst": -4.0}, {"id": "c396", "tid": "2026-09-01 15:31:00", "dag": "2026-09-01", "asset": "ES", "retning": "SHORT", "linje": 7643.125, "anker": 7647.5, "luk": 7643.25, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c400", "tid": "2026-09-01 15:33:00", "dag": "2026-09-01", "asset": "ES", "retning": "LONG", "linje": 7644.5, "anker": 7642.75, "luk": 7644.25, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c409", "tid": "2026-09-01 15:39:30", "dag": "2026-09-01", "asset": "ES", "retning": "SHORT", "linje": 7646.0, "anker": 7649.25, "luk": 7646.25, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c443", "tid": "2026-09-02 15:36:00", "dag": "2026-09-02", "asset": "ES", "retning": "SHORT", "linje": 7648.125, "anker": 7650.25, "luk": 7647.75, "forbi": -0.375, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7646.5, "ES_stopafst": 3.75, "ES_beafst": 3.0, "NQ_entry": 29059.0, "NQ_stopafst": 31.5, "NQ_beafst": 16.25}, {"id": "c448", "tid": "2026-09-02 15:40:00", "dag": "2026-09-02", "asset": "ES", "retning": "LONG", "linje": 7648.875, "anker": 7646.75, "luk": 7648.75, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c455", "tid": "2026-09-02 15:48:00", "dag": "2026-09-02", "asset": "ES", "retning": "LONG", "linje": 7649.0, "anker": 7647.75, "luk": 7648.75, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c458", "tid": "2026-09-02 15:49:15", "dag": "2026-09-02", "asset": "ES", "retning": "SHORT", "linje": 7649.375, "anker": 7651.0, "luk": 7648.75, "forbi": -0.625, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7646.75, "ES_stopafst": 4.25, "ES_beafst": -1.75, "NQ_entry": 29043.75, "NQ_stopafst": 38.75, "NQ_beafst": -31.5}, {"id": "c465", "tid": "2026-09-02 15:55:00", "dag": "2026-09-02", "asset": "ES", "retning": "LONG", "linje": 7649.375, "anker": 7646.5, "luk": 7649.25, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c466", "tid": "2026-09-02 15:55:00", "dag": "2026-09-02", "asset": "ES", "retning": "SHORT", "linje": 7650.625, "anker": 7652.0, "luk": 7649.25, "forbi": -1.375, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7649.25, "ES_stopafst": 2.75, "ES_beafst": 2.75, "NQ_entry": 29029.75, "NQ_stopafst": 34.0, "NQ_beafst": 4.5}, {"id": "c493", "tid": "2026-09-03 15:59:45", "dag": "2026-09-03", "asset": "ES", "retning": "SHORT", "linje": 7721.75, "anker": 7726.5, "luk": 7722.0, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c504", "tid": "2026-09-04 15:41:30", "dag": "2026-09-04", "asset": "NQ", "retning": "SHORT", "linje": 29621.5, "anker": 29641.0, "luk": 29621.25, "forbi": -0.25, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7744.75, "ES_stopafst": 6.25, "ES_beafst": 0.0, "NQ_entry": 29614.25, "NQ_stopafst": 26.75, "NQ_beafst": 3.0}, {"id": "c505", "tid": "2026-09-04 15:42:00", "dag": "2026-09-04", "asset": "ES", "retning": "LONG", "linje": 7744.375, "anker": 7742.25, "luk": 7744.25, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c513", "tid": "2026-09-04 15:50:30", "dag": "2026-09-04", "asset": "ES", "retning": "LONG", "linje": 7744.625, "anker": 7741.0, "luk": 7744.5, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c522", "tid": "2026-09-07 15:30:00", "dag": "2026-09-07", "asset": "NQ", "retning": "LONG", "linje": 29613.375, "anker": 29607.75, "luk": 29615.5, "forbi": -2.125, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7715.5, "ES_stopafst": 2.25, "ES_beafst": 0.75, "NQ_entry": 29625.0, "NQ_stopafst": 17.25, "NQ_beafst": -0.25}, {"id": "c523", "tid": "2026-09-07 15:31:00", "dag": "2026-09-07", "asset": "ES", "retning": "LONG", "linje": 7714.75, "anker": 7714.0, "luk": 7714.5, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c524", "tid": "2026-09-07 15:32:30", "dag": "2026-09-07", "asset": "ES", "retning": "LONG", "linje": 7715.875, "anker": 7714.5, "luk": 7715.75, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c528", "tid": "2026-09-07 15:37:45", "dag": "2026-09-07", "asset": "ES", "retning": "SHORT", "linje": 7713.625, "anker": 7715.0, "luk": 7713.75, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c531", "tid": "2026-09-07 15:41:00", "dag": "2026-09-07", "asset": "ES", "retning": "SHORT", "linje": 7712.875, "anker": 7713.75, "luk": 7712.75, "forbi": -0.125, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7712.75, "ES_stopafst": 1.0, "ES_beafst": 0.5, "NQ_entry": 29608.25, "NQ_stopafst": 32.0, "NQ_beafst": 3.5}, {"id": "c535", "tid": "2026-09-07 15:43:30", "dag": "2026-09-07", "asset": "NQ", "retning": "LONG", "linje": 29615.375, "anker": 29607.75, "luk": 29615.25, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c541", "tid": "2026-09-07 15:50:00", "dag": "2026-09-07", "asset": "ES", "retning": "SHORT", "linje": 7714.375, "anker": 7714.5, "luk": 7714.5, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c543", "tid": "2026-09-07 15:51:00", "dag": "2026-09-07", "asset": "NQ", "retning": "SHORT", "linje": 29625.0, "anker": 29628.25, "luk": 29625.25, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c544", "tid": "2026-09-07 15:51:45", "dag": "2026-09-07", "asset": "ES", "retning": "SHORT", "linje": 7713.625, "anker": 7714.5, "luk": 7713.75, "forbi": 0.125, "afgjort": "15s formregel", "status": "1. raid lukkede igennem EQ-linjen", "kat": "formregel", "note": "Ingen 5s-data her. Raidet er afgjort af barens form — er det et rigtigt raid?"}, {"id": "c551", "tid": "2026-09-07 15:56:00", "dag": "2026-09-07", "asset": "ES", "retning": "SHORT", "linje": 7713.625, "anker": 7714.5, "luk": 7713.75, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c553", "tid": "2026-09-07 15:59:00", "dag": "2026-09-07", "asset": "ES", "retning": "SHORT", "linje": 7713.25, "anker": 7713.75, "luk": 7713.5, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c554", "tid": "2026-09-07 15:59:00", "dag": "2026-09-07", "asset": "NQ", "retning": "SHORT", "linje": 29618.875, "anker": 29624.5, "luk": 29619.0, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c573", "tid": "2026-09-08 15:59:15", "dag": "2026-09-08", "asset": "ES", "retning": "LONG", "linje": 7695.5, "anker": 7689.75, "luk": 7695.25, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c586", "tid": "2026-09-09 15:41:15", "dag": "2026-09-09", "asset": "ES", "retning": "SHORT", "linje": 7658.0, "anker": 7660.0, "luk": 7658.25, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c595", "tid": "2026-09-09 15:47:45", "dag": "2026-09-09", "asset": "ES", "retning": "LONG", "linje": 7656.75, "anker": 7654.0, "luk": 7656.5, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c600", "tid": "2026-09-09 15:50:15", "dag": "2026-09-09", "asset": "NQ", "retning": "LONG", "linje": 29494.5, "anker": 29475.25, "luk": 29494.25, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c605", "tid": "2026-09-09 15:53:00", "dag": "2026-09-09", "asset": "NQ", "retning": "LONG", "linje": 29498.25, "anker": 29487.75, "luk": 29505.0, "forbi": -6.75, "afgjort": "5s", "status": "TAGET", "kat": "taget", "note": "Kontroller at raidet er ægte og at begge lukkede samme vej inden for 4 barer.", "ES_entry": 7657.0, "ES_stopafst": 2.75, "ES_beafst": 4.75, "NQ_entry": 29508.75, "NQ_stopafst": 21.0, "NQ_beafst": 5.0}, {"id": "c610", "tid": "2026-09-09 15:57:15", "dag": "2026-09-09", "asset": "NQ", "retning": "SHORT", "linje": 29538.625, "anker": 29547.25, "luk": 29538.75, "forbi": 0.125, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.125 pkt forbi linjen. Én tick havde vendt beslutningen."}, {"id": "c620", "tid": "2026-09-10 15:36:00", "dag": "2026-09-10", "asset": "NQ", "retning": "LONG", "linje": 29112.375, "anker": 29088.75, "luk": 29132.0, "forbi": -19.625, "afgjort": "5s", "status": "5. kasseret af lofterne: stop>8 (ES); stop>40 (NQ)", "kat": "loft-kant", "note": "Kasseret af afstandsloftet, men lige på grænsen. Tjek stop- og BE-afstanden.", "ES_entry": 7602.5, "ES_stopafst": 8.75, "ES_beafst": 0.5, "NQ_entry": 29132.0, "NQ_stopafst": 43.25, "NQ_beafst": -8.75}, {"id": "c649", "tid": "2026-09-11 15:39:00", "dag": "2026-09-11", "asset": "NQ", "retning": "LONG", "linje": 29402.25, "anker": 29390.75, "luk": 29402.0, "forbi": 0.25, "afgjort": "5s", "status": "1. raid lukkede igennem EQ-linjen", "kat": "tynd-luk", "note": "Motoren kasserede den fordi luk lå 0.250 pkt forbi linjen. Én tick havde vendt beslutningen."}];
+const KAT = {"taget": ["Taget", "Denne blev til en handel. Kontroller at raidet er ægte."], "tynd-luk": ["Tynd afvisning", "Kasseret fordi luk lå under én tick forbi linjen."], "loft-kant": ["På afstandsloftet", "Stop eller BE lå inden for 10 % af loftet."], "formregel": ["Formregel", "Ingen 5s-data. Rækkefølgen blev udledt af barens form."]};
+
+const $ = (s,r)=> (r||document).querySelector(s);
+let filter = "alle";
+let dirty = false, publishing = false, readOnly = false;
+
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function num(v,d){ if(v===undefined||v===null) return "—";
+  return Number(v).toLocaleString("da-DK",{minimumFractionDigits:d,maximumFractionDigits:d}); }
+
+function marked(){ return DATA.filter(c=>MARKS[c.id] && MARKS[c.id].v).length; }
+
+function rowNums(c){
+  const n = [];
+  n.push('EQ-linje <b>'+num(c.linje,3)+'</b>');
+  n.push('anker <b>'+num(c.anker,2)+'</b>');
+  n.push('raid-luk <b>'+num(c.luk,2)+'</b>');
+  n.push('forbi linjen <b>'+(c.forbi>0?"+":"")+num(c.forbi,3)+'</b>');
+  if(c.ES_stopafst!==undefined) n.push('ES stop <b>'+num(c.ES_stopafst,2)+'</b>');
+  if(c.NQ_stopafst!==undefined) n.push('NQ stop <b>'+num(c.NQ_stopafst,2)+'</b>');
+  if(c.ES_beafst!==undefined) n.push('ES BE <b>'+num(c.ES_beafst,2)+'</b>');
+  if(c.NQ_beafst!==undefined) n.push('NQ BE <b>'+num(c.NQ_beafst,2)+'</b>');
+  return n.join("");
+}
+
+function render(){
+  const done = marked(), pct = Math.round(done/DATA.length*100);
+  const counts = {alle:DATA.length};
+  for(const k in KAT) counts[k] = DATA.filter(c=>c.kat===k).length;
+  const shown = DATA.filter(c=> filter==="alle" || c.kat===filter);
+
+  let h = '<div class="wrap"><header>';
+  h += '<div class="eyebrow">EQ-konfluens · 12. aug – 11. sep 2026</div>';
+  h += '<h1>Har motoren taget alle handlerne?</h1>';
+  h += '<p class="lede">Motoren traf '+TOT.raids.toLocaleString("da-DK")+' raid-beslutninger i entry-vinduet. '
+     + 'De fleste er afgjort med så stor margin at de ikke kan være forkerte. '
+     + 'De '+DATA.length+' herunder er dem hvor en tick, en manglende 5s-bar eller et loft var afgørende. '
+     + 'Tjek dem mod dit chart — så er hele materialet dækket.</p>';
+  h += '<dl class="funnel">'
+     + '<div><dt>Raid-beslutninger</dt><dd>'+TOT.raids.toLocaleString("da-DK")+'</dd><div class="sub">over '+TOT.dage+' handelsdage</div></div>'
+     + '<div><dt>Afgjort på 5s-barer</dt><dd>'+TOT.fem_s+'</dd><div class="sub">rækkefølgen aflæst direkte</div></div>'
+     + '<div><dt>Klare på 15s</dt><dd>'+TOT.klar+'</dd><div class="sub">ingen tvivl om margin</div></div>'
+     + '<div><dt>Udledt af formreglen</dt><dd>'+TOT.form+'</dd><div class="sub">de eneste gæt der er tilbage</div></div>'
+     + '<div><dt>Blev til handler</dt><dd>'+TOT.taget+'</dd><div class="sub">18 par, 36 ben</div></div>'
+     + '</dl></header>';
+
+  h += '<div class="bar"><div class="progress"><i style="width:'+pct+'%"></i></div><div class="barrow">';
+  h += '<span class="count">'+done+' / '+DATA.length+' <span>gennemgået</span></span>';
+  h += '<button class="chip" data-f="alle" aria-pressed="'+(filter==="alle")+'">Alle <b>'+counts.alle+'</b></button>';
+  for(const k in KAT) h += '<button class="chip" data-f="'+k+'" aria-pressed="'+(filter===k)+'">'+esc(KAT[k][0])+' <b>'+counts[k]+'</b></button>';
+  h += '</div></div>';
+
+  if(readOnly) h += '<div class="ro">Du kigger med som læser — afkrydsninger gemmes ikke.</div>';
+
+  let lastDay = null;
+  for(const c of shown){
+    if(c.dag !== lastDay){
+      if(lastDay!==null) h += '</section>';
+      const nd = shown.filter(x=>x.dag===c.dag).length;
+      const dt = new Date(c.dag+"T12:00:00");
+      const lab = dt.toLocaleDateString("da-DK",{weekday:"long",day:"numeric",month:"long"});
+      h += '<section class="day"><div class="dayhead"><h2>'+esc(lab.charAt(0).toUpperCase()+lab.slice(1))+'</h2>'
+         + '<span class="n">'+nd+(nd===1?" sag":" sager")+'</span></div>';
+      lastDay = c.dag;
+    }
+    const m = MARKS[c.id] || {};
+    h += '<div class="row'+(m.v?" done":"")+'" data-id="'+c.id+'">';
+    h += '<div><div class="rowhead">'
+       + '<span class="tid">'+esc(c.tid.slice(11))+'</span>'
+       + '<span class="sym '+c.asset+'">'+c.asset+'</span>'
+       + '<span class="dir">'+c.retning+'</span>'
+       + '<span class="tag '+c.kat+'">'+esc(KAT[c.kat][0])+'</span></div>';
+    h += '<div class="verdict"><b>Motoren sagde:</b> '+esc(c.status)+'. '+esc(c.note)+'</div>';
+    h += '<div class="nums">'+rowNums(c)+'</div></div>';
+    h += '<div class="acts"><div class="btns">'
+       + '<button class="btn ok" data-v="ok" aria-pressed="'+(m.v==="ok")+'">Enig</button>'
+       + '<button class="btn no" data-v="nej" aria-pressed="'+(m.v==="nej")+'">Uenig</button></div>';
+    if(m.v==="nej") h += '<textarea class="note" id="n_'+c.id+'" placeholder="Hvad så du på chartet?">'+esc(m.note||"")+'</textarea>';
+    h += '</div></div>';
+  }
+  if(lastDay!==null) h += '</section>';
+
+  h += '<footer><p><b>Når listen er tom, er materialet dækket.</b> De '+(TOT.raids-DATA.length).toLocaleString("da-DK")
+     + ' øvrige beslutninger blev truffet med en margin der er mange gange større end enhver tænkelig forskel '
+     + 'mellem mit datafeed og dit chart — de kan ikke vendes af en tick.</p>'
+     + '<p>Finder du uenigheder, så send dem tilbage. Ét fejlfundet mønster her er mere værd end '
+     + 'hundrede rigtige.</p></footer></div>';
+
+  document.getElementById("app").innerHTML = h;
+}
+
+function schedulePublish(){
+  if(readOnly) return;
+  dirty = true;
+  clearTimeout(schedulePublish.t);
+  schedulePublish.t = setTimeout(doPublish, 1200);
+}
+
+async function doPublish(){
+  if(publishing || !dirty || readOnly) return;
+  const api = await claude.use("artifact");
+  if(!api){ readOnly = true; render(); return; }
+  publishing = true; dirty = false;
+  try{
+    await api.publish(buildDoc());
+  }catch(e){
+    if(e && (e.code === "not_writer" || e.code === "not_granted" || e.code === "not_declared")){
+      readOnly = true; render();
+    }
+    // conflict: viewet genindlaeses af sig selv - ingen retry
+  }finally{ publishing = false; }
+}
+
+function buildDoc(){
+  const code = document.getElementById("code").textContent
+    .replace(/\/\/ STATE-START[\s\S]*?\/\/ STATE-END/,
+             "// STATE-START\nlet MARKS = " + JSON.stringify(MARKS) + ";\n// STATE-END");
+  const css = document.getElementById("css").textContent;
+  const S = "scr" + "ipt";
+  return '<!doctype html><html lang="da"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>EQ-revision</title>'
+    + '<link rel="preconnect" href="https://fonts.googleapis.com">'
+    + '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+    + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500;700&display=swap">'
+    + '<style id="css">' + css + '</style></head><body>'
+    + '<div id="app"></div><' + S + ' id="code">' + code + '</' + S + '></body></html>';
+}
+
+document.addEventListener("click", ev=>{
+  const chip = ev.target.closest(".chip");
+  if(chip){ filter = chip.dataset.f; render(); return; }
+  const btn = ev.target.closest(".btn");
+  if(!btn) return;
+  const id = btn.closest(".row").dataset.id;
+  const cur = MARKS[id] || {};
+  const v = btn.dataset.v;
+  MARKS[id] = (cur.v === v) ? {note:cur.note||""} : {v:v, note:cur.note||""};
+  render();
+  schedulePublish();
+});
+document.addEventListener("input", ev=>{
+  if(!ev.target.classList.contains("note")) return;
+  const id = ev.target.closest(".row").dataset.id;
+  MARKS[id] = MARKS[id] || {};
+  MARKS[id].note = ev.target.value;
+  schedulePublish();
+});
+
+render();
+claude.use("artifact").then(api=>{ if(!api){ readOnly = true; render(); } });
+</script>

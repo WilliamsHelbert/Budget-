@@ -1,0 +1,5 @@
+*.parquet
+*.dbn
+*.dbn.zst
+__pycache__/
+node_modules/

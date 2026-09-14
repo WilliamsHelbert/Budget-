@@ -1,0 +1,908 @@
+<title>Virker EQ-konfluensen?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --ground:#eceeed; --surface:#fbfcfb; --surface-2:#f3f5f4;
+  --ink:#13181b; --ink-2:#3c484f; --muted:#6c787f; --rule:#d2d8d7; --rule-strong:#b6bfbe;
+  --es:#2a78d6; --nq:#eb6834; --pos:#17724a; --neg:#a83a30; --flat:#8a9499;
+  --grid:#dfe4e3;
+  --shadow:0 1px 2px rgba(19,24,27,.06), 0 8px 24px -16px rgba(19,24,27,.28);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#0e1214; --surface:#161b1e; --surface-2:#1c2225;
+    --ink:#e5e9e8; --ink-2:#a9b5bb; --muted:#7d8a91; --rule:#242c30; --rule-strong:#333e43;
+    --es:#3987e5; --nq:#d95926; --pos:#38a877; --neg:#e07068; --flat:#6d7a80;
+    --grid:#222a2e;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0e1214; --surface:#161b1e; --surface-2:#1c2225;
+  --ink:#e5e9e8; --ink-2:#a9b5bb; --muted:#7d8a91; --rule:#242c30; --rule-strong:#333e43;
+  --es:#3987e5; --nq:#d95926; --pos:#38a877; --neg:#e07068; --flat:#6d7a80;
+  --grid:#222a2e;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"Source Serif 4",Georgia,serif; font-size:17px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px; margin:0 auto; padding-inline:20px; padding-block:0 72px}
+.col{max-width:660px}
+h1,h2,h3,.ui{font-family:Archivo,"Helvetica Neue",Arial,sans-serif}
+h1{font-size:clamp(2.1rem,6vw,3.4rem); line-height:1.03; font-weight:700; letter-spacing:-.025em; margin:0; text-wrap:balance}
+h2{font-size:clamp(1.35rem,3.4vw,1.75rem); font-weight:600; letter-spacing:-.015em; line-height:1.15; margin:0; text-wrap:balance}
+h3{font-size:1.02rem; font-weight:600; letter-spacing:-.005em; margin:0; text-wrap:balance}
+p{margin:0}
+a{color:inherit}
+.eyebrow{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:.68rem; font-weight:500;
+  letter-spacing:.17em; text-transform:uppercase; color:var(--muted)}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+.num{font-family:"JetBrains Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums; font-weight:500}
+.pos{color:var(--pos)} .neg{color:var(--neg)} .dim{color:var(--muted)}
+
+/* ---------- masthead ---------- */
+header.mast{border-bottom:1px solid var(--rule-strong); padding-block:44px 0; margin-bottom:0}
+.mast .col{display:flex; flex-direction:column; gap:18px}
+.standfirst{font-size:1.16rem; line-height:1.55; color:var(--ink-2); max-width:60ch}
+.runmeta{display:flex; flex-wrap:wrap; gap:0; border-top:1px solid var(--rule);
+  margin-top:26px; padding-top:0}
+.runmeta div{flex:1 1 128px; padding:14px 16px 16px 0; border-right:1px solid var(--rule)}
+.runmeta div:last-child{border-right:0}
+.runmeta dt{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:.62rem; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--muted); margin-bottom:5px}
+.runmeta dd{margin:0; font-family:Archivo,sans-serif; font-weight:600; font-size:.98rem; letter-spacing:-.01em}
+
+/* ---------- verdict ---------- */
+.verdict{background:var(--surface); border:1px solid var(--rule); border-top:3px solid var(--rule-strong);
+  padding:28px 30px; margin-block:38px; box-shadow:var(--shadow)}
+.verdict .headline{font-family:Archivo,sans-serif; font-weight:700; font-size:clamp(1.2rem,3vw,1.5rem);
+  letter-spacing:-.02em; line-height:1.25; margin-bottom:14px; text-wrap:balance}
+.verdict p+p{margin-top:11px}
+.verdict .bignum{display:flex; flex-wrap:wrap; gap:28px; margin-top:22px; padding-top:20px; border-top:1px solid var(--rule)}
+.verdict .bignum div{min-width:96px}
+.verdict .bignum .v{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums;
+  font-weight:700; font-size:1.5rem; letter-spacing:-.03em; line-height:1}
+.verdict .bignum .l{font-size:.75rem; color:var(--muted); margin-top:5px; font-family:Archivo,sans-serif}
+
+section{padding-block:34px 0}
+section>.col>*+*{margin-top:16px}
+.sechead{display:flex; align-items:baseline; gap:14px; border-bottom:1px solid var(--rule);
+  padding-bottom:9px; margin-bottom:20px}
+.sechead h2{flex:1}
+
+/* ---------- rules list (a real sequence) ---------- */
+ol.steps{list-style:none; counter-reset:s; padding:0; margin:0; display:flex; flex-direction:column; gap:0}
+ol.steps li{counter-increment:s; display:grid; grid-template-columns:34px 1fr; gap:14px;
+  padding:14px 0; border-bottom:1px dotted var(--rule)}
+ol.steps li:last-child{border-bottom:0}
+ol.steps li::before{content:counter(s); font-family:"JetBrains Mono",monospace; font-weight:700;
+  font-size:.82rem; color:var(--muted); padding-top:.28em}
+ol.steps b{font-family:Archivo,sans-serif; font-weight:600; font-size:.97rem}
+ol.steps p{font-size:.94rem; color:var(--ink-2); margin-top:3px}
+
+/* ---------- assumption ledger ---------- */
+.ledger{border:1px solid var(--rule); background:var(--surface)}
+.ledger .lrow{display:grid; grid-template-columns:1fr; gap:4px; padding:13px 16px; border-bottom:1px solid var(--rule)}
+.ledger .lrow:last-child{border-bottom:0}
+.ledger .q{font-family:Archivo,sans-serif; font-weight:600; font-size:.9rem}
+.ledger .a{font-size:.9rem; color:var(--ink-2)}
+.ledger .a em{font-style:normal; color:var(--muted)}
+@media(min-width:620px){.ledger .lrow{grid-template-columns:210px 1fr; gap:18px}}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto; border:1px solid var(--rule); background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-family:"JetBrains Mono",monospace;
+  font-size:.79rem; font-variant-numeric:tabular-nums}
+th,td{padding:8px 12px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--rule)}
+th{font-weight:700; font-size:.64rem; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--muted); background:var(--surface-2); position:sticky; top:0}
+td:first-child,th:first-child{text-align:left}
+tbody tr:last-child td{border-bottom:0}
+tr.total td{font-weight:700; border-top:2px solid var(--rule-strong); background:var(--surface-2)}
+.chip{display:inline-block; padding:1px 6px; border-radius:2px; font-size:.68rem; font-weight:700; letter-spacing:.02em}
+.chip.tp{background:color-mix(in srgb,var(--pos) 16%,transparent); color:var(--pos)}
+.chip.sl{background:color-mix(in srgb,var(--neg) 16%,transparent); color:var(--neg)}
+.chip.be{background:color-mix(in srgb,var(--flat) 20%,transparent); color:var(--ink-2)}
+.swatch{display:inline-block; width:9px; height:9px; border-radius:1px; margin-right:7px; vertical-align:baseline}
+
+/* ---------- figures ---------- */
+figure{margin:0; background:var(--surface); border:1px solid var(--rule); padding:20px 20px 16px}
+figcaption{font-size:.84rem; color:var(--ink-2); margin-top:12px; padding-top:11px; border-top:1px solid var(--rule); line-height:1.5}
+.figtitle{font-family:Archivo,sans-serif; font-weight:600; font-size:.95rem; margin-bottom:2px}
+.figsub{font-size:.8rem; color:var(--muted); margin-bottom:14px; font-family:Archivo,sans-serif}
+.legend{display:flex; flex-wrap:wrap; gap:16px; margin-bottom:12px; font-family:Archivo,sans-serif; font-size:.78rem; color:var(--ink-2)}
+.legend span{display:flex; align-items:center; gap:6px}
+.legend i{width:16px; height:2.5px; border-radius:2px; display:block}
+svg{display:block; width:100%; height:auto; overflow:visible}
+.gl{stroke:var(--grid); stroke-width:1}
+.axl{fill:var(--muted); font-family:"JetBrains Mono",monospace; font-size:10px; font-variant-numeric:tabular-nums}
+.dlab{font-family:Archivo,sans-serif; font-size:11px; font-weight:600}
+
+/* ---------- callout ---------- */
+.note{border-left:3px solid var(--rule-strong); padding:4px 0 4px 18px; color:var(--ink-2); font-size:.96rem}
+.note b{color:var(--ink); font-family:Archivo,sans-serif; font-weight:600}
+.flag{border:1px solid var(--rule); border-left:3px solid var(--nq); background:var(--surface);
+  padding:18px 20px; font-size:.95rem}
+.flag .ft{font-family:Archivo,sans-serif; font-weight:600; font-size:.9rem; margin-bottom:7px}
+
+ul.tight{margin:0; padding-left:1.15em; font-size:.96rem; color:var(--ink-2)}
+ul.tight li{margin-block:6px}
+ul.tight li::marker{color:var(--muted)}
+
+/* ---------- tooltip ---------- */
+#tip{position:fixed; pointer-events:none; opacity:0; transition:opacity .1s; z-index:50;
+  background:var(--ink); color:var(--ground); font-family:"JetBrains Mono",monospace;
+  font-size:.72rem; font-variant-numeric:tabular-nums; padding:7px 10px; border-radius:3px;
+  box-shadow:0 4px 16px rgba(0,0,0,.3); white-space:pre; line-height:1.5}
+footer{border-top:1px solid var(--rule-strong); margin-top:52px; padding-top:22px;
+  font-size:.84rem; color:var(--muted)}
+footer code{font-family:"JetBrains Mono",monospace; font-size:.92em; color:var(--ink-2)}
+:focus-visible{outline:2px solid var(--es); outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
+</style>
+<div class="wrap">
+<header class="mast">
+  <div class="col">
+    <div class="eyebrow">Backtest v13 · ES + NQ · 12. aug – 10. sep 2026 · raids verificeret på 5 s</div>
+    <h1>Virker EQ-konfluensen?</h1>
+    <p class="standfirst">Du fandt at et raid kan se ud som et raid på 15&nbsp;s uden at være det på 5&nbsp;s.
+      Det ramte <b>5 af de 21 trades</b>. Med 5&nbsp;s-data for begge assets afgøres
+      <b>94&nbsp;% af ES-raids og 68&nbsp;% af NQ-raids</b> nu direkte — og facit ændrer sig ikke:
+      <b>+23,9&nbsp;R over 18 par</b>. Formreglen ramte 99,9&nbsp;% rigtigt.</p>
+  </div>
+  <div class="col">
+    <dl class="runmeta">
+      <div><dt>Signaler</dt><dd>100</dd></div>
+      <div><dt>Efter filtre</dt><dd>30</dd></div>
+      <div><dt>Trades taget</dt><dd>18 par</dd></div>
+      <div><dt>Resultat</dt><dd class="pos">+23,9 R</dd></div>
+      <div><dt>Max drawdown</dt><dd>−13,1 R</dd></div>
+    </dl>
+  </div>
+</header>
+
+<div class="col">
+<div class="verdict">
+  <div class="headline">Rækkefølge-testen er nu efterprøvet på 58 673 beslutninger. Den holder.</div>
+  <p>Modellen giver <b>+23,9 R over 18 par</b>, stort set samme facit som før. Men det er ikke det
+     interessante. Over <em>alle</em> 30 signaler — uden dagsgrænser og uden én-position-ad-gangen —
+     går værdien pr. par fra <b>−0,01 R til +0,56 R</b> (t fra −0,01 til +0,51). Drawdown falder fra
+     −17,1 til −13,1 R. De falske raids var med andre ord ikke bare støj; de var systematisk dårlige
+     handler — hvilket giver mening: et falsk bear-raid betyder at baren allerede var faldet hårdt,
+     så man shorter bunden af et move.</p>
+  <p>Med 5 s-data for begge assets er værdien pr. signal <b>+0,56 R</b> (t = +0,51). Det er stadig
+     ikke signifikant, og retningen er stadig et møntkast (49,7 %). Spejlvendingen giver
+     <b>+17,3 R</b> — den advarsel står uændret. Men for første gang peger den ærlige måling
+     opad i stedet for mod nul.</p>
+  <div class="bignum">
+    <div><div class="v pos">+23,9</div><div class="l">R over 18 par</div></div>
+    <div><div class="v pos">+0,56</div><div class="l">R pr. signal <span class="dim">(før −0,01)</span></div></div>
+    <div><div class="v pos">99,9 %</div><div class="l">præcision målt mod 5 s</div></div>
+    <div><div class="v">49,7 %</div><div class="l">retningstræf — møntkast</div></div>
+  </div>
+</div>
+</div>
+
+<section>
+  <div class="col">
+    <div class="sechead"><h2>Raids der aldrig skete</h2></div>
+    <p>Du satte det samme øjeblik op på 15&nbsp;s og på 5&nbsp;s, og på 5&nbsp;s kunne man se at
+      prisen aldrig rørte EQ-linjen. Det er ikke en fejl i dataen — det er en fejl i <em>hvordan
+      motoren læser en bar</em>.</p>
+    <p style="margin-top:12px">EQ-linjen er midtpunktet mellem ankeret og det løbende extreme.
+      Sætter en bar selv et nyt extreme, <b>flytter linjen sig under baren</b>. Motoren regnede
+      linjen ud med barens færdige low og testede så barens high mod den — som om begge skete
+      samtidig. I virkeligheden har de en rækkefølge.</p>
+  </div>
+  <div class="col" style="margin-top:16px">
+    <div class="tablewrap"><table>
+      <thead><tr><th>14. aug 15:33:00 · ES</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>1m-candle 15:32</td><td class="num">H 7 827,75 · L 7 824,25</td></tr>
+        <tr><td>EQ-linje da baren åbnede</td><td class="num"><b>7 826,00</b></td></tr>
+        <tr><td>15 s-baren</td><td class="num">O 7 825,25 H 7 825,50 L 7 823,00 C 7 823,00</td></tr>
+        <tr><td>Barens low trak linjen ned til</td><td class="num">7 825,375</td></tr>
+        <tr><td>Motorens test: high 7 825,50 ≥ 7 825,375</td><td class="num neg">ramte — men først bagefter</td></tr>
+        <tr class="total"><td>Baren lukker på sin egen low → high kom først</td><td class="num neg">7 825,50 &lt; 7 826,00 — rørte den aldrig</td></tr>
+      </tbody>
+    </table></div>
+    <p style="margin-top:16px">Da high'en printede, lå linjen stadig på 7&nbsp;826,00. Den kom først
+      ned på 7&nbsp;825,375 efter at prisen var faldet til 7&nbsp;823,00 — og da var high'en fortid.
+      Raidet skete aldrig.</p>
+    <p style="margin-top:12px"><b>Reglen nu:</b> et raid godkendes kun hvis baren ramte linjen som
+      den lå <em>før</em> flytningen — eller hvis barens form siger at det nye extreme kom først.
+      For en bear-EQ er forlængelsen en ny low og berøringen er high'en, så low'en skal være kommet
+      først: en op-lukkende bar. Lukker baren ned, kom high'en først, og raidet er falsk.</p>
+  </div>
+  <div class="col" style="margin-top:20px">
+    <div class="tablewrap"><table>
+      <thead><tr><th>Alle 7 358 raids i vinduet</th><th>Antal</th><th>Andel</th></tr></thead>
+      <tbody>
+        <tr><td>Ramte linjen før flytningen <span class="dim">— ingen tvivl</span></td><td class="num">6 377</td><td class="num">86,7 %</td></tr>
+        <tr><td>Ramte kun efter flytningen, men formen siger OK</td><td class="num">159</td><td class="num">2,2 %</td></tr>
+        <tr><td>Formen afgør det ikke <span class="dim">— kasseret</span></td><td class="num">37</td><td class="num">0,5 %</td></tr>
+        <tr class="total"><td>Falske <span class="dim">— kasseret</span></td><td class="num neg">785</td><td class="num neg">10,7 %</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note" style="margin-top:16px"><b>Fem af de 21 gamle trades var falske raids</b> —
+      14. aug 15:33, 14. aug 15:55, 31. aug 15:51, 7. sep 15:30 og 7. sep 15:40. Tilsammen −9,2 R.
+      Dit gæt om 14. aug 15:42 holdt derimod ikke: den bar flyttede slet ikke linjen, og low'en
+      ramte 7&nbsp;822,75 præcis. Den er ægte.</p>
+  </div>
+  <div class="col" style="margin-top:30px">
+    <h3>Og så kom 5 s-dataen</h3>
+    <p style="margin-top:8px">"Op-lukkende bar → low'en kom først" var en antagelse, ikke en måling.
+      Med 5&nbsp;s for begge assets — ES fra 13. august, NQ fra 21. august — kan den efterprøves:
+      hver 15&nbsp;s-bar deles i tre, og rækkefølgen aflæses direkte.
+      <b>58 673 beslutningspunkter</b>, heraf 5 485 ægte raids.</p>
+    <p style="margin-top:12px">Først den bar du pegede på. <b>14. august 15:33:00 på ES</b>,
+      hvor EQ-linjen lå på 7&nbsp;826,00:</p>
+  </div>
+  <div class="col" style="margin-top:16px">
+    <div class="tablewrap"><table>
+      <thead><tr><th>De tre 5 s-barer i 15 s-baren 15:33:00</th><th>High</th><th>Low</th><th>Linjen</th><th>Ramte?</th></tr></thead>
+      <tbody>
+        <tr><td>15:33:00</td><td class="num">7 825,50</td><td class="num">7 823,50</td><td class="num">7 825,625</td><td class="num">nej</td></tr>
+        <tr><td>15:33:05</td><td class="num">7 824,00</td><td class="num">7 823,00</td><td class="num">7 825,375</td><td class="num">nej</td></tr>
+        <tr><td>15:33:10</td><td class="num">7 824,00</td><td class="num">7 823,00</td><td class="num">7 825,375</td><td class="num">nej</td></tr>
+        <tr class="total"><td>Raidet skete aldrig</td><td colspan="4" class="num neg">high'en 7 825,50 kom i FØRSTE 5 s-bar, hvor linjen stadig lå på 7 825,625</td></tr>
+      </tbody>
+    </table></div>
+    <p style="margin-top:16px">Nøjagtig som du sagde. Og det gælder bredt — her er alle tre regler
+      holdt op mod 5 s-facit over hele materialet:</p>
+    <div class="tablewrap" style="margin-top:14px"><table>
+      <thead><tr><th>Regel, målt mod 5 s</th><th>Falske raids</th><th>Missede raids</th><th>Præcision</th></tr></thead>
+      <tbody>
+        <tr><td>Gammel — hele 15 s-baren på én gang</td><td class="num neg">464</td><td class="num">0</td><td class="num neg">92,2 %</td></tr>
+        <tr><td>Kun linjen før flytningen <span class="dim">— maksimalt forsigtig</span></td><td class="num">0</td><td class="num neg">308</td><td class="num">100 %</td></tr>
+        <tr class="total"><td>Formreglen <span class="dim">— den jeg valgte</span></td><td class="num pos">3</td><td class="num">192</td><td class="num pos">99,9 %</td></tr>
+      </tbody>
+    </table></div>
+    <p style="margin-top:16px">Den gamle regel påstod altså <b>464 raids der aldrig skete</b>.
+      Formreglen fjerner 461 af dem og henter samtidig 116 ægte raids tilbage, som den maksimalt
+      forsigtige regel ville have kasseret.</p>
+    <p style="margin-top:12px">Skarpest ses det på de <b>772 punkter hvor flytningen er afgørende</b>
+      — dem hvor de to yderregler er uenige. 39,9 % af dem var ægte raids. Den gamle regel sagde ja
+      til alle og ramte 39,9 % rigtigt; den forsigtige sagde nej til alle og ramte 60,1 %;
+      formreglen ramte <b>74,7 %</b>.</p>
+    <p class="note" style="margin-top:16px"><b>Og vigtigst: facit ændrer sig ikke.</b>
+      93,9 % af ES-raids og 68,1 % af NQ-raids afgøres nu med rigtige 5&nbsp;s-barer.
+      De 18 par og +23,90 R står uændret — præcis de samme handler som da reglen var et gæt.
+      Det er første gang i hele forløbet at en antagelse er blevet efterprøvet og har holdt.</p>
+  </div>
+  <div class="col" style="margin-top:18px">
+    <div class="flag">
+      <div class="ft">Hvad der stadig udledes</div>
+      ES mangler kun 12. august, NQ mangler 13.–20. august. Der bruges formreglen — nu med en
+      <em>målt</em> træfsikkerhed på 99,9 % i stedet for et gæt.
+      <div style="margin-top:11px">Det er ikke længere den svage del af modellen. Det er
+        <b>antallet af handler</b>: 18 par, t = +0,51, og en spejlvending der også giver plus.
+        Finere data løser ikke det — kun flere dage gør.</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <div class="sechead"><h2>Fødselsbaren er en rigtig bar</h2></div>
+    <p>Du fandt to fejl i træk, og de er to sider af samme sag. EQ'en fødes når 1m-candlen lukker —
+      og den 15&nbsp;s-bar der bærer det luk er <em>selv en bar</em>. Den blev aldrig testet mod den EQ
+      den lige havde skabt, fordi raid-testen kørte før oprettelsen. Så fødselsbaren kunne hverken
+      dræbe EQ'en eller handle den.</p>
+    <p style="margin-top:12px"><b>14. august, long 15:51:15.</b> Bullish EQ ud af 1m-candlen 15:50,
+      linje 7&nbsp;822,25 (ES) / 30&nbsp;238,88 (NQ). Fødselsbaren lukkede på 7&nbsp;820,75 og
+      30&nbsp;219,00 — <em>under</em> linjen på begge. Ugyldig med det samme, men handlen blev taget.</p>
+    <p style="margin-top:12px"><b>17. august, short 15:32:00.</b> Det omvendte. 1m-candlen 15:31
+      lukkede bearish under sin egen midt på begge assets → ny bear-EQ. NQ's linje lå på
+      30&nbsp;248,50, og fødselsbaren satte en high på 30&nbsp;248,75 — ramte linjen — og lukkede
+      tilbage på 30&nbsp;240,00. Rent raid, begge lukkede bearish. Et helt lovligt signal, som min
+      første rettelse blokerede.</p>
+  </div>
+  <div class="col" style="margin-top:16px">
+    <div class="tablewrap"><table>
+      <thead><tr><th></th><th>14. aug — EQ dør</th><th>17. aug — EQ handles</th></tr></thead>
+      <tbody>
+        <tr><td>1m-candle</td><td class="num">15:50 bullish</td><td class="num">15:31 bearish</td></tr>
+        <tr><td>EQ-anker <span class="dim">(NQ)</span></td><td class="num dim">low 30 228,25</td><td class="num dim">high 30 266,00</td></tr>
+        <tr><td>Linje ved fødslen <span class="dim">(NQ)</span></td><td class="num"><b>30 238,88</b></td><td class="num"><b>30 248,50</b></td></tr>
+        <tr><td>Fødselsbaren rører linjen</td><td class="num">ja</td><td class="num">ja — high 30 248,75</td></tr>
+        <tr><td>Fødselsbarens close</td><td class="num neg">30 219,00</td><td class="num pos">30 240,00</td></tr>
+        <tr class="total"><td>Udfald</td><td class="num neg">lukkede igennem → ugyldig</td><td class="num pos">rent raid → entry</td></tr>
+      </tbody>
+    </table></div>
+    <p style="margin-top:16px">Fødselsbaren behandles nu som enhver anden bar — inklusive
+      rækkefølge-testen ovenfor. Den kan både raide EQ'en rent og lukke igennem den.</p>
+    <div class="flag" style="margin-top:16px">
+      <div class="ft">Jeg tog fejl én gang undervejs — værd at skrive ned</div>
+      Efter 14. august lod jeg fødselsbaren <em>kun</em> dræbe en EQ, aldrig handle den. Begrundelsen
+      var at fødselsbar-raids var "degenererede", fordi baren selv kan trække linjen ned til sig.
+      Det holdt ikke: målt på alle 3 640 tilfælde når <b>80–82 %</b> helt op til 1m-candlens egen
+      midt — altså ægte retracements. Kun ~20 % er artefakter. Jeg smed en stor lovlig kategori væk
+      på et løst argument, og 17. august var beviset.
+    </div>
+    <p style="margin-top:16px">Det artefakt-tilfælde jeg beskrev her — <b>14. august 15:33:00 på
+      ES</b> — viste sig at være netop det falske raid du fandt på 5&nbsp;s-chartet. Du valgte
+      dengang at beholde det, fordi det er sådan alle andre barer behandles. Det var det rigtige
+      valg: fejlen lå ikke i fødselsbaren, men i at <em>alle</em> barer blev læst uden rækkefølge.
+      Med rækkefølge-testen falder den nu ud af sig selv, sammen med 784 andre.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <div class="sechead"><h2>Hvorfor lofterne virker</h2></div>
+    <p>Det hænger sammen med noget jeg fandt allerede i første kørsel: i åbningsvinduet er EQ-benene
+      på deres bredeste, og fordi stoppet følger EQ-boksen mens målet står fast på 15 og 75 point,
+      kollapser det reelle gevinst:risiko-forhold netop dér.</p>
+    <p style="margin-top:12px">Før lofterne havde NQ et medianstop på 45,88 point mod en TP på 75 —
+      altså 1,6 : 1, hvor du skulle ramme 38 % for at gå i nul. Efter lofterne er medianstoppet
+      <b>27,00 point</b>, hvilket giver 2,8 : 1 og et krav på 26 %.</p>
+    <p style="margin-top:12px">Den mekaniske begrundelse holder stadig: lofterne fjerner de setups
+      hvor din faste TP aldrig stod i et fornuftigt forhold til risikoen. Men <em>tallene</em>
+      understøtter den ikke længere — se tabellen.</p>
+  </div>
+  <div class="col" style="margin-top:20px">
+    <div class="tablewrap"><table>
+      <thead><tr><th>Loft (ES / NQ)</th><th>Par</th><th>Resultat</th><th>R pr. par</th></tr></thead>
+      <tbody>
+        <tr><td>4 / 20 <span class="dim">— for stramt</span></td><td class="num">4</td><td class="num neg">−6,7 R</td><td class="num neg">−1,68</td></tr>
+        <tr><td>5 / 25</td><td class="num">7</td><td class="num neg">−0,9 R</td><td class="num neg">−0,13</td></tr>
+        <tr><td>6 / 30</td><td class="num">10</td><td class="num neg">−12,3 R</td><td class="num neg">−1,23</td></tr>
+        <tr><td>7 / 35</td><td class="num">12</td><td class="num pos">+4,1 R</td><td class="num pos">+0,34</td></tr>
+        <tr class="total"><td>8 / 40 <span class="dim">— dine tal</span></td><td class="num">18</td><td class="num pos">+23,9 R</td><td class="num pos">+1,33</td></tr>
+        <tr><td>9 / 45</td><td class="num">21</td><td class="num pos">+13,1 R</td><td class="num pos">+0,63</td></tr>
+        <tr><td>10 / 50</td><td class="num">24</td><td class="num pos">+6,9 R</td><td class="num pos">+0,29</td></tr>
+        <tr><td>12 / 60</td><td class="num">29</td><td class="num neg">−11,2 R</td><td class="num neg">−0,38</td></tr>
+        <tr><td>15 / 75</td><td class="num">31</td><td class="num neg">−20,6 R</td><td class="num neg">−0,66</td></tr>
+        <tr><td>Intet loft</td><td class="num">35</td><td class="num neg">−38,1 R</td><td class="num neg">−1,09</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note" style="margin-top:16px"><b>Nu er der i det mindste en top, ikke en ø.</b>
+      Kurven stiger fra −12,3 ved 6/30 til +23,9 ved 8/40 og falder derefter jævnt: +13,1 · +6,9 ·
+      −11,2 · −20,6 · −38,1 R. En enkelt top med faldende flanker på begge sider ligner mere en
+      mekanisme end det hakkede mønster i sidste version. Men toppen ligger præcis på dine egne
+      tal, og det er stadig 18 par — behandl det som held indtil mere data siger andet.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <div class="sechead"><h2>Men se hvor plusset kommer fra</h2></div>
+    <p>Det her er grunden til at jeg ikke vil kalde modellen bevist:</p>
+  </div>
+  <div class="col" style="margin-top:16px">
+    <div class="tablewrap"><table>
+      <thead><tr><th>Udfald</th><th>Par</th><th>Bidrag</th></tr></thead>
+      <tbody>
+        <tr><td>Begge ben i TP</td><td class="num">2</td><td class="num pos">+30,0 R</td></tr>
+        <tr><td>Ét ben i TP, ét i BE</td><td class="num">3</td><td class="num pos">+22,5 R</td></tr>
+        <tr><td>Ender på præcis nul <span class="dim">(begge ben BE)</span></td><td class="num">2</td><td class="num">0,0 R</td></tr>
+        <tr><td>Tab</td><td class="num">11</td><td class="num">−28,6 R</td></tr>
+        <tr class="total"><td>I alt</td><td class="num">18</td><td class="num pos">+23,9 R</td></tr>
+      </tbody>
+    </table></div>
+    <p style="margin-top:16px">Fem vindere leverer +52,5 R; elleve tabere koster −28,6 R; to ender på nul.
+      To trades alene (20. aug og 25. aug) står for +30,0 R af plusset.</p>
+    <p style="margin-top:12px">Den afgørende måling: alle <b>30 signaler</b> uden dagsgrænser og uden
+      én-position-ad-gangen giver <b>+16,68 R</b> — +0,56 R pr. par, t = +0,51. Det er stadig langt
+      fra signifikant, men det er første gang tallet er tydeligt positivt. Før rækkefølge-testen var
+      det −0,01.</p>
+    <p style="margin-top:12px">Skævheden er der stadig: første halvdel +29,5 R, anden halvdel −12,8 R.
+      Og forskellen mellem +0,56 R pr. signal og +1,33 R pr. taget trade er fortsat dagsgrænserne,
+      ikke modellen — de har bare et bedre råmateriale at vælge fra nu.</p>
+  </div>
+  <div class="col" style="margin-top:24px">
+    <figure>
+      <div class="figtitle">Kapitalkurve</div>
+      <div class="figsub">Kumuleret R over 18 trade-par, i rækkefølge</div>
+      <div class="legend">
+        <span><i style="background:var(--ink)"></i>Kombineret</span>
+        <span><i style="background:var(--es)"></i>ES</span>
+        <span><i style="background:var(--nq)"></i>NQ</span>
+      </div>
+      <svg id="c-eq" viewBox="0 0 700 300" role="img" aria-label="Kapitalkurve: kombineret ender på plus 23,9 R"></svg>
+      <figcaption>Fem lodrette spring og ellers nedad. Kurven ligner et lotteri med god risikostyring
+        mere end en jævn edge — hvilket den strengt taget også er, med 2 nul-trades ud af 18
+        og et drawdown på −13,1 R undervejs.</figcaption>
+    </figure>
+  </div>
+  <div class="col" style="margin-top:22px">
+    <figure>
+      <div class="figtitle">Dag for dag</div>
+      <div class="figsub">Kombineret R pr. session · 11 dage med trades</div>
+      <svg id="c-day" viewBox="0 0 700 210" role="img" aria-label="Søjlediagram over dagligt resultat"></svg>
+      <figcaption>5 plus-dage, 6 minus-dage, ingen på nul. Værste dag er −8,2 R — dagsstoppet
+        griber først <em>efter</em> at en dag har tabt mere end 5 R, så −5 er ikke et loft.</figcaption>
+    </figure>
+  </div>
+</section>
+
+
+<section>
+  <div class="col">
+    <div class="sechead"><h2>Alle 18 trades</h2></div>
+    <p>Begge ben side om side. <b>TP</b> = target ramt, <b>SL</b> = oprindeligt stop ramt,
+      <b>BE</b> = stoppet var flyttet til entry og blev ramt (0 RR). Varigheden er fra entry til
+      det sidste ben lukkede.</p>
+  </div>
+  <div style="max-width:none; margin-top:18px">
+    <div class="tablewrap"><table>
+      <thead><tr>
+        <th>#</th><th>Dato</th><th>Tid</th><th>Retn.</th><th>Varighed</th>
+        <th>ES entry</th><th>ES SL</th><th>ES exit</th><th></th><th>ES RR</th>
+        <th>NQ entry</th><th>NQ SL</th><th>NQ exit</th><th></th><th>NQ RR</th>
+        <th>Par</th><th>Kum.</th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td>14. aug</td><td class="num">15:42:00</td><td><b>LONG</b></td><td class="num dim">5 min</td><td class="num">7 823,75</td><td class="num dim">7 821,00</td><td class="num">7 823,75</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num">30 230,25</td><td class="num dim">30 195,00</td><td class="num">30 230,25</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num dim"><b>0,00</b></td><td class="num dim">0,00</td></tr>
+        <tr><td class="num">2</td><td>14. aug</td><td class="num">15:56:00</td><td><b>SHORT</b></td><td class="num dim">6 min</td><td class="num">7 825,50</td><td class="num dim">7 828,50</td><td class="num">7 828,50</td><td><span class="chip sl">SL</span></td><td class="num neg">−1,50</td><td class="num">30 236,50</td><td class="num dim">30 254,00</td><td class="num">30 236,50</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num neg"><b>−1,50</b></td><td class="num dim">−1,50</td></tr>
+        <tr><td class="num">3</td><td>17. aug</td><td class="num">15:32:00</td><td><b>SHORT</b></td><td class="num dim">128 min</td><td class="num">7 804,50</td><td class="num dim">7 809,50</td><td class="num">7 789,50</td><td><span class="chip tp">TP</span></td><td class="num pos">+7,50</td><td class="num">30 240,00</td><td class="num dim">30 266,00</td><td class="num">30 240,00</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num pos"><b>+7,50</b></td><td class="num dim">+6,00</td></tr>
+        <tr><td class="num">4</td><td>20. aug</td><td class="num">15:45:15</td><td><b>SHORT</b></td><td class="num dim">19 min</td><td class="num">7 712,25</td><td class="num dim">7 716,25</td><td class="num">7 697,25</td><td><span class="chip tp">TP</span></td><td class="num pos">+7,50</td><td class="num">29 426,00</td><td class="num dim">29 457,00</td><td class="num">29 351,00</td><td><span class="chip tp">TP</span></td><td class="num pos">+7,50</td><td class="num pos"><b>+15,00</b></td><td class="num dim">+21,00</td></tr>
+        <tr><td class="num">5</td><td>21. aug</td><td class="num">15:41:15</td><td><b>LONG</b></td><td class="num dim">1 min</td><td class="num">7 686,50</td><td class="num dim">7 681,25</td><td class="num">7 686,50</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num">29 353,00</td><td class="num dim">29 320,75</td><td class="num">29 320,75</td><td><span class="chip sl">SL</span></td><td class="num neg">−3,23</td><td class="num neg"><b>−3,23</b></td><td class="num dim">+17,77</td></tr>
+        <tr><td class="num">6</td><td>21. aug</td><td class="num">15:45:00</td><td><b>LONG</b></td><td class="num dim">3 min</td><td class="num">7 688,25</td><td class="num dim">7 682,75</td><td class="num">7 682,75</td><td><span class="chip sl">SL</span></td><td class="num neg">−2,75</td><td class="num">29 335,75</td><td class="num dim">29 314,00</td><td class="num">29 314,00</td><td><span class="chip sl">SL</span></td><td class="num neg">−2,17</td><td class="num neg"><b>−4,92</b></td><td class="num dim">+12,85</td></tr>
+        <tr><td class="num">7</td><td>25. aug</td><td class="num">15:30:00</td><td><b>SHORT</b></td><td class="num dim">1 min</td><td class="num">7 694,25</td><td class="num dim">7 697,25</td><td class="num">7 697,25</td><td><span class="chip sl">SL</span></td><td class="num neg">−1,50</td><td class="num">29 292,75</td><td class="num dim">29 312,50</td><td class="num">29 312,50</td><td><span class="chip sl">SL</span></td><td class="num neg">−1,98</td><td class="num neg"><b>−3,48</b></td><td class="num dim">+9,37</td></tr>
+        <tr><td class="num">8</td><td>25. aug</td><td class="num">15:41:45</td><td><b>LONG</b></td><td class="num dim">4 min</td><td class="num">7 697,25</td><td class="num dim">7 694,25</td><td class="num">7 694,25</td><td><span class="chip sl">SL</span></td><td class="num neg">−1,50</td><td class="num">29 353,25</td><td class="num dim">29 315,00</td><td class="num">29 353,25</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num neg"><b>−1,50</b></td><td class="num dim">+7,87</td></tr>
+        <tr><td class="num">9</td><td>25. aug</td><td class="num">15:50:30</td><td><b>SHORT</b></td><td class="num dim">33 min</td><td class="num">7 696,75</td><td class="num dim">7 700,50</td><td class="num">7 681,75</td><td><span class="chip tp">TP</span></td><td class="num pos">+7,50</td><td class="num">29 379,00</td><td class="num dim">29 414,75</td><td class="num">29 304,00</td><td><span class="chip tp">TP</span></td><td class="num pos">+7,50</td><td class="num pos"><b>+15,00</b></td><td class="num dim">+22,88</td></tr>
+        <tr><td class="num">10</td><td>28. aug</td><td class="num">15:57:30</td><td><b>LONG</b></td><td class="num dim">2 min</td><td class="num">7 749,75</td><td class="num dim">7 746,25</td><td class="num">7 749,75</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num">29 648,75</td><td class="num dim">29 631,75</td><td class="num">29 631,75</td><td><span class="chip sl">SL</span></td><td class="num neg">−1,70</td><td class="num neg"><b>−1,70</b></td><td class="num dim">+21,18</td></tr>
+        <tr><td class="num">11</td><td>1. sep</td><td class="num">15:30:00</td><td><b>SHORT</b></td><td class="num dim">5 min</td><td class="num">7 641,00</td><td class="num dim">7 648,75</td><td class="num">7 648,75</td><td><span class="chip sl">SL</span></td><td class="num neg">−3,88</td><td class="num">29 096,00</td><td class="num dim">29 122,75</td><td class="num">29 122,75</td><td><span class="chip sl">SL</span></td><td class="num neg">−2,67</td><td class="num neg"><b>−6,55</b></td><td class="num dim">+14,62</td></tr>
+        <tr><td class="num">12</td><td>2. sep</td><td class="num">15:36:30</td><td><b>SHORT</b></td><td class="num dim">1 min</td><td class="num">7 646,50</td><td class="num dim">7 650,25</td><td class="num">7 646,50</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num">29 059,00</td><td class="num dim">29 090,50</td><td class="num">29 059,00</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num dim"><b>0,00</b></td><td class="num dim">+14,62</td></tr>
+        <tr><td class="num">13</td><td>2. sep</td><td class="num">15:49:30</td><td><b>SHORT</b></td><td class="num dim">2 min</td><td class="num">7 646,75</td><td class="num dim">7 651,00</td><td class="num">7 651,00</td><td><span class="chip sl">SL</span></td><td class="num neg">−2,12</td><td class="num">29 043,75</td><td class="num dim">29 082,50</td><td class="num">29 043,75</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num neg"><b>−2,12</b></td><td class="num dim">+12,50</td></tr>
+        <tr><td class="num">14</td><td>2. sep</td><td class="num">15:55:00</td><td><b>SHORT</b></td><td class="num dim">1 min</td><td class="num">7 649,25</td><td class="num dim">7 652,00</td><td class="num">7 652,00</td><td><span class="chip sl">SL</span></td><td class="num neg">−1,38</td><td class="num">29 029,75</td><td class="num dim">29 063,75</td><td class="num">29 029,75</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num neg"><b>−1,38</b></td><td class="num dim">+11,12</td></tr>
+        <tr><td class="num">15</td><td>4. sep</td><td class="num">15:41:45</td><td><b>SHORT</b></td><td class="num dim">44 min</td><td class="num">7 744,75</td><td class="num dim">7 751,00</td><td class="num">7 729,75</td><td><span class="chip tp">TP</span></td><td class="num pos">+7,50</td><td class="num">29 614,25</td><td class="num dim">29 641,00</td><td class="num">29 614,25</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num pos"><b>+7,50</b></td><td class="num dim">+18,62</td></tr>
+        <tr><td class="num">16</td><td>7. sep</td><td class="num">15:30:45</td><td><b>LONG</b></td><td class="num dim">5 min</td><td class="num">7 715,50</td><td class="num dim">7 713,25</td><td class="num">7 715,50</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num">29 625,00</td><td class="num dim">29 607,75</td><td class="num">29 607,75</td><td><span class="chip sl">SL</span></td><td class="num neg">−1,73</td><td class="num neg"><b>−1,73</b></td><td class="num dim">+16,90</td></tr>
+        <tr><td class="num">17</td><td>7. sep</td><td class="num">15:41:00</td><td><b>SHORT</b></td><td class="num dim">31 min</td><td class="num">7 712,75</td><td class="num dim">7 713,75</td><td class="num">7 713,75</td><td><span class="chip sl">SL</span></td><td class="num neg">−0,50</td><td class="num">29 608,25</td><td class="num dim">29 640,25</td><td class="num">29 608,25</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num neg"><b>−0,50</b></td><td class="num dim">+16,40</td></tr>
+        <tr><td class="num">18</td><td>9. sep</td><td class="num">15:53:15</td><td><b>LONG</b></td><td class="num dim">11 min</td><td class="num">7 657,00</td><td class="num dim">7 654,25</td><td class="num">7 657,00</td><td><span class="chip be">BE</span></td><td class="num dim">0,00</td><td class="num">29 508,75</td><td class="num dim">29 487,75</td><td class="num">29 583,75</td><td><span class="chip tp">TP</span></td><td class="num pos">+7,50</td><td class="num pos"><b>+7,50</b></td><td class="num dim">+23,90</td></tr>
+        <tr class="total"><td colspan="9">I alt</td>
+          <td class="num pos">+14,88</td><td colspan="4"></td>
+          <td class="num pos">+9,02</td><td class="num pos">+23,90</td><td></td></tr>
+      </tbody>
+    </table></div>
+    <p class="dim" style="font-size:.84rem; margin-top:10px">Tabellen kan scrolles vandret.</p>
+  </div>
+
+  <div class="col" style="margin-top:30px">
+    <h3>Dag for dag</h3>
+  </div>
+  <div class="col" style="margin-top:14px">
+    <div class="tablewrap"><table>
+      <thead><tr><th>Dato</th><th>Par</th><th>ES</th><th>NQ</th><th>Dagen</th><th>Kum.</th><th>Ramte grænse</th></tr></thead>
+      <tbody>
+        <tr><td>14. aug</td><td class="num">2</td><td class="num neg">−1,50</td><td class="num dim">0,00</td><td class="num neg"><b>−1,50</b></td><td class="num dim">−1,50</td><td><span class="dim">—</span></td></tr>
+        <tr><td>17. aug</td><td class="num">1</td><td class="num pos">+7,50</td><td class="num dim">0,00</td><td class="num pos"><b>+7,50</b></td><td class="num dim">+6,00</td><td><span class="chip tp">mål +7,5</span></td></tr>
+        <tr><td>20. aug</td><td class="num">1</td><td class="num pos">+7,50</td><td class="num pos">+7,50</td><td class="num pos"><b>+15,00</b></td><td class="num dim">+21,00</td><td><span class="chip tp">mål +7,5</span></td></tr>
+        <tr><td>21. aug</td><td class="num">2</td><td class="num neg">−2,75</td><td class="num neg">−5,40</td><td class="num neg"><b>−8,15</b></td><td class="num dim">+12,85</td><td><span class="chip sl">stop −5</span></td></tr>
+        <tr><td>25. aug</td><td class="num">3</td><td class="num pos">+4,50</td><td class="num pos">+5,53</td><td class="num pos"><b>+10,03</b></td><td class="num dim">+22,88</td><td><span class="chip tp">mål +7,5</span></td></tr>
+        <tr><td>28. aug</td><td class="num">1</td><td class="num dim">0,00</td><td class="num neg">−1,70</td><td class="num neg"><b>−1,70</b></td><td class="num dim">+21,18</td><td><span class="dim">—</span></td></tr>
+        <tr><td>1. sep</td><td class="num">1</td><td class="num neg">−3,88</td><td class="num neg">−2,67</td><td class="num neg"><b>−6,55</b></td><td class="num dim">+14,62</td><td><span class="chip sl">stop −5</span></td></tr>
+        <tr><td>2. sep</td><td class="num">3</td><td class="num neg">−3,50</td><td class="num dim">0,00</td><td class="num neg"><b>−3,50</b></td><td class="num dim">+11,12</td><td><span class="dim">—</span></td></tr>
+        <tr><td>4. sep</td><td class="num">1</td><td class="num pos">+7,50</td><td class="num dim">0,00</td><td class="num pos"><b>+7,50</b></td><td class="num dim">+18,62</td><td><span class="chip tp">mål +7,5</span></td></tr>
+        <tr><td>7. sep</td><td class="num">2</td><td class="num neg">−0,50</td><td class="num neg">−1,73</td><td class="num neg"><b>−2,23</b></td><td class="num dim">+16,40</td><td><span class="dim">—</span></td></tr>
+        <tr><td>9. sep</td><td class="num">1</td><td class="num dim">0,00</td><td class="num pos">+7,50</td><td class="num pos"><b>+7,50</b></td><td class="num dim">+23,90</td><td><span class="chip tp">mål +7,5</span></td></tr>
+        <tr class="total"><td>I alt</td><td class="num">18</td>
+          <td class="num pos">+14,88</td><td class="num pos">+9,02</td>
+          <td class="num pos">+23,90</td><td></td><td></td></tr>
+      </tbody>
+    </table></div>
+    <p class="note" style="margin-top:16px"><b>Længden afslører meget.</b> De fem vindere løb 11, 19, 33, 44 og 128 minutter. 8 af de 18 par var færdige på under fem minutter — og kort levetid betyder næsten altid break-even eller et lille tab.</p>
+  </div>
+</section>
+<section>
+  <div class="col">
+    <div class="sechead"><h2>Retningen er et møntkast</h2></div>
+    <p>Den rene retningstest står på <b>49,7 %</b> i den filtrerede gruppe mod 48,5 % før filtrering.
+      Begge tal ligger så tæt på 50 % at man ikke kan aflæse noget af dem — signalet indeholder
+      ingen information om hvilken vej prisen går.</p>
+  </div>
+  <div class="col" style="margin-top:16px">
+    <figure>
+      <div class="figtitle">Symmetrisk retningstest, efter filtrering</div>
+      <div class="figsub">Andel der ramte målet før stoppet · 50 % = ingen information</div>
+      <div class="legend">
+        <span><i style="background:var(--es)"></i>ES</span>
+        <span><i style="background:var(--nq)"></i>NQ</span>
+      </div>
+      <svg id="c-sym" viewBox="0 0 700 250" role="img" aria-label="Retningstest nu omkring 50 procent"></svg>
+      <figcaption>Fire målinger over 50 %, to på 50 %, fire under. Samlet 149 af 300 = 49,7 %.
+        Til sammenligning: 48,5 % før filtrering.</figcaption>
+    </figure>
+  </div>
+  <div class="col" style="margin-top:18px">
+    <p><b>Vær klar over hvad det betyder.</b> Signalet forudsiger ikke retningen. Overskuddet kommer
+      derfor ikke fra at have ret, men udelukkende fra strukturen: et stop du har gjort billigt,
+      en BE-regel der rammer i <b>22 af 36 ben</b>, og en TP på 7,5 R der af og til bliver ramt.</p>
+    <p style="margin-top:12px">Det er en helt legitim måde at tjene penge på — men den står og falder
+      med at BE-reglen bliver ved med at neutralisere taberne. Det er der din risiko ligger,
+      ikke i at ramme retningen.</p>
+    <p style="margin-top:12px">Sidebemærkning: spejlvendingen giver <b>+17,3 R over 21 par</b>.
+      Tag lige det alvorligt. Handler du modellen præcis omvendt af hvad den siger, tjener du
+      også penge. Det kan kun lade sig gøre hvis resultatet ikke kommer fra retningen, men fra
+      stop/TP-strukturen og fra hvilke handler dagsgrænserne lukker ind. Det er den stærkeste
+      enkeltindikation i hele rapporten på at der ikke er en retningskant at handle på.</p>
+  </div>
+</section>
+
+
+
+
+<section>
+  <div class="col">
+    <div class="sechead"><h2>Backtest og strategi: fire fejl fundet, én endnu ikke genverificeret</h2></div>
+    <p>Fem kørsler af Pine-strategien blev holdt op mod backtesten. Undervejs dukkede tre ægte fejl op —
+      to i min motor, én i Pine — og til sidst viste den resterende forskel sig ikke at være kode
+      overhovedet: <b>min backtest kørte på MNQ, mens strategien kørte på NQ.</b> Med NQ-data var
+      alle 32 ben identiske: samme tidspunkt, samme entry-pris, samme RR ned til tredje decimal.</p>
+    <p style="margin-top:12px">Fejl fire, fem og seks er dem du selv fandt — fødselsbaren der
+      hverken kunne dræbe eller handle sin egen EQ, og raids der kun ser ud som raids fordi
+      15 s-baren læses uden rækkefølge. Alle er rettet med <em>samme</em> ændring i begge motorer,
+      men <b>afstemningen er endnu ikke kørt</b>. Kør den opdaterede strategi på begge charts og
+      send CSV'en, så holder jeg de 36 ben op mod tallene her.</p>
+    <p style="margin-top:12px">Bemærk én forskel der ikke kan fjernes: backtesten bruger nu rigtige
+      5 s-barer til raid-detektion, mens Pine-strategien kun ser 15 s og derfor bruger formreglen.
+      De var uenige i 0,33 % af 58 673 beslutninger og ingen af dem ændrede en handel, så de to skal
+      stadig give samme resultat — men hvis de afviger et enkelt sted, er det formodentlig dér.</p>
+  </div>
+  <div class="col" style="margin-top:16px">
+    <div class="ledger">
+      <div class="lrow"><div class="q">Forældet entry-pris <span class="dim">(min fejl)</span></div>
+        <div class="a">Motoren brugte den <em>forrige</em> 15 s-candle som bekræftelse og fyldte på dens
+          luk — en pris der lå 15 sekunder tilbage i tiden. Pine gjorde det rigtige.</div></div>
+      <div class="lrow"><div class="q">BE på et brugt niveau <span class="dim">(begge)</span></div>
+        <div class="a">Afstanden til 5m-niveauet blev målt med absolutværdi. Lå niveauet allerede på den
+          forkerte side af entry, armerede BE øjeblikkeligt. Nu kræves det at niveauet ligger foran
+          handlen i gevinstretningen.</div></div>
+      <div class="lrow"><div class="q">na betød "gyldig" <span class="dim">(Pines fejl)</span></div>
+        <div class="a">Blev en EQ raidet på samme bar som setuppet blev armeret, læste Pine niveauet som
+          <code>na</code>, og invaliderings-testen faldt stille igennem. Niveauet aflæses nu før barens
+          vækst, og manglende niveau regnes som ugyldigt.</div></div>
+      <div class="lrow"><div class="q">MNQ i stedet for NQ</div>
+        <div class="a">Priserne afviger i snit 0,001 point, men enkelte bars op til
+          29. Det var nok til at flytte resultatet fra +2,85 til +5,83 R på NQ-benet og ændre hvilke
+          handler der blev taget.</div></div>
+      <div class="lrow"><div class="q">Rækkefølge inde i baren <span class="dim">(begge — dit fund)</span></div>
+        <div class="a">Motoren flyttede EQ-linjen med barens eget nye extreme og testede så barens
+          modsatte extreme mod den — som om de skete samtidig. 785 raids (10,7 %) var falske;
+          fem af dem blev til trades. Raid afgøres nu på 5 s-barer hvor de findes; ellers kræves
+          at linjen blev ramt før flytningen, eller at barens form viser at flytningen kom først.
+          Målt mod 5 s rammer den regel 99,9 % rigtigt.</div></div>
+      <div class="lrow"><div class="q">Fødselsbaren blev aldrig testet <span class="dim">(begge — dine fund)</span></div>
+        <div class="a">Raid-testen kørte før oprettelsen i samme bar, så den 15 s-bar der bærer
+          1m-lukket aldrig blev holdt op mod den EQ den lige havde skabt. Den kunne hverken lukke
+          igennem linjen (14. aug) eller raide den rent (17. aug). Nu behandles den som enhver
+          anden bar: af 2 752 fødselsbar-raids dør 1 277 ved fødslen og 1 475 er rene.</div></div>
+    </div>
+    <p class="note" style="margin-top:16px"><b>Læg mærke til hvad det sidste punkt betyder.</b>
+      To kontrakter på samme indeks, med en gennemsnitlig prisforskel på en tusindedel af et point,
+      gav 19 mod 16 handler og dobbelt så stort resultat. Og én rækkefølge-regel i EQ-motoren har
+      over tre dage flyttet facit fra 16 par / +17,9 R til 15 / +19,5 til 21 / +23,7 til 18 / +23,9 R —
+      mens værdien pr. signal gik +0,92 → +0,22 → −0,01 → +0,44 R. Modellen er så følsom at både
+      markedsstøj og detaljer i reglen afgør udfaldet.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col">
+    <div class="sechead"><h2>Minimumsafstand til BE-niveauet</h2></div>
+    <p>BE-reglen havde en degenereret kant: lå det forrige 5m-niveau oven i entry-prisen, blev stoppet
+      flyttet til break-even på selve entry-baren — før handlen havde gjort noget. Kravet er nu at
+      niveauet skal ligge mindst <b>0,25 point (ES) / 2 point (NQ)</b> fra entry; ellers ventes der
+      på næste 5m-candle.</p>
+  </div>
+  <div class="col" style="margin-top:16px">
+    <div class="tablewrap"><table>
+      <thead><tr><th></th><th>Uden krav</th><th>Med krav</th></tr></thead>
+      <tbody>
+        <tr><td>Resultat</td><td class="num">+19,2 R</td><td class="num pos">+23,9 R</td></tr>
+        <tr><td>ES-benet</td><td class="num">+10,1 R</td><td class="num pos">+14,9 R</td></tr>
+        <tr><td>NQ-benet</td><td class="num">+9,0 R</td><td class="num">+9,0 R</td></tr>
+        <tr><td>ES: TP / SL / BE</td><td class="num">3 / 7 / 8</td><td class="num">4 / 8 / 6</td></tr>
+        <tr><td>Max drawdown</td><td class="num">−14,0 R</td><td class="num pos">−13,1 R</td></tr>
+      </tbody>
+    </table></div>
+    <p style="margin-top:16px">Den tydeligste enkeltsag er <b>4. september</b>. Det forrige 5m-low lå
+      på 7744,75 — præcis entry-prisen. Første bar tog det med 0,75 point, BE blev armeret, og to bars
+      senere lukkede handlen på nul. Prisen løb derefter hele vejen ned til 7729,75, altså fuld TP.
+      Med minimumsafstanden springes det niveau over, og handlen giver +7,50 R.</p>
+    <p class="note" style="margin-top:16px"><b>Her holder reglen faktisk.</b> ES bytter to BE-exits
+      for én TP, resultatet stiger 4,7 R <em>og</em> drawdown falder fra −14,0 til −13,1 R.
+      Den er stadig målt på 18 par, så den er ikke bevist — men den er ikke en afvejning.</p>
+  </div>
+</section>
+<section>
+  <div class="col">
+    <div class="sechead"><h2>At strække TP'en for at hente dagens tab</h2></div>
+    <p>Idéen: er dagen i minus, forlænges næste trades TP med det tabte, så dagen lander på +7,5 R.
+      Jeg har bygget den ind — men på dette datasæt er den næsten ikke testbar.</p>
+  </div>
+  <div class="col" style="margin-top:16px">
+    <div class="tablewrap"><table>
+      <thead><tr><th>Entry-situation</th><th>Trades</th></tr></thead>
+      <tbody>
+        <tr><td>Flad dag — TP uændret 15 / 75</td><td class="num">13</td></tr>
+        <tr><td>Dagen i minus — TP strækkes</td><td class="num">5</td></tr>
+        <tr><td>Dagen i plus</td><td class="num">0</td></tr>
+        <tr class="total"><td>I alt</td><td class="num">18</td></tr>
+      </tbody>
+    </table></div>
+    <p style="margin-top:16px">Reglen rammer <b>fem gange ud af 18</b> — og ændrer stadig
+      <b>ingenting</b>: resultatet er +23,90 R både med og uden. Ingen af de fem strakte mål blev nået.</p>
+    <p style="margin-top:12px">Det er i sig selv svaret. Når målet strækkes fra 7,5 R til 9 R eller
+      mere, rammer det aldrig i dette datasæt. Reglen koster ikke noget, men den giver heller ikke
+      noget — og fem forsøg uden en eneste træffer peger samme vej som tabellen nedenfor.</p>
+  </div>
+  <div class="col" style="margin-top:22px">
+    <h3>Hvad det ville koste, hvis den ramte oftere</h3>
+    <p style="margin-top:8px">Her er tallene værd at kende, for de to assets opfører sig modsat:</p>
+  </div>
+  <div class="col" style="margin-top:14px">
+    <div class="tablewrap"><table>
+      <thead><tr><th>Mål</th><th>ES — når det</th><th>ES forv. værdi</th><th>NQ — når det</th><th>NQ forv. værdi</th></tr></thead>
+      <tbody>
+        <tr><td>7,5 R <span class="dim">(15 / 75 pkt)</span></td><td class="num">20,0 %</td><td class="num pos">+0,12</td><td class="num">26,7 %</td><td class="num pos">+0,04</td></tr>
+        <tr><td>9,0 R <span class="dim">(18 / 90 pkt)</span></td><td class="num">16,7 %</td><td class="num pos">+0,09</td><td class="num">13,3 %</td><td class="num neg">−1,09</td></tr>
+        <tr><td>10,0 R</td><td class="num">16,7 %</td><td class="num pos">+0,25</td><td class="num">10,0 %</td><td class="num neg">−1,36</td></tr>
+        <tr><td>12,5 R <span class="dim">(maks ved −5 R dagsstop)</span></td><td class="num">13,3 %</td><td class="num pos">+0,19</td><td class="num">6,7 %</td><td class="num neg">−1,63</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note" style="margin-top:16px"><b>De to assets peger hver sin vej.</b>
+      Uden BE-reglen er dit nuværende mål nu marginalt positivt på begge (+0,12 / +0,04) — også det
+      er en effekt af at de falske raids er væk. Men at strække det virker kun på ES, hvor
+      forventet værdi holder sig positiv helt op til 12,5 R. På NQ kollapser den til −1,09 allerede
+      ved 9 R. Skulle man bruge reglen, ville jeg kun strække ES-benet — men se forbeholdet nedenfor.</p>
+  </div>
+  <div class="col" style="margin-top:20px">
+    <div class="flag">
+      <div class="ft">Det principielle forbehold</div>
+      Reglen ændrer ikke hvad hver trade er værd — den flytter risiko rundt i tiden. Du gør de dage
+      hvor du allerede er bagud <em>sværere</em> at redde, fordi du kræver en større bevægelse præcis
+      når du har mindst råd til at tage fejl. Det er samme familie som martingale: flere dage lander
+      pænt på +7,5 R, men de dage der går galt, går mere galt.
+      <div style="margin-top:11px">Med fem observationer der alle ændrer nul, hælder jeg til at
+        droppe den. Jeg har ladet den stå <em>fra</em> i rapportens hovedtal, så +23,9 R er uden reglen.</div>
+    </div>
+  </div>
+</section>
+<section>
+  <div class="col">
+    <div class="sechead"><h2>Hvad der skal til for at vide om det holder</h2></div>
+    <ul class="tight">
+      <li><b>Opløsningen er færdig.</b> Begge assets er nu verificeret på 5 s, formreglen ramte
+        99,9 % rigtigt, og facit rykkede sig ikke. Der er ikke mere at hente dér — næste skridt er
+        udelukkende flere handelsdage.</li>
+      <li><b>Genkør strategien.</b> Begge rettelser er lagt ind i Pine, men afstemningen mellem de
+        to motorer er endnu ikke gentaget. Kør den på ES-chartet og på NQ-chartet (15 s begge steder)
+        og send CSV'en — så holder jeg de 36 ben op mod tallene her.</li>
+      <li><b>Det vigtigste tal er +0,56 R pr. signal.</b> Over alle 30 signaler er kanten nu tydeligt
+        positiv, men t = +0,51 betyder stadig "kan ikke skelnes fra tilfældighed". Og spejlvendingen
+        giver +17,3 R. Før du lægger penge på det, skal du se +0,56 holde på data du ikke har tunet
+        reglerne på.</li>
+      <li><b>Mere data.</b> 18 par over 11 handelsdage er ikke nok til noget som helst.
+        Med 6–12 måneder på samme vindue ville du have 200–500 trades. Du har allerede backtestet
+        16. januar manuelt — send den periode som CSV, så kører jeg den igennem.</li>
+      <li><b>Hold øje med BE-frekvensen.</b> 22 af 36 ben når BE. Falder det tal, forsvinder
+        overskuddet, fordi taberne så koster fuld pris. Det er den enkeltstørrelse jeg ville
+        overvåge først i live-handel.</li>
+      <li><b>Omkostninger er ikke med.</b> Spread og kommission på 18 par × 2 ben er ikke gratis,
+        men på ES er ét tick 0,125 R og på NQ 0,025 R — så det flytter i størrelsesordenen
+        2–3 R. Det æder ikke plusset, men det gør det tyndere.</li>
+      <li><b>Én ting jeg stadig gætter på:</b> jeg har læst "BE over 8 / 40 point væk" som afstanden
+        fra entry til det 5m-niveau der udløser BE — altså den forrige afsluttede 5m-candles
+        low (short) eller high (long). Det betyder også at BE-niveauet findes allerede ved entry.
+        Mente du noget andet, siger du til.</li>
+    </ul>
+  </div>
+</section>
+
+<div class="col">
+<footer>
+  <p>Motoren er en bar-for-bar port af EQ-scriptet: EQ'er oprettes udelukkende på lukkede 1m-candles,
+     én ad gangen pr. retning pr. asset. Den 15 s-bar der bærer 1m-lukket behandles som enhver anden
+     bar og kan både raide den nye EQ rent og lukke igennem den. Raids afgøres på 5 s-barer hvor
+     de findes (ES fra 13. august, NQ fra 21.); ellers godkendes et raid kun hvis baren ramte EQ-linjen som den
+     lå før barens egen forlængelse af extremet, eller hvis barens form viser at forlængelsen kom
+     først. Bekræftelse og exits kører på 15 s.
+     Entries kun 15:30–16:00, én position ad gangen, dagen slutter ved −5 R eller +7,5 R.
+     Ingen look-ahead. Ved samtidigt SL og TP i samme 15 s-bar tæller SL først; det skete aldrig.</p>
+  <p style="margin-top:10px">Filer: <code>TRADES_paired.csv</code> (18 par side om side),
+     <code>TRADES_allsignals.csv</code> (alle 30 signalpar uden dagsgrænser),
+     <code>EQ_konfluens_strategy.txt</code> (Pine-strategien), <code>raidcheck.py</code>
+     (klassificerer hvert raid) og <code>validate5s.py</code> (måler reglerne mod 5 s-barerne).</p>
+</footer>
+</div>
+</div>
+<div id="tip" role="status"></div>
+<script>
+const D = {"nPairs": 18, "equity": [0.0, 0.0, -1.5, 6.0, 21.0, 17.77, 12.85, 9.37, 7.87, 22.88, 21.18, 14.62, 14.62, 12.5, 11.12, 18.62, 16.9, 16.4, 23.9], "equityES": [0.0, 0.0, -1.5, 6.0, 13.5, 13.5, 10.75, 9.25, 7.75, 15.25, 15.25, 11.38, 11.38, 9.26, 7.88, 15.38, 15.38, 14.88, 14.88], "equityNQ": [0.0, 0.0, 0.0, 0.0, 7.5, 4.28, 2.11, 0.13, 0.13, 7.63, 5.93, 3.26, 3.26, 3.26, 3.26, 3.26, 1.53, 1.53, 9.03], "equityInv": [0.0, -3.52, -3.52, -3.52, -3.52, -3.52, -5.27, -5.27, -5.27, -5.27, 2.23, 2.23, -0.44, 7.06, 7.06, 7.06, 22.06, 22.06, 20.33, 20.33, 20.33, 20.33, 17.3], "daily": [["08-14", -1.5], ["08-17", 7.5], ["08-20", 15.0], ["08-21", -8.2], ["08-25", 10.0], ["08-28", -1.7], ["09-01", -6.6], ["09-02", -3.5], ["09-04", 7.5], ["09-07", -2.2], ["09-09", 7.5]], "sym": {"ES": [[2, 56.7], [4, 40.0], [6, 40.0], [10, 56.7], [15, 56.7]], "NQ": [[10, 50.0], [20, 53.3], [30, 50.0], [50, 53.3], [75, 40.0]]}};
+const NS = "http://www.w3.org/2000/svg";
+const tip = document.getElementById("tip");
+const el = (n, a) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); return e; };
+const cs = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+function showTip(e, txt){ tip.textContent = txt; tip.style.opacity = 1;
+  const r = tip.getBoundingClientRect();
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - r.width - 10) + "px";
+  tip.style.top = Math.max(8, e.clientY - r.height - 12) + "px"; }
+function hideTip(){ tip.style.opacity = 0; }
+
+function axes(svg, W, H, P, xt, yt, xs, ys, yfmt){
+  yt.forEach(v => {
+    const y = ys(v);
+    svg.appendChild(el("line", {x1:P.l, y1:y, x2:W-P.r, y2:y, class:"gl"}));
+    const t = el("text", {x:P.l-9, y:y+3.5, class:"axl", "text-anchor":"end"});
+    t.textContent = yfmt ? yfmt(v) : v; svg.appendChild(t);
+  });
+  xt.forEach(([v,lab]) => {
+    const t = el("text", {x:xs(v), y:H-P.b+17, class:"axl", "text-anchor":"middle"});
+    t.textContent = lab; svg.appendChild(t);
+  });
+}
+const path = pts => pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+
+/* ---------- 1. equity ---------- */
+function drawEquity(){
+  const svg = document.getElementById("c-eq"); svg.textContent = "";
+  const W=700,H=300,P={l:44,r:16,t:10,b:30};
+  const n = D.equity.length;
+  const all = D.equity.concat(D.equityES, D.equityNQ);
+  const lo = Math.min(...all), hi = Math.max(...all);
+  const y0 = Math.floor(lo/20)*20, y1 = Math.ceil(hi/20)*20;
+  const xs = i => P.l + (W-P.l-P.r) * i/(n-1);
+  const ys = v => H-P.b - (H-P.t-P.b) * (v-y0)/(y1-y0);
+  const yt=[]; for(let v=y0; v<=y1; v+=20) yt.push(v);
+  const xt=[[0,"0"],[Math.round((n-1)/2),String(Math.round((n-1)/2))],[n-1,String(n-1)]];
+  axes(svg,W,H,P,xt,yt,xs,ys,v=>v>0?"+"+v:String(v));
+  svg.appendChild(el("line",{x1:P.l,y1:ys(0),x2:W-P.r,y2:ys(0),stroke:cs("--rule-strong"),"stroke-width":1.5}));
+  [["equityES",cs("--es"),2],["equityNQ",cs("--nq"),2],["equity",cs("--ink"),2.6]].forEach(([k,c,w])=>{
+    svg.appendChild(el("path",{d:path(D[k].map((v,i)=>[xs(i),ys(v)])),fill:"none",stroke:c,
+      "stroke-width":w,"stroke-linejoin":"round","stroke-linecap":"round"}));
+  });
+  const lab = (k,c,txt) => { const v = D[k][n-1];
+    const t = el("text",{x:W-P.r-4,y:ys(v)+(txt==="NQ"?14:-7),class:"dlab",fill:c,"text-anchor":"end"});
+    t.textContent = txt+" "+v.toFixed(1)+"R"; svg.appendChild(t); };
+  lab("equity",cs("--ink"),"Kombineret"); lab("equityES",cs("--es"),"ES"); lab("equityNQ",cs("--nq"),"NQ");
+  const cur = el("line",{x1:0,y1:P.t,x2:0,y2:H-P.b,stroke:cs("--rule-strong"),"stroke-width":1,opacity:0});
+  svg.appendChild(cur);
+  const hit = el("rect",{x:P.l,y:P.t,width:W-P.l-P.r,height:H-P.t-P.b,fill:"transparent"});
+  svg.appendChild(hit);
+  hit.addEventListener("pointermove", e=>{
+    const r = svg.getBoundingClientRect();
+    const i = Math.max(0, Math.min(n-1, Math.round(((e.clientX-r.left)/r.width*W - P.l)/(W-P.l-P.r)*(n-1))));
+    cur.setAttribute("x1",xs(i)); cur.setAttribute("x2",xs(i)); cur.setAttribute("opacity",1);
+    showTip(e, (i===0?"Start":"Efter "+i+" par")+"\nKombineret  "+D.equity[i].toFixed(1)+" R\nES          "+
+      D.equityES[i].toFixed(1)+" R\nNQ          "+D.equityNQ[i].toFixed(1)+" R");
+  });
+  hit.addEventListener("pointerleave", ()=>{ cur.setAttribute("opacity",0); hideTip(); });
+}
+
+/* ---------- 2. daily bars ---------- */
+function drawDaily(){
+  const svg = document.getElementById("c-day"); svg.textContent = "";
+  const W=700,H=210,P={l:44,r:12,t:10,b:34};
+  const d = D.daily, n = d.length;
+  const lo = Math.min(0,...d.map(x=>x[1])), hi = Math.max(0,...d.map(x=>x[1]));
+  const y0 = Math.floor(lo/10)*10, y1 = Math.ceil(hi/10)*10;
+  const ys = v => H-P.b - (H-P.t-P.b)*(v-y0)/(y1-y0);
+  const bw = (W-P.l-P.r)/n, gap = 3;
+  const yt=[]; for(let v=y0; v<=y1; v+=10) yt.push(v);
+  yt.forEach(v=>{ const y=ys(v);
+    svg.appendChild(el("line",{x1:P.l,y1:y,x2:W-P.r,y2:y,class:"gl"}));
+    const t=el("text",{x:P.l-9,y:y+3.5,class:"axl","text-anchor":"end"}); t.textContent=(v>0?"+":"")+v; svg.appendChild(t); });
+  d.forEach(([day,v],i)=>{
+    const x = P.l + i*bw + gap/2, w = bw-gap;
+    const yTop = v>=0 ? ys(v) : ys(0), h = Math.max(1.5, Math.abs(ys(v)-ys(0)));
+    const c = v>0?cs("--pos"):v<0?cs("--neg"):cs("--flat");
+    const r = el("rect",{x,y:yTop,width:w,height:h,fill:c,rx:2});
+    r.addEventListener("pointerenter",e=>showTip(e,day+"\n"+(v>0?"+":"")+v.toFixed(1)+" R"));
+    r.addEventListener("pointermove",e=>showTip(e,day+"\n"+(v>0?"+":"")+v.toFixed(1)+" R"));
+    r.addEventListener("pointerleave",hideTip);
+    svg.appendChild(r);
+    if(i%3===0){ const t=el("text",{x:x+w/2,y:H-P.b+17,class:"axl","text-anchor":"middle"});
+      t.textContent=day; svg.appendChild(t); }
+  });
+  svg.appendChild(el("line",{x1:P.l,y1:ys(0),x2:W-P.r,y2:ys(0),stroke:cs("--rule-strong"),"stroke-width":1.5}));
+}
+
+/* ---------- 3. MFE ---------- */
+function drawMfe(){
+  const svg = document.getElementById("c-mfe"); svg.textContent="";
+  const W=700,H=300,P={l:44,r:88,t:12,b:44};
+  const ys = v => H-P.b - (H-P.t-P.b)*v/80;
+  const yt=[0,20,40,60,80];
+  yt.forEach(v=>{ const y=ys(v);
+    svg.appendChild(el("line",{x1:P.l,y1:y,x2:W-P.r,y2:y,class:"gl"}));
+    const t=el("text",{x:P.l-9,y:y+3.5,class:"axl","text-anchor":"end"}); t.textContent=v+"%"; svg.appendChild(t); });
+  // x axis = fraction of each asset's own target, so both fit one scale
+  const frac = {ES:15, NQ:75};
+  const xs = f => P.l + (W-P.l-P.r)*Math.min(f,2)/2;
+  [[0,"0"],[0.5,"½ mål"],[1,"mål"],[1.5,"1½"],[2,"2×"]].forEach(([f,lab])=>{
+    const t=el("text",{x:xs(f),y:H-P.b+18,class:"axl","text-anchor":"middle"}); t.textContent=lab; svg.appendChild(t);
+  });
+  const tx=el("text",{x:(P.l+W-P.r)/2,y:H-P.b+36,class:"axl","text-anchor":"middle"});
+  tx.textContent="bevægelse i favør, som andel af assetets eget TP (15 pkt ES / 75 pkt NQ)"; svg.appendChild(tx);
+  svg.appendChild(el("line",{x1:xs(1),y1:P.t,x2:xs(1),y2:H-P.b,stroke:cs("--rule-strong"),
+    "stroke-width":1.5,"stroke-dasharray":"4 4"}));
+  ["ES","NQ"].forEach(k=>{
+    const c = cs(k==="ES"?"--es":"--nq");
+    const pts = D.mfe[k].map(([p,pct])=>[xs(p/frac[k]),ys(pct),p,pct]).filter(p=>p[0]<=W-P.r+1);
+    svg.appendChild(el("path",{d:path(pts),fill:"none",stroke:c,"stroke-width":2,
+      "stroke-linejoin":"round","stroke-linecap":"round"}));
+    pts.forEach(([x,y,p,pct])=>{
+      const dot=el("circle",{cx:x,cy:y,r:4,fill:c,stroke:cs("--surface"),"stroke-width":2});
+      dot.addEventListener("pointerenter",e=>showTip(e,k+"  "+p+" pkt\n"+pct+" % af signalerne nåede så langt"));
+      dot.addEventListener("pointermove",e=>showTip(e,k+"  "+p+" pkt\n"+pct+" % af signalerne nåede så langt"));
+      dot.addEventListener("pointerleave",hideTip);
+      svg.appendChild(dot);
+    });
+    const at = D.mfe[k].find(([p])=>p===frac[k]);
+    const t=el("text",{x:xs(1)+10,y:ys(at[1])+(k==="ES"?22:-11),class:"dlab",fill:c});
+    t.textContent=k+": "+at[1]+"% når TP"; svg.appendChild(t);
+  });
+}
+
+/* ---------- 4. symmetric ---------- */
+function drawSym(){
+  const svg=document.getElementById("c-sym"); svg.textContent="";
+  const W=700,H=250,P={l:44,r:16,t:14,b:46};
+  const ys=v=>H-P.b-(H-P.t-P.b)*(v-25)/(40);  // 25..65
+  [30,40,50,60].forEach(v=>{ const y=ys(v);
+    svg.appendChild(el("line",{x1:P.l,y1:y,x2:W-P.r,y2:y,class:"gl"}));
+    const t=el("text",{x:P.l-9,y:y+3.5,class:"axl","text-anchor":"end"}); t.textContent=v+"%"; svg.appendChild(t); });
+  const bars=[];
+  D.sym.ES.forEach(([p,v])=>bars.push(["ES",p,v]));
+  D.sym.NQ.forEach(([p,v])=>bars.push(["NQ",p,v]));
+  const bw=(W-P.l-P.r)/bars.length, gap=10;
+  bars.forEach(([k,p,v],i)=>{
+    const x=P.l+i*bw+gap/2, w=bw-gap, c=cs(k==="ES"?"--es":"--nq");
+    const top=Math.min(ys(v),ys(50)), h=Math.max(1.5,Math.abs(ys(v)-ys(50)));
+    const r=el("rect",{x,y:top,width:w,height:h,fill:c,rx:2,opacity:v<50?1:.42});
+    const msg=k+"  ±"+p+" pkt\n"+v+" % ramte målet først\n"+(v<50?"under":"over")+" 50 % = "+(v<50?"forkert":"rigtig")+" retning";
+    r.addEventListener("pointerenter",e=>showTip(e,msg));
+    r.addEventListener("pointermove",e=>showTip(e,msg));
+    r.addEventListener("pointerleave",hideTip);
+    svg.appendChild(r);
+    const t=el("text",{x:x+w/2,y:H-P.b+17,class:"axl","text-anchor":"middle"}); t.textContent="±"+p; svg.appendChild(t);
+    const t2=el("text",{x:x+w/2,y:(v<50?ys(v)+14:ys(v)-7),class:"axl","text-anchor":"middle",
+      fill:cs("--ink-2")}); t2.textContent=v.toFixed(0)+"%"; svg.appendChild(t2);
+  });
+  svg.appendChild(el("line",{x1:P.l,y1:ys(50),x2:W-P.r,y2:ys(50),stroke:cs("--ink"),"stroke-width":2}));
+  const lab=el("text",{x:W-P.r,y:ys(50)-8,class:"dlab",fill:cs("--ink"),"text-anchor":"end"});
+  lab.textContent="50 % = ingen information"; svg.appendChild(lab);
+  const t3=el("text",{x:(P.l+W-P.r)/2,y:H-P.b+38,class:"axl","text-anchor":"middle"});
+  t3.textContent="symmetrisk afstand i point (venstre: ES · højre: NQ)"; svg.appendChild(t3);
+}
+
+/* ---------- 5. inverted ---------- */
+function drawInv(){
+  const svg=document.getElementById("c-inv"); svg.textContent="";
+  const W=700,H=270,P={l:48,r:76,t:12,b:32};
+  const a=D.equity, b=D.equityInv, n=Math.max(a.length,b.length);
+  const all=a.concat(b); const y0=Math.floor(Math.min(...all)/25)*25, y1=Math.ceil(Math.max(...all)/25)*25;
+  const xs=i=>P.l+(W-P.l-P.r)*i/(n-1);
+  const ys=v=>H-P.b-(H-P.t-P.b)*(v-y0)/(y1-y0);
+  const yt=[]; for(let v=y0;v<=y1;v+=25) yt.push(v);
+  yt.forEach(v=>{ const y=ys(v);
+    svg.appendChild(el("line",{x1:P.l,y1:y,x2:W-P.r,y2:y,class:"gl"}));
+    const t=el("text",{x:P.l-9,y:y+3.5,class:"axl","text-anchor":"end"}); t.textContent=(v>0?"+":"")+v; svg.appendChild(t); });
+  svg.appendChild(el("line",{x1:P.l,y1:ys(0),x2:W-P.r,y2:ys(0),stroke:cs("--rule-strong"),"stroke-width":1.5}));
+  [[a,cs("--neg"),"Som beskrevet"],[b,cs("--pos"),"Omvendt"]].forEach(([arr,c,name])=>{
+    svg.appendChild(el("path",{d:path(arr.map((v,i)=>[xs(i),ys(v)])),fill:"none",stroke:c,
+      "stroke-width":2.4,"stroke-linejoin":"round","stroke-linecap":"round"}));
+    const t=el("text",{x:xs(arr.length-1)+7,y:ys(arr[arr.length-1])+4,class:"dlab",fill:c});
+    t.textContent=(arr[arr.length-1]>0?"+":"")+arr[arr.length-1].toFixed(0)+"R"; svg.appendChild(t);
+  });
+  const t=el("text",{x:(P.l+W-P.r)/2,y:H-P.b+22,class:"axl","text-anchor":"middle"});
+  t.textContent="trade-par i rækkefølge"; svg.appendChild(t);
+}
+
+function drawAll(){ drawEquity(); drawDaily(); drawSym(); }
+drawAll();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawAll);
+new MutationObserver(drawAll).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+</script>

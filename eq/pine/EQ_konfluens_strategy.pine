@@ -1,0 +1,626 @@
+//@version=6
+// =====================================================================
+//  EQ KONFLUENS - ES + NQ   (strategy)
+//  ---------------------------------------------------------------
+//  Handler den model vi backtestede: +24,5 RR over 21 par i perioden
+//  12. aug - 10. sep 2026, entries kun 15:30-16:00 dansk tid.
+//
+//  VIGTIGT - SAADAN BRUGES DEN
+//  Pine kan kun sende ordrer paa chartets EGET symbol. Derfor:
+//    - laeg scriptet paa ES-chartet med Partner = MNQ
+//    - laeg det ogsaa paa MNQ-chartet med Partner = ES
+//  Hver instans handler sit eget ben. Begge instanser regner
+//  partnerens ben med internt, saa dagsgraensen (-5 / +7,5 RR paa
+//  BEGGE ben tilsammen) bliver den samme i begge vinduer.
+//
+//  BEMAERK margin_long/margin_short = 0. Pine kraever som standard
+//  100 % margin, og én ES-kontrakt er ~385.000 USD notional - med
+//  100.000 i startkapital afviser TradingView saa ordren uden at sige
+//  noget. Labelen bliver tegnet, men handlen dukker aldrig op i
+//  Strategy Tester. Med 0 simuleres ingen margin-begraensning.
+//
+//  Partnerens EQ-tilstand, luk OG high/low hentes i ÉT request.security-
+//  kald, saa alle vaerdier kommer fra samme bar. To separate kald kan
+//  ellers lande paa hver sin bar-justering, og saa lukker skygge-benet
+//  paa et andet tidspunkt end det skal.
+//
+//  BEGRAENSNING: partnerens data naar kun hertil gennem request.security.
+//  Paa et 15-sekunders chart er justeringen ikke bar-eksakt, saa partnerens
+//  EQ-tilstand og skygge-benets exit kan ankomme et par bars forsinket.
+//  Det er derfor denne strategi ikke kan ramme en to-symbol-backtest 100 %.
+//  Brug ALDRIG lookahead_on for at "rette" det - det ville indfoere aegte
+//  look-ahead bias og goere backtesten falsk.
+//
+//  Laeg den paa 15 sekunder. EQ'erne bygges paa 1m uanset hvad, men
+//  raid, bekraeftelse og exits kraever 15s-oploesning.
+//
+//  MODELLEN
+//   1. EQ oprettes KUN paa lukkede 1m-candles. En bearish luk under
+//      candlens egen (H+L)/2 giver en bearish EQ med candlens high som
+//      anker. Bullish er spejlvendt. Én aktiv pr. retning pr. symbol.
+//      Alt nulstilles ved market open.
+//   2. EQ-linjen = (anker + loebende ekstrem)/2 og flytter sig med nye
+//      lows/highs. Den er RAIDET naar en 15s-bar naar linjen. Lukker
+//      baren igennem linjen, er raidet ugyldigt.
+//   3. Begge symboler skal have en aktiv EQ samme vej, og ét af dem
+//      skal raides rent. Saa er setuppet armeret.
+//   4. Derefter maks 4 bars til en luk hvor BEGGE symboler lukker
+//      samme vej: begge bearish -> short, begge bullish -> long.
+//      Lukker ét af dem gennem sin EQ undervejs, doer setuppet.
+//   5. SL = eget EQ-anker. TP = 15 pkt (ES) / 75 pkt (NQ) = 7,5 RR.
+//      BE ved foerste 5m-likviditet efter entry - men kun hvis
+//      niveauet ligger mindst 0,25 pkt (ES) / 2 pkt (NQ) FORAN entry
+//      i gevinstretningen. Er 5m-niveauet allerede taget ud, tæller det
+//      ikke, og BE venter paa naeste 5m-candle.
+//      Uden det krav kan BE armeres paa selve entry-baren.
+//   6. Signalet kasseres hvis stoppet ELLER afstanden til BE-niveauet
+//      er over 8 pkt (ES) / 40 pkt (NQ) paa ét af benene.
+//   7. Én position ad gangen. Dagen slutter ved -5 eller +7,5 RR.
+//
+//  FORBEHOLD: modellen er testet paa 21 trades over 12 handelsdage.
+//  Hele overskuddet er tre trades. Det er ikke statistisk signifikant.
+// =====================================================================
+strategy("EQ Konfluens ES/NQ", overlay = true,
+     process_orders_on_close = true,
+     pyramiding           = 0,
+     default_qty_type     = strategy.fixed,
+     default_qty_value    = 1,
+     initial_capital      = 100000,
+     margin_long          = 0,
+     margin_short         = 0,
+     calc_on_every_tick   = false,
+     max_labels_count     = 500,
+     max_lines_count      = 300,
+     max_boxes_count      = 300)
+
+// ───────────────────────────── INPUTS ─────────────────────────────
+g0 = "Instrument"
+chartIs = input.string("ES", "Dette chart er", options = ["ES", "NQ"], group = g0,
+     tooltip = "Bestemmer hvilke point-vaerdier der gaelder for chartets eget ben.")
+partnerSym = input.symbol("CME_MINI:MNQ1!", "Partner-symbol", group = g0,
+     tooltip = "MNQ naar du koerer paa ES. ES naar du koerer paa MNQ.")
+
+g1 = "Session"
+sessTz  = input.string("Europe/Copenhagen", "Tidszone", group = g1)
+openH   = input.int(15, "Market open - time",   0, 23, group = g1)
+openM   = input.int(30, "Market open - minut",  0, 59, group = g1)
+endH    = input.int(16, "Sidste entry - time",  0, 23, group = g1)
+endM    = input.int(0,  "Sidste entry - minut", 0, 59, group = g1)
+
+g2 = "Signal"
+maxWait = input.int(4, "Maks bars fra raid til entry", 1, 40, group = g2)
+
+g3 = "Risiko"
+tpES  = input.float(15, "TP - ES (point)",  minval = 0.25, group = g3)
+tpNQ  = input.float(75, "TP - NQ (point)",  minval = 0.25, group = g3)
+rES   = input.float(2,  "1 RR i point - ES", minval = 0.25, group = g3,
+     tooltip = "Fast enhed, ikke stopafstanden. 15 pkt / 2 = 7,5 RR.")
+rNQ   = input.float(10, "1 RR i point - NQ", minval = 0.25, group = g3)
+useBE = input.bool(true, "Flyt til break-even ved foerste 5m likviditet", group = g3)
+beMode = input.string("Forrige 5m (som i backtesten)", "BE-niveau",
+     options = ["Forrige 5m (som i backtesten)", "Naeste 5m"], group = g3,
+     tooltip = "Forrige 5m: niveauet findes allerede ved entry, saa BE kan ramme med det samme. "
+             + "Naeste 5m: der ventes til den igangvaerende 5m-candle lukker. "
+             + "Forskellen er stor - 21 trades / +24,5 RR mod 15 trades / +13,3 RR i backtesten.")
+bool bePrev = beMode == "Forrige 5m (som i backtesten)"
+beMinES = input.float(0.25, "Min. afstand entry -> BE-niveau, ES (point)", minval = 0, group = g3,
+     tooltip = "Ligger 5m-niveauet taettere paa entry end dette, tæller det ikke. "
+             + "Uden det kan BE blive armeret paa selve entry-baren og draebe en handel paa nul.")
+beMinNQ = input.float(2.0, "Min. afstand entry -> BE-niveau, NQ (point)", minval = 0, group = g3)
+
+g4 = "Filtre"
+useCaps = input.bool(true, "Brug afstandslofter", group = g4,
+     tooltip = "Kasserer signalet hvis stop eller BE-afstand er for stor paa ét af benene. "
+             + "Dette filter vendte backtesten fra -32 til +24,5 RR.")
+capES = input.float(8,  "Maks stop og BE-afstand - ES (point)", minval = 0.25, group = g4)
+capNQ = input.float(40, "Maks stop og BE-afstand - NQ (point)", minval = 0.25, group = g4)
+
+g5 = "Dagsgraenser"
+useDaily = input.bool(true, "Stop dagen ved graenserne", group = g5)
+blockOnPartner = input.bool(true, "Partnerens ben blokerer ogsaa for nye entries", group = g5,
+     tooltip = "Til: 'een position ad gangen' gaelder paret, som i backtesten. Partnerens ben "
+             + "kendes dog kun gennem request.security, og paa 15s kan det lukke et par bars for "
+             + "sent - saa springes et signal over som backtesten tager. Fra: hver instans styrer "
+             + "kun sit eget ben og bliver intern konsistent, men de to charts kan tage forskellige "
+             + "antal handler.")
+dStop    = input.float(-5,  "Dagsstop (RR)",  maxval = 0, group = g5)
+dTarget  = input.float(7.5, "Dagsmaal (RR)",  minval = 0, group = g5)
+
+g6 = "Visning"
+showEQ    = input.bool(true, "Tegn aktive EQ-zoner",  group = g6)
+showLabel = input.bool(true, "Marker entries og exits", group = g6)
+showWhy = input.bool(false, "Skriv paa chartet hvorfor et signal blev afvist", group = g6,
+     tooltip = "Saetter en lille etiket paa hver bar hvor et setup kunne vaere blevet til en "
+             + "handel, men ikke blev det - med aarsagen.")
+
+// point-vaerdier for hhv. dette chart og partneren
+bool  isES    = chartIs == "ES"
+float tpMine  = isES ? tpES  : tpNQ
+float rMine   = isES ? rES   : rNQ
+float capMine = isES ? capES : capNQ
+float tpPart  = isES ? tpNQ  : tpES
+float rPart   = isES ? rNQ   : rES
+float capPart = isES ? capNQ : capES
+float beMinMine = isES ? beMinES : beMinNQ
+float beMinPart = isES ? beMinNQ : beMinES
+
+// --- opsaetnings-tjek ---------------------------------------------------
+// De to klassiske fejl: partner-symbolet er ikke skiftet, eller "Dette chart
+// er" passer ikke til chartet. Begge giver naesten ingen trades, fordi
+// partnerens lofter saa bliver brugt paa det forkerte instrument.
+bool samePartner = partnerSym == syminfo.tickerid
+bool chartLooksNQ = str.contains(str.upper(syminfo.ticker), "NQ")
+bool cfgMismatch  = chartLooksNQ != (not isES)
+string cfgWarn = samePartner ? "PARTNER = SAMME SYMBOL"
+     : cfgMismatch ? ("'Dette chart er' burde vaere " + (chartLooksNQ ? "NQ" : "ES")) : ""
+
+int openMin = openH * 60 + openM
+int endMin  = endH  * 60 + endM
+
+// ═══════════════════════ EQ-MOTOREN ═══════════════════════
+// Koeres baade lokalt og - via request.security - paa partneren.
+// Bygger selv 1m- og 5m-candles ud af chart-barerne, saa der ikke er
+// nogen nestet security-kald og ingen look-ahead.
+eqEngine() =>
+    // --- 1m-candle under opbygning + den sidste faerdige ---
+    var float m1o = na
+    var float m1h = na
+    var float m1l = na
+    var float m1c = na
+    var float f1o = na
+    var float f1h = na
+    var float f1l = na
+    var float f1c = na
+    var int   curM = na
+    int  thisM  = math.floor(time / 60000)
+    bool newMin = na(curM) or thisM != curM
+    if newMin
+        f1o := m1o
+        f1h := m1h
+        f1l := m1l
+        f1c := m1c
+        m1o := open
+        m1h := high
+        m1l := low
+        m1c := close
+        curM := thisM
+    else
+        m1h := math.max(m1h, high)
+        m1l := math.min(m1l, low)
+        m1c := close
+    bool m1done = newMin and not na(f1o)
+
+    // --- 5m-candle: gemmer den sidste FAERDIGE high/low til BE ---
+    var float m5h = na
+    var float m5l = na
+    var float p5h = na
+    var float p5l = na
+    var int   cur5 = na
+    int this5 = math.floor(time / 300000)
+    if na(cur5) or this5 != cur5
+        p5h := m5h
+        p5l := m5l
+        m5h := high
+        m5l := low
+        cur5 := this5
+    else
+        m5h := math.max(m5h, high)
+        m5l := math.min(m5l, low)
+
+    // --- EQ-tilstand ---
+    var bool  bOn = false
+    var float bA  = na
+    var float bX  = na
+    var bool  uOn = false
+    var float uA  = na
+    var float uX  = na
+
+    // nulstilling ved market open - én gang pr. dag
+    var int lastDay = na
+    int tmin = hour(time, sessTz) * 60 + minute(time, sessTz)
+    int dnum = dayofmonth(time, sessTz)
+    if tmin >= openMin and nz(lastDay, -1) != dnum
+        lastDay := dnum
+        bOn := false
+        uOn := false
+    bool inSess = tmin >= openMin and tmin < endMin
+
+    // tilstand FOER denne bar - bruges til "begge har EQ samme vej"
+    bool preBear = bOn
+    bool preBull = uOn
+    float preBearA = bA
+    float preBullA = uA
+    // EQ-niveauet som det saa ud FOER denne bars vaekst. Bruges til invaliderings-
+    // testen: bliver en EQ raidet paa samme bar, er bEqNow na, og en sammenligning
+    // med na falder stille igennem som "ikke invalid". Foedes en EQ paa denne bar,
+    // overskrives feltet nedenfor med den nyfoedtes niveau.
+    float preBearEq = bOn ? (bA + bX) / 2.0 : na
+    float preBullEq = uOn ? (uA + uX) / 2.0 : na
+
+    // --- vaekst + raid paa en EQ der allerede var aktiv ved barens start ---
+    bool  bRaid    = false
+    float bRaidLvl = na
+    float bRaidA   = na
+    bool  uRaid    = false
+    float uRaidLvl = na
+    float uRaidA   = na
+    // RAEKKEFOELGE INDE I BAREN: linjen flytter sig naar baren selv saetter et nyt
+    // extreme. Bruger man linjen EFTER den flytning, kan man registrere et raid
+    // der aldrig skete - fx 14/8 15:33 paa ES, hvor high'en (7825,50) kom FOER
+    // low'en, saa linjen stadig laa paa 7826,00 da high'en printede.
+    // Derfor: raidet godkendes kun hvis baren ramte linjen som den laa FOER
+    // flytningen, ELLER hvis barens form siger at det nye extreme kom foerst.
+    if bOn and inSess
+        float lvlPre = (bA + bX) / 2.0
+        bX := math.min(bX, low)
+        float lvl = (bA + bX) / 2.0
+        // bear: forlaengelsen er en ny LOW, beroeringen er barens HIGH
+        // -> low'en skal vaere kommet foerst -> op-lukkende bar
+        bool got = high >= lvlPre or (high >= lvl and close > open)
+        if got
+            // rent raid = baren lukkede IKKE igennem linjen
+            bRaid    := close <= lvl
+            bRaidLvl := lvl
+            bRaidA   := bA
+            bOn      := false
+    if uOn and inSess
+        float lvlPre = (uA + uX) / 2.0
+        uX := math.max(uX, high)
+        float lvl = (uA + uX) / 2.0
+        bool got = low <= lvlPre or (low <= lvl and close < open)
+        if got
+            uRaid    := close >= lvl
+            uRaidLvl := lvl
+            uRaidA   := uA
+            uOn      := false
+
+    // --- oprettelse ud af den netop lukkede 1m-candle ---
+    // Baren der FOEDER EQ'en er selv en 15s-bar og behandles som enhver anden
+    // bar: linjen vokser med barens eget extreme, og baren kan derefter baade
+    // raide EQ'en rent OG lukke igennem den (= doed ved foedslen).
+    bool bornDead = false
+    if m1done and inSess
+        float eq1 = (f1h + f1l) / 2.0
+        if f1c < f1o and f1c < eq1 and not bOn
+            float nbA = f1h
+            float nbX = math.min(f1l, low)
+            float nbL = (nbA + nbX) / 2.0
+            // EQ'en eksisterer fra dette oejeblik - ogsaa for "begge har EQ samme vej"
+            preBear   := true
+            preBearA  := nbA
+            preBearEq := nbL
+            if high >= eq1 or (high >= nbL and close > open)
+                if close <= nbL
+                    bRaid    := true
+                    bRaidLvl := nbL
+                    bRaidA   := nbA
+                else
+                    bornDead := true
+            else
+                bA  := nbA
+                bX  := nbX
+                bOn := true
+        if f1c > f1o and f1c > eq1 and not uOn
+            float nuA = f1l
+            float nuX = math.max(f1h, high)
+            float nuL = (nuA + nuX) / 2.0
+            preBull   := true
+            preBullA  := nuA
+            preBullEq := nuL
+            if low <= eq1 or (low <= nuL and close < open)
+                if close >= nuL
+                    uRaid    := true
+                    uRaidLvl := nuL
+                    uRaidA   := nuA
+                else
+                    bornDead := true
+            else
+                uA  := nuA
+                uX  := nuX
+                uOn := true
+
+    // aktuelle EQ-niveauer (efter vaekst) - til invalidering og tegning
+    float bEqNow = bOn ? (bA + bX) / 2.0 : na
+    float uEqNow = uOn ? (uA + uX) / 2.0 : na
+
+    [preBear, preBull, preBearA, preBullA, bRaid, bRaidLvl, bRaidA,
+     uRaid, uRaidLvl, uRaidA, bOn, bEqNow, uOn, uEqNow, p5h, p5l, open, close,
+     preBearEq, preBullEq, high, low, bornDead]
+
+// lokalt
+[mPreBear, mPreBull, mPreBearA, mPreBullA, mBRaid, mBRaidLvl, mBRaidA,
+ mURaid, mURaidLvl, mURaidA, mBOn, mBEq, mUOn, mUEq, mP5h, mP5l, mO, mC,
+ mPreBEq, mPreUEq, mHigh, mLow, mBorn] = eqEngine()
+
+// partneren
+[pPreBear, pPreBull, pPreBearA, pPreBullA, pBRaid, pBRaidLvl, pBRaidA,
+ pURaid, pURaidLvl, pURaidA, pBOn, pBEq, pUOn, pUEq, pP5h, pP5l, pO, pC,
+ pPreBEq, pPreUEq, pHigh, pLow, pBorn] = request.security(partnerSym, timeframe.period, eqEngine())
+
+int   tod    = hour(time, sessTz) * 60 + minute(time, sessTz)
+bool  canEnt = tod >= openMin and tod < endMin
+bool  newDay = ta.change(time("1D")) != 0
+
+// ═══════════════════ DAGENS REALISEREDE RR ═══════════════════
+// Eget ben laeses af strategiens egne lukkede handler. Partnerens ben
+// simuleres nedenfor, saa dagsgraensen svarer til backtesten.
+var float dayR      = 0.0
+var int   seenTrades = 0
+if newDay
+    dayR := 0.0
+if strategy.closedtrades > seenTrades
+    for i = seenTrades to strategy.closedtrades - 1
+        float pts = strategy.closedtrades.profit(i) / syminfo.pointvalue
+        dayR += pts / rMine
+    seenTrades := strategy.closedtrades
+
+// ═══════════════════ PARTNERENS SKYGGE-BEN ═══════════════════
+var bool  pIn    = false
+var bool  pShort = false
+var float pEnt   = na
+var float pStop  = na
+var float pTp    = na
+var float pRef   = na
+var bool  pBe    = false
+var int   pM5    = na
+
+// Nyt doegn: en aaben skygge-position maa aldrig baeres med over, ellers
+// staar pIn og blokerer for alle fremtidige entries resten af historikken.
+if pIn and newDay
+    pIn := false
+
+if pIn and not na(pHigh) and not na(pLow)
+    int b5 = math.floor(time / 300000)
+    if not na(pM5) and b5 != pM5 and not pBe and useBE
+        float cand = pShort ? pP5l : pP5h
+        float cdist = pShort ? pEnt - cand : cand - pEnt
+        if not na(cand) and cdist >= beMinPart
+            pRef := cand
+    pM5 := b5
+    bool hitSl = pShort ? pHigh >= pStop : pLow  <= pStop
+    bool hitTp = pShort ? pLow  <= pTp   : pHigh >= pTp
+    if hitSl
+        dayR += (pShort ? pEnt - pStop : pStop - pEnt) / rPart
+        pIn := false
+    else if hitTp
+        dayR += (pShort ? pEnt - pTp : pTp - pEnt) / rPart
+        pIn := false
+    else if useBE and not pBe and not na(pRef)
+        if (pShort ? pLow < pRef : pHigh > pRef)
+            pBe := true
+            pStop := pEnt
+
+// ═══════════════════════ DIAGNOSTIK ═══════════════════════
+// Tæller hvor mange signaler der overlever hvert trin. Er alle tal 0,
+// fortæller det foerste tal som IKKE er 0 hvor kaeden knaekker.
+var int cBars    = 0    // bars inde i entry-vinduet
+var int cRaid    = 0    // rene raids (dette chart eller partneren)
+var int cArm     = 0    // ... hvor BEGGE havde EQ samme vej
+var int cSameWay = 0    // ... hvor begge derefter lukkede samme vej
+var int cCaps    = 0    // kasseret af afstandslofterne
+var int cBusy    = 0    // blokeret af aaben position
+var int cHalt    = 0    // blokeret af dagsgraensen
+var int cFill    = 0    // faktiske entries
+var int cBorn    = 0    // EQ'er der lukkede igennem egen linje paa foedselsbaren
+var bool partnerOK = false
+if not na(pC)
+    partnerOK := true
+
+// etiket der forklarer hvorfor et signal ikke blev til en handel
+why(txt, up) =>
+    if showWhy
+        label.new(bar_index, up ? high : low, txt,
+             style = up ? label.style_label_down : label.style_label_up,
+             color = color.new(color.gray, 20), textcolor = color.white,
+             size = size.tiny)
+
+// ═══════════════════════ ARMERING ═══════════════════════
+// Ét af symbolerne raides rent, og BEGGE havde en aktiv EQ samme vej.
+var bool  armed     = false
+var bool  armShort  = false
+var int   armBar    = na
+var float armLvlM   = na    // EQ-niveau paa dette chart da setuppet blev armeret
+var float armLvlP   = na    // ... og paa partneren
+var float armAncM   = na    // ankre = stop-niveauer
+var float armAncP   = na
+
+if newDay or not canEnt
+    armed := false
+
+if mBorn or pBorn
+    cBorn += 1
+
+if canEnt
+    cBars += 1
+    if (mBRaid or pBRaid or mURaid or pURaid)
+        cRaid += 1
+    // ---- bearish: short ----
+    bool bearRaidAny = mBRaid or pBRaid
+    if bearRaidAny and not (mPreBear and pPreBear)
+        why("raid, men ikke begge har bear-EQ", true)
+    bool bearHit = (mBRaid and mPreBear and pPreBear) or (pBRaid and pPreBear and mPreBear)
+    if bearHit
+        cArm     += 1
+        armed    := true
+        armShort := true
+        armBar   := bar_index
+        armLvlM  := mBRaid ? mBRaidLvl : mPreBEq
+        armLvlP  := pBRaid ? pBRaidLvl : pPreBEq
+        armAncM  := mBRaid ? mBRaidA   : mPreBearA
+        armAncP  := pBRaid ? pBRaidA   : pPreBearA
+    // ---- bullish: long ----
+    bool bullRaidAny = mURaid or pURaid
+    if bullRaidAny and not (mPreBull and pPreBull)
+        why("raid, men ikke begge har bull-EQ", false)
+    bool bullHit = (mURaid and mPreBull and pPreBull) or (pURaid and pPreBull and mPreBull)
+    if bullHit
+        cArm     += 1
+        armed    := true
+        armShort := false
+        armBar   := bar_index
+        armLvlM  := mURaid ? mURaidLvl : mPreUEq
+        armLvlP  := pURaid ? pURaidLvl : pPreUEq
+        armAncM  := mURaid ? mURaidA   : mPreBullA
+        armAncP  := pURaid ? pURaidA   : pPreBullA
+
+// ═══════════════════════ ENTRY ═══════════════════════
+// stop og maal laases fast ved entry, saa en ny armering paa den
+// foelgende bar ikke kan overskrive dem
+var float pendStop = na
+var float pendTp   = na
+var float pendRef  = na
+
+bool flat     = strategy.position_size == 0 and (not pIn or not blockOnPartner)
+bool halted   = useDaily and (dayR <= dStop or dayR >= dTarget)
+bool bothBear = mC < mO and pC < pO
+bool bothBull = mC > mO and pC > pO
+
+if armed and canEnt and bar_index >= armBar
+    // doed hvis ét af benene lukker gennem sin EQ
+    // na-sikret: mangler et niveau, regnes setuppet som ugyldigt frem for gyldigt
+    bool dead = na(armLvlM) or na(armLvlP) or (armShort ? (mC > armLvlM or pC > armLvlP)
+                                                        : (mC < armLvlM or pC < armLvlP))
+    bool ok   = armShort ? bothBear : bothBull
+
+    if dead
+        why(na(armLvlM) or na(armLvlP) ? "doed: EQ-niveau mangler" : "doed: lukkede gennem EQ", armShort)
+        armed := false
+    else if bar_index - armBar > maxWait
+        why("udloebet: " + str.tostring(maxWait) + " bars uden faelles luk", armShort)
+        armed := false
+    else if ok
+        cSameWay += 1
+        float entM = mC
+        float entP = pC
+        float refM = armShort ? mP5l : mP5h
+        float refP = armShort ? pP5l : pP5h
+        float sdM  = math.abs(entM - armAncM)
+        float sdP  = math.abs(entP - armAncP)
+        float bdM  = na(refM) ? na : (armShort ? entM - refM : refM - entM)
+        float bdP  = na(refP) ? na : (armShort ? entP - refP : refP - entP)
+
+        bool blocked = useCaps and (sdM > capMine or sdP > capPart
+                                or na(bdM) or bdM > capMine
+                                or na(bdP) or bdP > capPart)
+
+        if blocked
+            cCaps += 1
+            why("afvist af lofter: ES stop " + str.tostring(sdM, "#.##") + " BE " + str.tostring(bdM, "#.##")
+              + " | NQ stop " + str.tostring(sdP, "#.##") + " BE " + str.tostring(bdP, "#.##"), armShort)
+        else if not flat
+            cBusy += 1
+            why(strategy.position_size != 0 ? "position aaben (eget ben)" : "position aaben (partner-ben)", armShort)
+        else if halted
+            cHalt += 1
+            why("dagsgraense naaet: " + str.tostring(dayR, "#.##") + " RR", armShort)
+        if not blocked and flat and not halted
+            cFill += 1
+            // --- eget ben: rigtige ordrer ---
+            pendStop := armAncM
+            pendTp   := armShort ? entM - tpMine : entM + tpMine
+            // bdM er fortegnet: positiv = niveauet ligger foran handlen.
+            // Er det allerede taget ud, saettes intet niveau, og BE venter paa naeste 5m.
+            pendRef  := (not na(bdM) and bdM >= beMinMine) ? refM : na
+            strategy.entry(armShort ? "Short" : "Long",
+                 armShort ? strategy.short : strategy.long)
+            // --- partnerens ben: skygge, kun til dagsregnskabet ---
+            pIn    := true
+            pShort := armShort
+            pEnt   := entP
+            pStop  := armAncP
+            pTp    := armShort ? entP - tpPart : entP + tpPart
+            pRef   := (bePrev and not na(bdP) and bdP >= beMinPart) ? refP : na
+            pBe    := false
+            pM5    := math.floor(time / 300000)
+            if showLabel
+                label.new(bar_index, armShort ? high : low,
+                     (armShort ? "SHORT" : "LONG") + "\nSL " + str.tostring(armAncM, format.mintick),
+                     style = armShort ? label.style_label_down : label.style_label_up,
+                     color = armShort ? color.new(color.red, 25) : color.new(color.green, 25),
+                     textcolor = color.white, size = size.tiny)
+        armed := false
+
+// ═══════════════════════ EXITS (eget ben) ═══════════════════════
+var float myStop = na
+var float myTp   = na
+var float myRef  = na
+var bool  myBe   = false
+var int   myM5   = na
+
+if strategy.position_size != 0
+    bool isShort = strategy.position_size < 0
+    if na(myStop)
+        myStop := pendStop
+        myTp   := isShort ? strategy.position_avg_price - tpMine
+                          : strategy.position_avg_price + tpMine
+        myRef  := bePrev ? pendRef : na
+        myBe   := false
+        myM5   := math.floor(time / 300000)
+    int b5 = math.floor(time / 300000)
+    if not na(myM5) and b5 != myM5 and not myBe and useBE
+        float cand = isShort ? mP5l : mP5h
+        float cdist = isShort ? strategy.position_avg_price - cand : cand - strategy.position_avg_price
+        if not na(cand) and cdist >= beMinMine
+            myRef := cand
+    myM5 := b5
+    if useBE and not myBe and not na(myRef)
+        if (isShort ? low < myRef : high > myRef)
+            myBe   := true
+            myStop := strategy.position_avg_price
+    strategy.exit("X", stop = myStop, limit = myTp)
+else
+    myStop := na
+    myTp   := na
+    myRef  := na
+    myBe   := false
+
+// ═══════════════════════ VISNING ═══════════════════════
+var line bLine = na
+var line uLine = na
+if showEQ and barstate.islast
+    line.delete(bLine)
+    line.delete(uLine)
+    bLine := mBOn ? line.new(bar_index - 40, mBEq, bar_index + 5, mBEq,
+         color = color.new(color.red, 0), width = 2, style = line.style_dashed) : na
+    uLine := mUOn ? line.new(bar_index - 40, mUEq, bar_index + 5, mUEq,
+         color = color.new(color.green, 0), width = 2, style = line.style_dashed) : na
+
+bgcolor(canEnt ? color.new(color.blue, 94) : na, title = "Entry-vindue")
+bgcolor(halted and canEnt ? color.new(color.orange, 88) : na, title = "Dagsgraense naaet")
+
+plot(strategy.position_size != 0 ? myStop : na, "Stop", color.red,   2, plot.style_linebr)
+plot(strategy.position_size != 0 ? myTp   : na, "Mål",  color.green, 2, plot.style_linebr)
+
+// ═══════════════════ TABEL: STATUS + DIAGNOSE ═══════════════════
+showDiag = input.bool(true, "Vis diagnose-tabel", group = g6,
+     tooltip = "Laes den oppefra og ned. Det foerste tal der er 0 viser hvor kaeden knaekker.")
+
+var table tb = table.new(position.top_right, 2, 16, border_width = 1,
+     frame_width = 1, frame_color = color.gray)
+f_row(r, k, v, col) =>
+    table.cell(tb, 0, r, k, text_size = size.tiny, text_color = color.gray,
+         text_halign = text.align_left)
+    table.cell(tb, 1, r, v, text_size = size.tiny, text_color = col,
+         text_halign = text.align_right)
+
+if barstate.islast and showDiag
+    int opened   = strategy.closedtrades + (strategy.position_size != 0 ? 1 : 0)
+    int rejected = cFill - opened
+    f_row(0,  "Opsaetning",   cfgWarn == "" ? "OK" : cfgWarn,
+          cfgWarn == "" ? color.green : color.red)
+    f_row(1,  "Partner-data", partnerOK ? "OK" : "MANGLER",
+          partnerOK ? color.green : color.red)
+    f_row(2,  "Bars i vindue", str.tostring(cBars),  cBars > 0 ? color.silver : color.red)
+    f_row(3,  "Rene raids",    str.tostring(cRaid),  cRaid > 0 ? color.silver : color.red)
+    f_row(15, "EQ doed v. foedsel", str.tostring(cBorn), color.orange)
+    f_row(4,  "Begge har EQ",  str.tostring(cArm),   cArm  > 0 ? color.silver : color.red)
+    f_row(5,  "Begge lukker ens", str.tostring(cSameWay), cSameWay > 0 ? color.silver : color.red)
+    f_row(6,  "- kasseret, lofter",      str.tostring(cCaps), color.orange)
+    f_row(7,  "- blokeret, position",    str.tostring(cBusy), color.orange)
+    f_row(8,  "- blokeret, dagsgraense", str.tostring(cHalt), color.orange)
+    f_row(9,  "ENTRIES",       str.tostring(cFill), cFill > 0 ? color.green : color.red)
+    f_row(10, "Ordrer AFVIST", str.tostring(rejected), rejected > 0 ? color.red : color.silver)
+    f_row(11, "Dagens RR",     str.tostring(dayR, "#.##"), dayR >= 0 ? color.green : color.red)
+    f_row(12, "Status", halted ? "dagen er slut" : canEnt ? "i vindue" : "uden for vindue", color.silver)
+    f_row(13, "Setup",  armed ? (armShort ? "armeret SHORT" : "armeret LONG") : "-", color.silver)
+    f_row(14, "Partner-ben", pIn ? "aaben" : "flad", color.silver)
