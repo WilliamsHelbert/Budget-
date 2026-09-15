@@ -84,11 +84,27 @@ def fmt(ts):
 
 
 def _be_level(m5, bucket, short, back=8):
-    """Extreme of the most recent 5m candle completed before `bucket`."""
+    """GAMMEL regel (forkert): extremet paa det senest afsluttede 5m-lys.
+    Beholdt bag be_src='prev5' saa gamle koersler kan reproduceres."""
     for i in range(1, back+1):
         c = m5.get(bucket - 300*i)
         if c: return c[2] if short else c[1]
     return None
+
+
+def _nearest_liq(lvls, ent, short):
+    """Naermeste UROERTE 5m-likviditetsniveau i gevinstretningen paa entry-tidspunktet.
+    lvls = liste af dicts {lvl, hi, dead}. Short -> lows under entry. Long -> highs over entry."""
+    best = None
+    for m in lvls:
+        if m["dead"] or m["hi"] == short: continue
+        v = m["lvl"]
+        if (v >= ent) if short else (v <= ent): continue
+        if best is None:
+            best = v
+        elif (v > best) if short else (v < best):
+            best = v
+    return best
 
 
 def _tp(k, ent, stop, mode, r):
@@ -111,6 +127,7 @@ def _run(conf_sec=60, entry_mode="loose", be_mode="liq5", sl_mode="anchor",
         tp_mode="fixed", tp_r=3.0, max_stop=None, invert=False,
         daily_stop=None, daily_target=None, daily_basis="sum",
         max_be=None, be_ref="next", be_min=None, conf_now=False,
+        be_src="prev5", liq_piv=0, liq_from=None,
         tp_sess=None, tp_sess_cap=False, tp_m15=None,
         daily_tp=None, daily_tp_floor=True, birth_raid="ext", raid_ref="order", force_clean=None,
         sides=None):
@@ -164,6 +181,12 @@ def _run(conf_sec=60, entry_mode="loose", be_mode="liq5", sl_mode="anchor",
     pmin = {k: None for k in SYMS}; pconf = {k: None for k in SYMS}
     FC = force_clean or set()
     trades = []; armed = None; live = []; audit = []
+    # --- 5m likviditetsniveauer (be_src='liq') ---
+    LV   = {k: [] for k in SYMS}    # levende/doede niveauer for dagen
+    P5   = {k: [] for k in SYMS}    # afsluttede 5m-lys for dagen (bucket,o,h,l,c)
+    LVB  = {k: None for k in SYMS}  # sidst sete 5m-bucket
+    LVD  = {k: None for k in SYMS}  # sidst sete dag
+    LVFROM = OPEN_MIN if liq_from is None else liq_from
     dayRk = {}   # (dag, asset) -> R for det ben alene
     decided = {}  # (dag, asset) -> True naar en IKKE-BE handel er lukket for det ben den dag
     dayR = {}; siglog = []
@@ -180,6 +203,35 @@ def _run(conf_sec=60, entry_mode="loose", be_mode="liq5", sl_mode="anchor",
             if bars[k] is None: newmin[k] = None; continue
             newmin[k] = M1[k].get(pmin[k]) if (pmin[k] is not None and mb != pmin[k]) else None
             pmin[k] = mb
+
+        if be_src == "liq":
+            for k in SYMS:
+                b = bars[k]
+                if b is None: continue
+                if LVD[k] != d:
+                    LVD[k] = d; LV[k] = []; P5[k] = []; LVB[k] = None
+                # nyt 5m-lys afsluttet?
+                if LVB[k] is not None and m5b != LVB[k]:
+                    c5 = M5[k].get(LVB[k])
+                    if c5 and TOD.get(LVB[k], LVFROM) >= LVFROM:
+                        P5[k].append((LVB[k],) + c5)
+                        n = len(P5[k])
+                        if liq_piv <= 0:
+                            _, _o, _h, _l, _c = P5[k][-1]
+                            LV[k].append(dict(lvl=_h, hi=True,  dead=False))
+                            LV[k].append(dict(lvl=_l, hi=False, dead=False))
+                        elif n >= 3:
+                            a_, b_, c_ = P5[k][-3], P5[k][-2], P5[k][-1]
+                            if b_[3] < a_[3] and b_[3] < c_[3]:
+                                LV[k].append(dict(lvl=b_[3], hi=False, dead=False))
+                            if b_[2] > a_[2] and b_[2] > c_[2]:
+                                LV[k].append(dict(lvl=b_[2], hi=True,  dead=False))
+                LVB[k] = m5b
+                # doed hvis prisen har vaeret igennem
+                o_, h_, l_, c_ = b
+                for m in LV[k]:
+                    if not m["dead"] and ((h_ >= m["lvl"]) if m["hi"] else (l_ <= m["lvl"])):
+                        m["dead"] = True
 
         in_sess = OPEN_MIN <= tod < CLOSE_MIN
         can_enter = entry_from <= tod < entry_to
@@ -243,7 +295,7 @@ def _run(conf_sec=60, entry_mode="loose", be_mode="liq5", sl_mode="anchor",
                 lg = tr["legs"][k]
                 if lg["exit"] is not None: continue
                 b = bars[k]
-                if lg["m5"] is not None and m5b != lg["m5"] and not lg["be"]:
+                if (be_src != "liq") and lg["m5"] is not None and m5b != lg["m5"] and not lg["be"]:
                     c5 = M5[k].get(lg["m5"])
                     if c5:
                         if be_mode == "liq5":
@@ -389,19 +441,22 @@ def _run(conf_sec=60, entry_mode="loose", be_mode="liq5", sl_mode="anchor",
                             stop = (armed["anchors"][k] if sl_mode == "anchor"
                                     else armed["levels"][k] if sl_mode == "eqline"
                                     else armed["sweeps"][k])
-                            ref0 = _be_level(M5[k], m5b, short)
+                            ref0 = (_nearest_liq(LV[k], ent, short) if be_src == "liq"
+                                    else _be_level(M5[k], m5b, short))
                             bed = None if ref0 is None else (ent - ref0 if short else ref0 - ent)
                             cand[k] = (ent, stop, ref0, bed)
                         why = []
                         if max_stop is not None:
                             for k in frie:
-                                if abs(cand[k][0]-cand[k][1]) > max_stop[k]: why.append(f"stop>{max_stop[k]} ({k})")
+                                if k in max_stop and abs(cand[k][0]-cand[k][1]) > max_stop[k]:
+                                    why.append(f"stop>{max_stop[k]} ({k})")
                         if max_be is not None:
                             # loftet handler om at BE ikke maa ligge for LANGT vaek. Ligger
                             # niveauet allerede paa den anden side af entry (negativ afstand),
                             # er der intet at kappe - handlen gaar igennem, og BE venter blot
                             # paa naeste 5m-candle.
                             for k in frie:
+                                if k not in max_be: continue
                                 bd = cand[k][3]
                                 if bd is None: why.append(f"intet 5m-niveau ({k})")
                                 elif bd > max_be[k]: why.append(f"BE>{max_be[k]} ({k})")
@@ -449,9 +504,11 @@ def _run(conf_sec=60, entry_mode="loose", be_mode="liq5", sl_mode="anchor",
                             legs[k] = dict(entry=ent, stop=stop, init_stop=stop,
                                            tp=(ent-dist) if side == "bear" else (ent+dist),
                                            be=False, be_t=None, m5=m5b,
-                                           ref=(ref0 if (be_ref == "prev" and ref0 is not None
+                                           ref=(ref0 if ((be_src == "liq" or be_ref == "prev")
+                                                and ref0 is not None
+                                                and cand[k][3] is not None
                                                 and cand[k][3] >= (0.0 if be_min is None
-                                                                   else be_min[k]))
+                                                                   else be_min.get(k, 0.0)))
                                                 else None),
                                            exit=None, exit_t=None, reason=None)
                         if invert:
