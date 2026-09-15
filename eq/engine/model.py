@@ -127,7 +127,7 @@ def _run(conf_sec=60, entry_mode="loose", be_mode="liq5", sl_mode="anchor",
         tp_mode="fixed", tp_r=3.0, max_stop=None, invert=False,
         daily_stop=None, daily_target=None, daily_basis="sum",
         max_be=None, be_ref="next", be_min=None, conf_now=False,
-        be_src="prev5", liq_piv=0, liq_from=None,
+        be_src="prev5", liq_piv=0, liq_from=None, block_mode="any",
         tp_sess=None, tp_sess_cap=False, tp_m15=None,
         daily_tp=None, daily_tp_floor=True, birth_raid="ext", raid_ref="order", force_clean=None,
         sides=None):
@@ -426,11 +426,14 @@ def _run(conf_sec=60, entry_mode="loose", be_mode="liq5", sl_mode="anchor",
                         siglog.append(dict(ts=ts, side=side, hit=armed["hit"], status="dagsgraense naaet",
                                            why=f"dagens R = {dr:+.2f}"))
                     elif (not per_leg) and one_at_a_time and (
-                            [t for t in live if oaat_leg in t["legs"]
-                             and t["legs"][oaat_leg]["exit"] is None]
-                            if oaat_leg else live):
+                            [t for t in live
+                             if (block_mode != "opposite" or t["side"] != side)
+                             and (oaat_leg is None or
+                                  (oaat_leg in t["legs"] and t["legs"][oaat_leg]["exit"] is None))]):
                         stat["skipped"] += 1
-                        armed["rec"]["status"] = "7. en position var allerede aaben"
+                        armed["rec"]["status"] = ("7. en position i modsat retning var aaben"
+                                                  if block_mode == "opposite"
+                                                  else "7. en position var allerede aaben")
                         siglog.append(dict(ts=ts, side=side, hit=armed["hit"], status="position aaben",
                                            why="et trade koerte allerede"))
                     else:
