@@ -1,7 +1,8 @@
 # EQ + SMT — overlevering
 
-Skrevet 16-09-2026. Læs denne først. Den indeholder det der er afgjort,
-det der er bevist forkert, og det der stadig er åbent.
+Skrevet 16-09-2026. Opdateret 16-09-2026 efter partner-EQ-rettelsen.
+Læs denne først. Den indeholder det der er afgjort, det der er bevist
+forkert, og det der stadig er åbent.
 
 ---
 
@@ -10,7 +11,7 @@ det der er bevist forkert, og det der stadig er åbent.
 | Fil | Hvad |
 |---|---|
 | `eq_model.py` | EQ-konfluensmotoren. Rører ES og NQ samtidig. |
-| `smt_model.py` | SMT (Session Sweep), port af Pine v10. **Ikke færdig.** |
+| `smt_model.py` | SMT (Session Sweep), port af Pine v10. **PARKERET.** |
 | `koer_alt.py` | Kører begge og skriver `alle_trades.csv`. |
 | `databento_konverter3.py` | Databento OHLCV-1s → 15s parquet, ét år pr. fil. |
 | `del_op.py` | Deler en parquet i bidder under 30 MB. |
@@ -21,9 +22,20 @@ Kør:
 python koer_alt.py sti/til/datamappe
 ```
 
-Datamappen skal have `ES.parquet` og `NQ.parquet`: 15s-barer, kolonnerne
-`time` (UTC), `open`, `high`, `low`, `close`. **Fuld døgndata** — mindst
-02:00–22:10 dansk tid. SMT har brug for Asien og London.
+### Dataformat — vigtigt, konverteren og motoren taler ikke samme sprog
+
+`databento_konverter3.py` skriver **ikke** det format motoren læser. Den
+skriver `ES_2025.parquet` med:
+
+- kolonnen `ts` — epoch-sekunder som `int32`
+- priser som **heltal i ticks** (`pris / 0.25`), ikke i point
+
+Motoren (`_prep`) forventer `ES.parquet` med kolonnen `time` som UTC-
+datetime og priser i **rigtige point**. Der mangler altså et mellemtrin:
+slå årene sammen, omdøb `ts` → `time`, og gang priserne med 0,25.
+
+Sker det ikke, er ES-priser 4× for høje, og 8/40-reglen måler i ticks
+i stedet for point. Alt bliver forkert uden at fejle.
 
 ---
 
@@ -39,6 +51,19 @@ giver −2,5 R. Et stop 37,5 point væk giver −3,75 R. Tabene varierer.
 
 Journalens `r`-kolonne følger samme konvention: `r = −3.125` betyder et
 stop 31,25 point væk.
+
+### Den faste enhed er ikke din RR
+
+TP er 7,5 R **i den faste enhed**, men risikoen pr. handel svinger med
+stoppet. Den faktiske reward:risk er TP divideret med stoppet:
+
+| ES-benet | Median | Snit | Min | Max |
+|---|---:|---:|---:|---:|
+| Stopafstand | 3,50 pt | 3,90 pt | 0,75 | 8,00 |
+| Risiko i R-enheder | 1,75 | 1,95 | — | 4,00 |
+| **Sand RR** | **4,29** | **4,80** | 1,88 | 20,00 |
+
+Du handler altså i snit **4,8:1**, ikke 7,5:1.
 
 ---
 
@@ -58,6 +83,12 @@ stop 31,25 point væk.
 **Stop**
 - På EQ-toppen (ankeret).
 
+**EQ'ernes levetid**
+- Når en EQ bliver raidet, ankrer den sig selv.
+- **Begge aktivers EQ'er er ude af drift fra det øjeblik en handel
+  udløses, og indtil handlen er ude i SL, BE eller TP.** Derefter
+  starter de forfra.
+
 **Break-even**
 - Nærmeste **LEVENDE** 5m-likviditet i gevinstretningen, låst ved entry.
 - Et 5m-lys' low bliver et niveau når lyset lukker. Det **dør** når prisen
@@ -66,7 +97,7 @@ stop 31,25 point væk.
 
 **8/40-reglen**
 - Både stoppet og BE-afstanden skal være ≤ 8 point på ES og ≤ 40 på NQ.
-  Ellers er handlen ugyldig.
+  Ellers er handlen **ugyldig** (ikke udskudt, ikke beskåret).
 
 **Take profit** — 15 ES-point / 75 NQ-point. Fast.
 
@@ -74,27 +105,67 @@ stop 31,25 point væk.
 
 ---
 
-## 4. Resultater, nov 2024 – sep 2026 (341 dage Databento + 2026 NinjaTrader)
+## 4. Resultater — rettet model, nov 2024 – feb 2026
 
-286 handler:
+341 dage Databento, 249 handler.
 
-| Ben | R | pr. handel | maxDD | TP | SL | BE | t |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| NQ | +30,03 | +0,10 | −39,80 | 39 | 121 | 126 | +0,56 |
-| **ES** | **+99,38** | +0,35 | −29,50 | 44 | 133 | 109 | **+1,84** |
+| Ben | R | pr. handel | maxDD | TP | SL | BE | profitfaktor | t |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| NQ | +11,08 | +0,04 | −39,80 | 31 | 105 | 113 | 1,05 | +0,23 |
+| **ES** | **+98,50** | +0,40 | −22,00 | 39 | 113 | 97 | 1,51 | **+1,94** |
 
-År for år, ES: 2024 nov–dec +13,25 · 2025 +74,75 · 2026 jan–sep +11,38.
+År for år, ES: 2024 nov–dec +13,25 · 2025 +73,75 · 2026 jan–feb +11,50.
 
-**Beslutning: der handles ES.** Samme signaler, tre gange resultatet.
+**Beslutning: der handles ES.** Samme signaler, ni gange resultatet.
+
+### Drawdown-profilen — det her er den vigtige tabel
+
+| Nedture fra en top | Antal | I USD |
+|---|---:|---:|
+| Under −5 R | 9 | −1.000 |
+| **Under −10 R** | **5** | −2.000 |
+| Under −15 R | 2 | −3.000 |
+| Under −20 R | 2 | −4.000 |
+
+De fem episoder under −10 R:
+
+| Start | Bund | Dybde | Handler | Kom sig |
+|---|---|---:|---:|---|
+| 2024-11-29 | 2024-12-17 | −14,75 R | 14 | 2025-02-25 |
+| 2025-02-28 | 2025-05-06 | **−22,00 R** | 19 | 2025-05-29 |
+| 2025-06-03 | 2025-07-09 | −21,50 R | 25 | 2025-08-15 |
+| 2025-09-01 | 2025-09-17 | −14,62 R | 15 | 2025-09-18 |
+| 2025-11-10 | 2025-12-09 | −13,25 R | 9 | 2025-12-15 |
+
+**85 % af alle handler foregår i drawdown.** Kun 15 % sker på en ny top.
+Længste periode under vand: 50 handler.
+
+### Drawdownen er strukturel, ikke uheld
+
+Ved 15,7 % TP-rate er sandsynligheden for højst 1 TP i 19 handler
+**17,8 %**, og der er 231 overlappende 19-vinduer i datasættet. En tørke
+som den værste er ikke usædvanlig — den er garanteret. Værste enkelttab
+er kun −4,00 R. Drawdownen kommer fra tørke i træfprocenten, ikke fra
+halerisiko, og den kan ikke fjernes uden at ændre udbetalingsstrukturen.
 
 ### Advarsel om tallet
-Der blev kørt ca. 40 konfigurationer på de her data. t = 1,84 er ikke
-et frit fund. Og 2026 er kun +11,38 på ni måneder mod 2025's +74,75.
-**Modellen er ikke bevist.**
+Der er nu kørt ca. 55 konfigurationer på de samme data. t = 1,94 er ikke
+et frit fund. **Modellen er ikke bevist.**
 
 ---
 
 ## 5. Fejl der er fundet og rettet — gentag dem ikke
+
+**Partnerens EQ blev aldrig brugt op.** `eq_model.py:253` dræbte EQ'en når
+et aktiv raidede sin *egen* linje, men når aktivet var konfluens-partner
+blev dets EQ kun aflæst, aldrig nulstillet. Partnerens anker blev derfor
+genbrugt hele dagen mens ekstremet løb videre, så stoppet voksede uden
+loft. 8. januar 2026 gav samme NQ-anker (25803,00) tre setups med stop på
+98,00 → 129,50 → **167,00** point. Værste tilfælde i datasættet: 659 point.
+Bivirkning: den forældede EQ blokerede også for at nye EQ'er kunne fødes
+(`:269`, `:277` kræver `bear[k] is None`).
+Rettelse: begge EQ'er bruges op ved entry og er ude af drift til handlen
+er færdig. Median-afvigelse mod journalen: +21,00 → **+1,25 point**.
 
 **BE lå på død likviditet.** Den gamle regel tog extremet på det senest
 afsluttede 5m-lys uden at tjekke om prisen allerede havde handlet igennem
@@ -115,6 +186,8 @@ false`. Dagsstoppet var tilføjet af modellen, ikke af traderen.
 **Tidszone.** Motoren SKAL køre i `America/New_York`. Amerikansk sommertid
 starter ~3 uger før europæisk (2026: 8. marts mod 29. marts). Kører man i
 Europe/Copenhagen, handler man 10:30–11:30 NY i 15 dage i marts.
+`eq_model.py:21` har stadig `TZ = "Europe/Copenhagen"` som modulstandard —
+den overskrives af `koer_alt.py:44`. **Kør altid gennem `koer_alt.py`.**
 
 **ms mod ns i parquet.** `dbfull`-filerne har `datetime64[ms]`.
 `astype('int64') // 10**9` giver da vrøvl. Brug
@@ -124,18 +197,29 @@ Europe/Copenhagen, handler man 10:30–11:30 NY i 15 dage i marts.
 
 ## 6. Hvad journalen viste
 
-18 MEQ-handler, 8.–16. januar 2026, −15,125 R i alt.
+18 MEQ-handler, 8.–16. januar 2026, −15,125 R i alt. 12 shorts, 6 longs.
 
-**Motoren armer 17 af de 18 inden for ét minut. 14 med samme retning.**
-Entry-logikken er altså rigtig. De blev kasseret af 8/40-loftet, fordi
-modellens stop på EQ-anchoren i snit er 2,1× bredere end journalens
-(median 37,25 mod 26,25 point).
+Motoren armer 15 af de 18 inden for ét minut, 13 med samme retning.
+Entry-logikken er rigtig.
 
-Journalens stop lå mellem 16,25 og 37,50 point. Aldrig over.
+**Ankerreglen er bekræftet korrekt.** Før rettelsen delte de matchede
+setups sig i to rene grupper efter hvem der udløste:
 
-**Åbent spørgsmål:** hvorfor er modellens anker bredere end det traderen
-bruger? SL-reglen er bekræftet som "toppen af EQ", men tallene stemmer
-ikke på halvdelen af setupsene. Det er det vigtigste uløste punkt.
+| Dato | Udløser | Journal | Model før | Model efter |
+|---|---|---:|---:|---:|
+| 01-08 15:50 | ES | 31,25 | 167,00 | **30,75** |
+| 01-09 15:49 | ES | 37,50 | 59,50 | 59,50 |
+| 01-13 15:32 | NQ | 27,50 | 28,75 | 28,75 |
+| 01-14 15:40 | NQ | 25,00 | 25,25 | 25,25 |
+| 01-14 15:47 | NQ | 27,50 | 23,50 | 23,50 |
+| 01-15 15:58 | — | 17,50 | 41,00 | 44,75 |
+| 01-16 15:33 | ES | 16,25 | 37,25 | 37,25 |
+
+Hver gang NQ raidede sin egen EQ, ramte modellen journalen inden for 4
+point — også før rettelsen. Afvigelserne lå udelukkende på partner-benet.
+
+**Åbent:** tre ES-udløste setups afviger stadig 21–27 point. Restfejlen er
+ikke fundet.
 
 ---
 
@@ -143,13 +227,31 @@ ikke på halvdelen af setupsene. Det er det vigtigste uløste punkt.
 
 Pålidelige, fordi de ikke er udvalgte fund — de blev testet og fejlede.
 
-| Idé | ES-resultat (basis +99,38) |
+| Idé | ES-resultat (basis +98,50) |
 |---|---:|
 | Stop efter første tab på dagen | +71,00 |
 | Kun én handel per dag | +52,38 |
-| Fjern BE helt | +98,38 |
+| Fjern BE helt | +98,00 R, men maxDD **−22,00 → −36,38** |
 | Tættere TP (1,5–6,0 R) | Monotont dårligere |
-| Longs med | Longs giver +30,22, men kun hvis de deler kø med shorts. Får de lov at køre samtidig: −10,08 |
+| Konstant risiko (skalér efter stopbredde) | R uændret, maxDD **−11,29 → −15,74** |
+| **Stoploft på 3 R** | Forkert præmis — se nedenfor |
+| Longs med | +30,22, men kun hvis de deler kø med shorts. Samtidigt: −10,08 |
+
+**BE-reglen er dit drawdown-værktøj, ikke et profit-værktøj.** Den koster
+0,50 R i total og halverer drawdownen. Rør den ikke.
+
+**3R-stoploftet er afvist.** Præmissen var at brede ankre er dårlige
+risikobeslutninger. Data siger det modsatte, monotont:
+
+| Stopbredde (ES) | n | R pr. handel | SL-andel |
+|---|---:|---:|---:|
+| 0,75–2,75 pt | 75 | +0,185 | 63 % |
+| 2,75–3,50 pt | 56 | +0,373 | 43 % |
+| 3,50–5,25 pt | 61 | +0,498 | 39 % |
+| 5,25–8,00 pt | 57 | **+0,586** | **32 %** |
+
+Et bredt anker betyder at EQ'en har strakt sig — det er et stærkt
+strukturelt signal. Skærer man toppen af, skærer man i de bedste handler.
 
 Handel nr. 2 på dagen er den **bedste** (+0,70 pr. handel mod +0,24 for nr. 1).
 
@@ -157,18 +259,32 @@ Handel nr. 2 på dagen er den **bedste** (+0,70 pr. handel mod +0,24 for nr. 1).
 
 ## 8. Åbne idéer — ingen af dem er validerede
 
-**Stoploft på 3 R (6 ES-point).** Den bedst begrundede. Ingen af de 44
-vindere gik mere end 2,75 R imod entry. Taberne gik 2,00 R i median og op
-til 6,25. Et loft på 3,0 R dræber ingen kendt vinder og skærer 25 % af
-taberne. Mekanismen: ankeret er en strukturel top, ikke en risikobeslutning.
+### Delgevinst + mindstestop (den bedst begrundede)
 
-**Efterhåndsfund — brug dem IKKE uden nye data:**
+MFE-måling viser en ren adskillelse: BE-handlerne når median **2,00 R** i
+din favør før de vender, mens SL-handlerne dør ved **0,62 R**. Kun 8 % af
+taberne når 2 R mod 54 % af BE-handlerne. De 97 BE-handler, der i dag
+lander på præcis 0,00 R, er den største uudnyttede pulje i modellen.
+
+| Variant | n | R | maxDD | Calmar | <−10 R | t |
+|---|---:|---:|---:|---:|---:|---:|
+| Basis | 249 | +98,50 | −22,00 | 4,48 | 5 | +1,94 |
+| Delgevinst ½ ved 1,0 R | 249 | +70,38 | −11,94 | 5,90 | 4 | +2,28 |
+| Mindstestop 2,5 ES-pt | 196 | +98,62 | −19,12 | 5,16 | 5 | +2,09 |
+| **Begge dele** | 196 | **+72,62** | **−10,00** | **7,26** | **1** | **+2,52** |
+
+Kombinationen halverer drawdownen og går fra fem til én episode under
+−10 R, men koster 26 R i total.
+
+**Det er et best-of-mange-valg.** Delgevinstniveauet er ikke monotont
+(1,0 R bedst, 1,5–2,5 dårligere, 3,0 lidt bedre igen), hvilket er
+kendetegnet ved støj. Med ~55 konfigurationer bag sig er t = 2,52 cirka
+hvad ren støj producerer. **Skal valideres på 2022/2023 før det bruges.**
+
+### Efterhåndsfund — brug dem IKKE uden nye data
 - 15:40–15:50 alene står for +84,62 af de +99,38 (t = 2,56)
 - Setups med NQ-stop 32–41 point taber penge (t = −0,23)
 - Dage med tre handler: 7 dage, −25,38 R på NQ
-
-Begge de første er 3- og 4-vejs opdelinger fundet bagefter på 286 handler.
-Med 40 forsøg bag sig er t = 2,5 cirka hvad ren støj producerer.
 
 ---
 
@@ -177,49 +293,48 @@ Med 40 forsøg bag sig er t = 2,5 cirka hvad ren støj producerer.
 Hent **2022 og 2023** fra Databento med `databento_konverter3.py`. Det er
 data ingen har rørt.
 
-Lås opsætningen først, skriftligt. Så kør den **én gang**. Det tal er det
-første ærlige tal.
+Lås opsætningen først, skriftligt — inklusive om delgevinst og
+mindstestop er med. Så kør den **én gang**. Det tal er det første
+ærlige tal.
 
-Justerer man efter at have set det, er det ikke længere et out-of-sample-tal.
+Justerer man efter at have set det, er det ikke længere et
+out-of-sample-tal.
 
 ---
 
-## 10. SMT — status
+## 10. SMT — PARKERET
 
-**Ikke færdig.** Bedste kørsel: 40 handler mod journalens 41 for jan–feb
-2026. +35,08 R mod journalens +86,60 R. 16 har samme dag og tidspunkt,
-8 har identisk R.
+Ikke i arbejde. Tallene står her så de ikke går tabt.
 
-Kendte fejl der er rettet undervejs:
-- Død-niveau-tjekket testede kun NQ
-- Korrelations-gaten blev aldrig anvendt (stille fejl)
-- Blokering talte 5m-niveauer med (R: −11,22 → +1,33)
-- Stop blev målt på løbende 1-minuts-ekstrem i stedet for 15s-lysets
-  ekstrem (R: +1,33 → +21,48, snit-tab −2,92 → −1,92)
+86 handler på fuld døgndata nov 2024 – feb 2026: **−34,15 R**, t = −1,88.
+SL 42 · BE 37 · TP 7. Den taber penge som den står og skal ikke handles.
+Reproduceret præcist 16-09-2026.
 
-**Kørt på fuld døgndata nov 2024 – feb 2026 (341 dage):**
-86 handler, **−34,15 R**, t = −1,88. SL 42 · BE 37 · TP 7.
-Den taber altså penge som den står. Den skal ikke handles.
+Kendte fejl rettet undervejs: død-niveau-tjekket testede kun NQ ·
+korrelations-gaten blev aldrig anvendt · blokering talte 5m-niveauer med ·
+stop målt på løbende 1-minuts-ekstrem i stedet for 15s-lysets ekstrem.
 
-**Uløst:** 27. april 2026 skulle fjernes af regel C, men bliver det ikke.
-
-Regel C: prisen må ikke sweepe BE'erne session-liq og EQ. Men bliver 25 %
-af EQ eller 15m/5m-liq taget, og det skulle have været brugt til BE, så
-springer man videre til næste BE-kandidat.
-
-Journalen har 142 SMT-handler. Der har kun været data til 41 af dem,
-fordi de gamle filer var RTH-klippede. Med fuld døgndata kan resten testes.
+Uløst: 27. april 2026 skulle fjernes af regel C, men bliver det ikke.
+Journalen har 142 SMT-handler; der har kun været data til 41.
 
 ---
 
 ## 11. Data
 
 Motoren forventer `ES.parquet` + `NQ.parquet` pr. mappe:
-`time` (UTC), `open`, `high`, `low`, `close`, 15s-barer, frontkontrakt
-volumenrullet, spreads og micros fjernet.
+`time` (UTC), `open`, `high`, `low`, `close`, 15s-barer i **point**,
+frontkontrakt volumenrullet, spreads og micros fjernet.
+Se afsnit 1 om mellemtrinnet fra konverterens format.
 
-`databento_konverter3.py` laver dem. Ca. 11 MB pr. år pr. symbol.
+**Datafilerne ligger ikke i repoet** (parquet er i `.gitignore`).
 
-Verificeret mod hinanden: Databento mod NinjaTrader matcher high/low
-99,7 %. To Databento-træk matcher 99,66 %, og hele afvigelsen ligger på
-rulledagen 15. september 2025.
+Verificeret 16-09-2026: nov 2024 – feb 2026, 341 handelsdage, døgndækning
+02:00–22:09 dansk tid, ca. 4.750 af 5.760 mulige 15s-barer pr. dag.
+ES 5.724–6.994, NQ 16.486–26.398. Ingen RTH-klipning.
+
+**2026 marts–september mangler.** De tal i den gamle udgave af dette
+dokument (+11,38 for jan–sep 2026, 286 handler) kom fra en separat
+NinjaTrader-kilde. Databento-sættet dækker kun til 27. februar 2026.
+Sammenholdt betyder det at **marts–september 2026 tilsammen gav −0,12 R
+på syv måneder** — 2026-svagheden er ikke jævnt fordelt, den er
+fuldstændig stilstand efter februar.
