@@ -197,6 +197,10 @@ Kendte fejl der er rettet undervejs:
 - Stop blev målt på løbende 1-minuts-ekstrem i stedet for 15s-lysets
   ekstrem (R: +1,33 → +21,48, snit-tab −2,92 → −1,92)
 
+**Kørt på fuld døgndata nov 2024 – feb 2026 (341 dage):**
+86 handler, **−34,15 R**, t = −1,88. SL 42 · BE 37 · TP 7.
+Den taber altså penge som den står. Den skal ikke handles.
+
 **Uløst:** 27. april 2026 skulle fjernes af regel C, men bliver det ikke.
 
 Regel C: prisen må ikke sweepe BE'erne session-liq og EQ. Men bliver 25 %
