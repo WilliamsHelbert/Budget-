@@ -48,6 +48,9 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
         use_be=False,             # BE er ude i denne version
         exit_scope="any",         # 'any' = luk igennem paa ET aktiv lukker begge ben
         add_scope="both",         # 'both' = tilfoejelsen laegges paa begge ben
+        gov_on="birth",           # hvornaar overtager en ny EQ styringen af exit?
+                                  #   'birth' = saa snart den foedes (ordret laesning)
+                                  #   'add'   = foerst naar den har givet en tilfoejelse
         ):
     C = EM._data(conf_sec)
     BAR, M1 = C["bar"], C["m1"]
@@ -80,23 +83,44 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
         # =================== A. AABEN POSITION ===================
         if pos is not None:
             side = pos["side"]; short = side == "bear"
-
-            # A1. ny EQ foedt -> den nyeste overtager styringen
+            add_hit = None
             for k in SYMS:
+                bb = bars[k]
+                if bb is None: continue
+                o, h, l, c = bb
+                # A1a. kandidat-EQ forlaenges / raides (raid = trigger for tilfoejelse)
+                if eqs[k][side] is not None:
+                    a_, e0 = eqs[k][side]
+                    e1 = min(e0, l) if short else max(e0, h)
+                    lvl = (a_ + e1) / 2.0
+                    if (h >= lvl) if short else (l <= lvl):
+                        eqs[k][side] = None
+                        rent = not ((c > lvl) if short else (c < lvl))
+                        if rent and add_hit is None: add_hit = (k, a_, e1)
+                    else:
+                        eqs[k][side] = (a_, e1)
+                # A1b. ny EQ foedes
                 pm = newmin[k]
-                if pm is None or bars[k] is None: continue
-                po, ph, pl, pc = pm; mid = (ph + pl) / 2.0
-                if (pc < po and pc < mid) if short else (pc > po and pc > mid):
-                    pos["gov"][k] = dict(a=ph if short else pl, e=pl if short else ph,
-                                         used=False, t=EM.fmt(ts))
+                if pm is not None and tod >= OPEN_MIN and eqs[k][side] is None:
+                    po, ph, pl, pc = pm; mid = (ph + pl) / 2.0
+                    if (pc < po and pc < mid) if short else (pc > po and pc > mid):
+                        a_, e_ = (ph, min(pl, l)) if short else (pl, max(ph, h))
+                        lvl = (a_ + e_) / 2.0
+                        if (h >= lvl) if short else (l <= lvl):
+                            if not ((c > lvl) if short else (c < lvl)) and add_hit is None:
+                                add_hit = (k, a_, e_)
+                        else:
+                            eqs[k][side] = (a_, e_)
+                        if gov_on == "birth":
+                            pos["gov"][k] = dict(a=a_, e=e_)
 
-            # A2. linjerne opdateres med denne bars ekstrem
+            # A2. den styrende EQ's linje opdateres med denne bars ekstrem
             lines = {}
             for k in SYMS:
                 if bars[k] is None: continue
                 lines[k] = _line(pos["gov"][k], side, bars[k][2], bars[k][1])
 
-            # A3. samlet TP - PR. BEN, hvert ben afvikles for sig
+            # A3. samlet TP - pr. ben
             for k in SYMS:
                 if pos["exit"][k] is not None or bars[k] is None: continue
                 tp = _tp_price(pos["entries"][k], k, side)
@@ -106,20 +130,19 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
             # A4. 15s-luk IGENNEM den styrende EQ -> alle aabne ben ud
             gennem = [k for k in SYMS if k in lines and
                       ((bars[k][3] > lines[k]) if short else (bars[k][3] < lines[k]))]
-            if gennem and (exit_scope == "any" or pos["hit"] in gennem):
+            luk = (exit_scope == "any"
+                   or (exit_scope in SYMS and exit_scope in gennem)
+                   or (exit_scope == "hit" and pos["hit"] in gennem))
+            if gennem and luk:
                 for k in SYMS:
                     if pos["exit"][k] is None and bars[k] is not None:
                         pos["exit"][k] = (bars[k][3], "EQ-luk", ts)
 
             aabne = [k for k in SYMS if pos["exit"][k] is None]
 
-            # A5. rent raid paa styrende EQ -> arm en tilfoejelse
-            if aabne and addarm is None:
-                for k in SYMS:
-                    if k not in lines or pos["gov"][k]["used"]: continue
-                    if (bars[k][1] >= lines[k]) if short else (bars[k][2] <= lines[k]):
-                        pos["gov"][k]["used"] = True
-                        addarm = dict(k=k, seen=0); break
+            # A5. rent raid paa kandidat-EQ -> arm en tilfoejelse
+            if aabne and addarm is None and add_hit is not None:
+                addarm = dict(k=add_hit[0], a=add_hit[1], e=add_hit[2], seen=0)
 
             # A6. tilfoejelsen kraever faelles 15s-luk samme vej
             if aabne and addarm is not None and all(bars[k] is not None for k in SYMS):
@@ -138,6 +161,12 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
                             pos["adds"].append(dict(ts=EM.fmt(ts), ben="+".join(lagt),
                                                     n=len(pos["entries"][lagt[0]]),
                                                     **{f"{j}_pris": bars[j][3] for j in lagt}))
+                            # styringen flytter foerst NAAR tilfoejelsen er sket
+                            if gov_on == "add":
+                                pos["gov"][addarm["k"]] = dict(a=addarm["a"], e=addarm["e"])
+                                for j in SYMS:
+                                    if j != addarm["k"] and eqs[j][side] is not None:
+                                        pos["gov"][j] = dict(a=eqs[j][side][0], e=eqs[j][side][1])
                         addarm = None
 
             if tod >= CLOSE_MIN:
