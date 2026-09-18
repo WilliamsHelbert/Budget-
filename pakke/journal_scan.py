@@ -9,7 +9,7 @@ _t=_pd.to_datetime(_pd.Series(TL),unit="s",utc=True).dt.tz_convert("Europe/Copen
 CPH=dict(zip(TL,(_t.dt.hour*60+_t.dt.minute).tolist()))
 SY=("ES","NQ")
 
-def signals(t_from=15*60+30, t_to=16*60, max_conf=4, birth_raid=True):
+def signals(t_from=15*60+30, t_to=16*60, max_conf=4, birth_raid=True, strict=False):
     """Alle gyldige EQ-signaler, begge retninger, uden positionsblokering."""
     eq={k:{"bear":None,"bull":None} for k in SY}
     pmin={k:None for k in SY}; day={k:None for k in SY}
@@ -38,7 +38,7 @@ def signals(t_from=15*60+30, t_to=16*60, max_conf=4, birth_raid=True):
                 a,e0=eq[k][side]
                 e1=min(e0,l) if side=="bear" else max(e0,h)
                 lvl=(a+e1)/2
-                if (h>=lvl) if side=="bear" else (l<=lvl):
+                if ((h>lvl) if strict else (h>=lvl)) if side=="bear" else ((l<lvl) if strict else (l<=lvl)):
                     raids.append((k,side,lvl,a,(c>lvl) if side=="bear" else (c<lvl)))
                     eq[k][side]=None
                 else: eq[k][side]=(a,e1)
@@ -47,11 +47,11 @@ def signals(t_from=15*60+30, t_to=16*60, max_conf=4, birth_raid=True):
                 po,ph,pl,pc=pm; mid=(ph+pl)/2
                 if pc<po and pc<mid and eq[k]["bear"] is None:
                     a,e=ph,min(pl,l); made["bear"][k]=(a,e); lvl=(a+e)/2
-                    if birth_raid and h>=lvl: raids.append((k,"bear",lvl,a,c>lvl))
+                    if birth_raid and ((h>lvl) if strict else (h>=lvl)): raids.append((k,"bear",lvl,a,c>lvl))
                     else: eq[k]["bear"]=(a,e)
                 if pc>po and pc>mid and eq[k]["bull"] is None:
                     a,e=pl,max(ph,h); made["bull"][k]=(a,e); lvl=(a+e)/2
-                    if birth_raid and l<=lvl: raids.append((k,"bull",lvl,a,c<lvl))
+                    if birth_raid and ((l<lvl) if strict else (l<=lvl)): raids.append((k,"bull",lvl,a,c<lvl))
                     else: eq[k]["bull"]=(a,e)
         can = t_from<=CPH[ts]<t_to
         for (k,side,lvl,anch,thr) in raids:
