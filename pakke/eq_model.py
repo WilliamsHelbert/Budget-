@@ -244,6 +244,9 @@ def _run(conf_sec=60, entry_mode="loose", be_mode="liq5", sl_mode="anchor",
             o, h, l, c = b
             if tod >= OPEN_MIN and day[k] != d:
                 day[k] = d; bear[k] = bull[k] = None; reset = True
+            # Begge aktivers EQ'er er ude af drift saa laenge en handel loeber.
+            # De genoptages foerst naar handlen er ude i SL, BE eller TP.
+            if live: continue
             # raid_ref 'ext' = linjen efter denne bars egen forlaengelse (som indikatoren)
             # raid_ref 'pre' = linjen FOER, saa baren ikke kan traekke linjen hen til sig
             #                  selv. Kausal: uafhaengig af rakkefoelgen inde i baren.
@@ -522,6 +525,11 @@ def _run(conf_sec=60, entry_mode="loose", be_mode="liq5", sl_mode="anchor",
                             side = "bull" if side == "bear" else "bear"
                         live.append(dict(side=side, ts=ts, day=d, legs=legs,
                                          hit=armed["hit"], hit_ts=armed["ts"]))
+                        # BEGGE EQ'er bruges op naar handlen udloeses - ikke kun
+                        # den der raidede. Uden det her blev partnerens anker
+                        # genbrugt hele dagen mens ekstremet loeb, og stopafstanden
+                        # voksede uden loft (op til 659 point paa NQ).
+                        for _s in SYMS: bear[_s] = bull[_s] = None
                     armed = None
                 elif entry_mode == "strict" and armed["seen"] >= 1:
                     armed = None; stat["arm_dead"] += 1
