@@ -48,6 +48,10 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
         use_be=False,             # BE er ude i denne version
         exit_scope="any",         # 'any' = luk igennem paa ET aktiv lukker begge ben
         add_scope="both",         # 'both' = tilfoejelsen laegges paa begge ben
+        gov_delay="candle1m",     # hvornaar er en ny EQ "etableret"?
+                                  #   'none'     = med det samme
+                                  #   'candle1m' = foerst naar et 1m-lys har lukket
+                                  #                i handlens retning EFTER foedslen
         gov_on="birth",           # hvornaar overtager en ny EQ styringen af exit?
                                   #   'birth' = saa snart den foedes (ordret laesning)
                                   #   'add'   = foerst naar den har givet en tilfoejelse
@@ -88,6 +92,14 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
                 bb = bars[k]
                 if bb is None: continue
                 o, h, l, c = bb
+                # A0. en ventende EQ forfremmes naar et 1m-lys har lukket
+                #     i handlens retning efter at den blev foedt
+                pend = pos["pend"].get(k)
+                if pend is not None:
+                    pend["e"] = min(pend["e"], l) if short else max(pend["e"], h)
+                    pv = newmin[k]
+                    if pv is not None and ((pv[3] < pv[0]) if short else (pv[3] > pv[0])):
+                        pos["gov"][k] = pend; pos["pend"][k] = None
                 # A1a. kandidat-EQ forlaenges / raides (raid = trigger for tilfoejelse)
                 if eqs[k][side] is not None:
                     a_, e0 = eqs[k][side]
@@ -112,7 +124,10 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
                         else:
                             eqs[k][side] = (a_, e_)
                         if gov_on == "birth":
-                            pos["gov"][k] = dict(a=a_, e=e_)
+                            if gov_delay == "none":
+                                pos["gov"][k] = dict(a=a_, e=e_)
+                            else:
+                                pos["pend"][k] = dict(a=a_, e=e_)
 
             # A2. den styrende EQ's linje opdateres med denne bars ekstrem
             lines = {}
@@ -188,6 +203,9 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
                     rec[f"{k}_udfald"] = grund
                     rec[f"{k}_pts"] = round(pts, 4)
                     rec[f"{k}_R"] = round(pts / EM.R_UNIT[k], 4)
+                    rec[f"{k}_risiko"] = round(pos["risk0"][k], 4)
+                    rec[f"{k}_rr"] = (round(pts / pos["risk0"][k], 2)
+                                      if pos["risk0"][k] > 1e-9 else None)
                 rec["adds"] = pos["adds"]
                 trades.append(rec)
                 pos = armed = addarm = None
@@ -266,7 +284,11 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
                     else:
                         pos = dict(side=side, day=d, t0=EM.fmt(ts), hit=armed["hit"],
                                    gov=armed["gov"], adds=[],
+                                   risk0={k: abs(bars[k][3] -
+                                          (armed["gov"][k]["a"] + armed["gov"][k]["e"]) / 2.0)
+                                          for k in SYMS},
                                    exit={k: None for k in SYMS},
+                                   pend={k: None for k in SYMS},
                                    entries={k: [bars[k][3]] for k in SYMS})
                         armed = None
     return pd.DataFrame(trades), pd.DataFrame(log)
