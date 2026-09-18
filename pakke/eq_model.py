@@ -130,7 +130,7 @@ def _run(conf_sec=60, entry_mode="loose", be_mode="liq5", sl_mode="anchor",
         be_src="prev5", liq_piv=0, liq_from=None, block_mode="any",
         tp_sess=None, tp_sess_cap=False, tp_m15=None,
         daily_tp=None, daily_tp_floor=True, birth_raid="ext", raid_ref="order", force_clean=None,
-        sides=None):
+        sides=None, eq_life="consume"):
     """daily_stop / daily_target: stop trading for the day once realised R for that
        session is <= daily_stop or >= daily_target. daily_basis 'sum' counts both legs
        added together; 'avg' treats the pair as one position (mean of the two legs)."""
@@ -238,12 +238,18 @@ def _run(conf_sec=60, entry_mode="loose", be_mode="liq5", sl_mode="anchor",
         pre = {"bear": dict(bear), "bull": dict(bull)}
         made = {"bear": {}, "bull": {}}
         hits = []; reset = False
+        # eq_life 'consume' (rigtigt): begge aktivers EQ'er er ude af drift fra det
+        #   oejeblik en handel udloeses og til den er ude i SL/BE/TP. Derefter forfra.
+        # eq_life 'legacy'  (gammel fejl): partnerens EQ blev kun aflaest, aldrig brugt
+        #   op, saa dens anker blev genbrugt hele dagen mens ekstremet loeb videre.
+        eq_paused = bool(live) and eq_life == "consume"
         for k in SYMS:
             b = bars[k]
             if b is None or not in_sess: continue
             o, h, l, c = b
             if tod >= OPEN_MIN and day[k] != d:
                 day[k] = d; bear[k] = bull[k] = None; reset = True
+            if eq_paused: continue
             # raid_ref 'ext' = linjen efter denne bars egen forlaengelse (som indikatoren)
             # raid_ref 'pre' = linjen FOER, saa baren ikke kan traekke linjen hen til sig
             #                  selv. Kausal: uafhaengig af rakkefoelgen inde i baren.
@@ -522,6 +528,10 @@ def _run(conf_sec=60, entry_mode="loose", be_mode="liq5", sl_mode="anchor",
                             side = "bull" if side == "bear" else "bear"
                         live.append(dict(side=side, ts=ts, day=d, legs=legs,
                                          hit=armed["hit"], hit_ts=armed["ts"]))
+                        if eq_life == "consume":
+                            # BEGGE aktivers EQ'er bruges op her - ogsaa partnerens.
+                            for _k in SYMS:
+                                bear[_k] = bull[_k] = None
                     armed = None
                 elif entry_mode == "strict" and armed["seen"] >= 1:
                     armed = None; stat["arm_dead"] += 1
