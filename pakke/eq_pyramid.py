@@ -109,90 +109,74 @@ def run(conf_sec=15, entry_from=15*60+30, entry_to=16*60, sides=("bear", "bull")
                     eqs[k] = {"bear": None, "bull": None}; armed = None
 
         # =================== A. AABEN POSITION ===================
+        # Der handles KUN NQ-kontrakten. ES er reference.
+        # Den der sweepede sin EQ ("styrer") bestemmer exit; sweeper begge
+        # samtidig, er det NQ. NQ bestemmer altid TP.
         if pos is not None:
             side = pos["side"]; short = side == "bear"
-            add_hit = None
+            st = pos["styrer"]
+            add_hit = False
+
             for k in SYMS:
                 bb = bars[k]
                 if bb is None: continue
                 o, h, l, c = bb
-                # A0. en ventende EQ forfremmes naar et 1m-lys har lukket
-                #     i handlens retning efter at den blev foedt
-                pend = pos["pend"].get(k)
-                if pend is not None:
-                    pend["e"] = min(pend["e"], l) if short else max(pend["e"], h)
-                    pv = newmin[k]
-                    if pv is not None and ((pv[3] < pv[0]) if short else (pv[3] > pv[0])):
-                        pos["gov"][k] = pend; pos["pend"][k] = None
-                # A1a. kandidat-EQ forlaenges / raides (raid = trigger for tilfoejelse)
+                # kandidat-EQ forlaenges / raides (raid paa styreren = tilfoejelse)
                 if eqs[k][side] is not None:
                     a_, e0 = eqs[k][side]
                     e1 = min(e0, l) if short else max(e0, h)
                     lvl = (a_ + e1) / 2.0
-                    if (h >= lvl) if short else (l <= lvl):
+                    if (h > lvl) if short else (l < lvl):
                         eqs[k][side] = None
-                        rent = not ((c > lvl) if short else (c < lvl))
-                        if rent and add_hit is None: add_hit = (k, a_, e1)
+                        if k == st and not ((c > lvl) if short else (c < lvl)):
+                            add_hit = True
                     else:
                         eqs[k][side] = (a_, e1)
-                # A1b. ny EQ foedes
+                # ny EQ foedes -> den nyeste overtager styringen
                 pm = newmin[k]
                 if pm is not None and tod >= OPEN_MIN and eqs[k][side] is None:
                     po, ph, pl, pc = pm; mid = (ph + pl) / 2.0
                     if (pc < po and pc < mid) if short else (pc > po and pc > mid):
                         a_, e_ = (ph, min(pl, l)) if short else (pl, max(ph, h))
                         lvl = (a_ + e_) / 2.0
-                        if (h >= lvl) if short else (l <= lvl):
-                            if not ((c > lvl) if short else (c < lvl)) and add_hit is None:
-                                add_hit = (k, a_, e_)
+                        if (h > lvl) if short else (l < lvl):
+                            if k == st and not ((c > lvl) if short else (c < lvl)):
+                                add_hit = True
                         else:
                             eqs[k][side] = (a_, e_)
-                        if gov_on == "birth":
-                            if gov_delay == "none":
-                                pos["gov"][k] = dict(a=a_, e=e_)
-                            else:
-                                pos["pend"][k] = dict(a=a_, e=e_)
+                        if k == st:
+                            pos["gov"] = dict(a=a_, e=e_)
 
-            # A2. den styrende EQ's linje opdateres med denne bars ekstrem
-            lines = {}
-            for k in SYMS:
-                if bars[k] is None: continue
-                lines[k] = _line(pos["gov"][k], side, bars[k][2], bars[k][1])
+            # styrerens EQ-linje opdateres med denne bars ekstrem
+            gb = bars[st]
+            linje = _line(pos["gov"], side, gb[2], gb[1]) if gb is not None else None
 
-            # A2b. HAARDT SL i bunden (long) / toppen (short) af EQ'en
-            if hard_stop:
-                for k in SYMS:
-                    if pos["exit"][k] is not None or bars[k] is None: continue
-                    a = pos["anchor"][k]
-                    if (bars[k][1] >= a) if short else (bars[k][2] <= a):
-                        pos["exit"][k] = (a, "SL", ts)
+            # A1. HAARDT SL i styrerens EQ-anker
+            if hard_stop and pos["exit"] is None and gb is not None:
+                if (gb[1] >= pos["gov"]["a"]) if short else (gb[2] <= pos["gov"]["a"]):
+                    # styrer er NQ  -> stoppet ligger paa den handlede kontrakt
+                    # styrer er ES  -> ES udloeser, NQ lukkes til markedspris
+                    px = pos["gov"]["a"] if st == "NQ" else bars["NQ"][3]
+                    pos["exit"] = (px, "SL", ts)
 
-            # A3. samlet TP - pr. ben
-            for k in SYMS:
-                if pos["exit"][k] is not None or bars[k] is None: continue
-                tp = _tp_price(pos["entries"][k], k, side, pos["dagR0"] if dyn_tp else 0.0)
-                if (bars[k][2] <= tp) if short else (bars[k][1] >= tp):
-                    pos["exit"][k] = (tp, "TP", ts)
+            # A2. samlet TP paa NQ
+            if pos["exit"] is None and bars["NQ"] is not None:
+                tp = _tp_price(pos["entries"], "NQ", side, pos["dagR0"] if dyn_tp else 0.0)
+                if (bars["NQ"][2] <= tp) if short else (bars["NQ"][1] >= tp):
+                    pos["exit"] = (tp, "TP", ts)
 
-            # A4. 15s-luk IGENNEM den styrende EQ -> alle aabne ben ud
-            gennem = [k for k in SYMS if k in lines and
-                      ((bars[k][3] > lines[k]) if short else (bars[k][3] < lines[k]))]
-            luk = (exit_scope == "any"
-                   or (exit_scope in SYMS and exit_scope in gennem)
-                   or (exit_scope == "hit" and pos["hit"] in gennem))
-            if gennem and luk:
-                for k in SYMS:
-                    if pos["exit"][k] is None and bars[k] is not None:
-                        pos["exit"][k] = (bars[k][3], "EQ-luk", ts)
+            # A3. 15s-luk IGENNEM styrerens EQ -> ud af NQ
+            if pos["exit"] is None and gb is not None and linje is not None:
+                if (gb[3] > linje) if short else (gb[3] < linje):
+                    pos["exit"] = (bars["NQ"][3], "EQ-luk", ts)
 
-            aabne = [k for k in SYMS if pos["exit"][k] is None]
+            # A4. rent raid paa styrerens EQ -> arm en tilfoejelse
+            if pos["exit"] is None and addarm is None and add_hit:
+                addarm = dict(seen=0)
 
-            # A5. rent raid paa kandidat-EQ -> arm en tilfoejelse
-            if aabne and addarm is None and add_hit is not None:
-                addarm = dict(k=add_hit[0], a=add_hit[1], e=add_hit[2], seen=0)
-
-            # A6. tilfoejelsen kraever faelles 15s-luk samme vej
-            if aabne and addarm is not None and all(bars[k] is not None for k in SYMS):
+            # A5. tilfoejelsen kraever faelles 15s-luk samme vej
+            if (pos["exit"] is None and addarm is not None
+                    and all(bars[k] is not None for k in SYMS)):
                 if addarm["seen"] >= max_conf_bars:
                     addarm = None
                 else:
@@ -200,48 +184,29 @@ def run(conf_sec=15, entry_from=15*60+30, entry_to=16*60, sides=("bear", "bull")
                     ok = all((bars[k][3] < bars[k][0]) if short else
                              (bars[k][3] > bars[k][0]) for k in SYMS)
                     if ok or not add_needs_conf:
-                        mod = aabne if add_scope == "both" else \
-                              ([addarm["k"]] if addarm["k"] in aabne else [])
-                        lagt = [j for j in mod if len(pos["entries"][j]) < max_contracts]
-                        for j in lagt: pos["entries"][j].append(bars[j][3])
-                        if lagt:
-                            pos["adds"].append(dict(ts=EM.fmt(ts), ben="+".join(lagt),
-                                                    n=len(pos["entries"][lagt[0]]),
-                                                    **{f"{j}_pris": bars[j][3] for j in lagt}))
-                            # styringen flytter foerst NAAR tilfoejelsen er sket
-                            if gov_on == "add":
-                                pos["gov"][addarm["k"]] = dict(a=addarm["a"], e=addarm["e"])
-                                for j in SYMS:
-                                    if j != addarm["k"] and eqs[j][side] is not None:
-                                        pos["gov"][j] = dict(a=eqs[j][side][0], e=eqs[j][side][1])
+                        if len(pos["entries"]) < max_contracts:
+                            pos["entries"].append(bars["NQ"][3])
+                            pos["adds"].append(dict(ts=EM.fmt(ts), n=len(pos["entries"]),
+                                                    pris=bars["NQ"][3]))
                         addarm = None
 
-            if tod >= CLOSE_MIN:
-                for k in SYMS:
-                    if pos["exit"][k] is None and bars[k] is not None:
-                        pos["exit"][k] = (bars[k][3], "EOD", ts)
+            if pos["exit"] is None and tod >= CLOSE_MIN and bars["NQ"] is not None:
+                pos["exit"] = (bars["NQ"][3], "EOD", ts)
 
-            if all(pos["exit"][k] is not None for k in SYMS):
-                rec = dict(dag=pos["day"], ind=pos["t0"], retning=side, trigger=pos["hit"],
-                           ud=EM.fmt(max(pos["exit"][k][2] for k in SYMS)),
-                           udfald="+".join(sorted({pos["exit"][k][1] for k in SYMS})))
-                for k in SYMS:
-                    ents = pos["entries"][k]; p, grund, _t = pos["exit"][k]
-                    sgn = -1 if short else 1
-                    pts = sum(sgn * (p - e) for e in ents)
-                    rec[f"{k}_n"] = len(ents)
-                    rec[f"{k}_snit"] = round(sum(ents) / len(ents), 4)
-                    rec[f"{k}_exit"] = round(p, 4)
-                    rec[f"{k}_udfald"] = grund
-                    rec[f"{k}_pts"] = round(pts, 4)
-                    rec[f"{k}_R"] = round(pts / EM.R_UNIT[k], 4)
-                    rec[f"{k}_risiko"] = round(pos["risk0"][k], 4)
-                    rec[f"{k}_rr"] = (round(pts / pos["risk0"][k], 2)
-                                      if pos["risk0"][k] > 1e-9 else None)
-                rec["adds"] = pos["adds"]
-                rec["dagR_foer"] = round(pos["dagR0"], 2)
-                rec["maal_pt"] = round(_maal("NQ", pos["dagR0"] if dyn_tp else 0.0), 2)
-                dagR[pos["day"]] = dagR.get(pos["day"], 0.0) + rec["NQ_R"]
+            if pos["exit"] is not None:
+                p, grund, xt = pos["exit"]
+                sgn = -1 if short else 1
+                pts = sum(sgn * (p - e) for e in pos["entries"])
+                rec = dict(dag=pos["day"], ind=pos["t0"], ud=EM.fmt(xt), retning=side,
+                           styrer=st, udfald=grund, n=len(pos["entries"]),
+                           snit=round(sum(pos["entries"]) / len(pos["entries"]), 4),
+                           exit=round(p, 4), pts=round(pts, 4),
+                           R=round(pts / EM.R_UNIT["NQ"], 4),
+                           risiko=round(pos["risk0"], 4),
+                           rr=(round(pts / pos["risk0"], 2) if pos["risk0"] > 1e-9 else None),
+                           adds=pos["adds"], dagR_foer=round(pos["dagR0"], 2),
+                           maal_pt=round(_maal("NQ", pos["dagR0"] if dyn_tp else 0.0), 2))
+                dagR[pos["day"]] = dagR.get(pos["day"], 0.0) + rec["R"]
                 rec["dagR_efter"] = round(dagR[pos["day"]], 2)
                 trades.append(rec)
                 pos = armed = addarm = None
@@ -293,11 +258,15 @@ def run(conf_sec=15, entry_from=15*60+30, entry_to=16*60, sides=("bear", "bull")
             # barens start - samme raekkefoelge som Pine og som eq_model.
             oth = made[side].get(other, pre[side][other])
             if oth is None: continue
-            armed = dict(side=side, hit=k, ts=ts, seen=0,
+            # Sweeper BEGGE samtidig, er det NQ der styrer exit. Ellers styrer
+            # den der sweepede - ogsaa naar det er ES.
+            sweep = {x[0] for x in raids if x[1] == side and not x[5]}
+            st = "NQ" if "NQ" in sweep else k
+            g = (dict(a=anch, e=ext) if st == k else dict(a=oth[0], e=oth[1]))
+            armed = dict(side=side, hit=k, styrer=st, ts=ts, seen=0,
                          anchors={k: anch, other: oth[0]},
                          levels={k: lvl, other: (oth[0] + oth[1]) / 2.0},
-                         gov={k: dict(a=anch, e=ext, used=True, t=EM.fmt(ts)),
-                              other: dict(a=oth[0], e=oth[1], used=False, t=EM.fmt(ts))})
+                         gov=g)
 
         if armed and all(bars[k] is not None for k in SYMS):
             side = armed["side"]
@@ -322,15 +291,12 @@ def run(conf_sec=15, entry_from=15*60+30, entry_to=16*60, sides=("bear", "bull")
                         log.append(dict(ts=EM.fmt(ts), status="8/40 kasserede", ben=",".join(bad)))
                         armed = None
                     else:
-                        pos = dict(side=side, day=d, t0=EM.fmt(ts), hit=armed["hit"],
-                                   gov=armed["gov"], adds=[],
-                                   anchor=dict(armed["anchors"]),
+                        _st = armed["styrer"]
+                        pos = dict(side=side, day=d, t0=EM.fmt(ts),
+                                   styrer=_st, gov=dict(armed["gov"]), adds=[],
                                    dagR0=dagR.get(d, 0.0),
-                                   risk0={k: abs(bars[k][3] -
-                                          (armed["gov"][k]["a"] + armed["gov"][k]["e"]) / 2.0)
-                                          for k in SYMS},
-                                   exit={k: None for k in SYMS},
-                                   pend={k: None for k in SYMS},
-                                   entries={k: [bars[k][3]] for k in SYMS})
+                                   risk0=abs(bars[_st][3] -
+                                             (armed["gov"]["a"] + armed["gov"]["e"]) / 2.0),
+                                   exit=None, entries=[bars["NQ"][3]])
                         armed = None
     return pd.DataFrame(trades), pd.DataFrame(log)
