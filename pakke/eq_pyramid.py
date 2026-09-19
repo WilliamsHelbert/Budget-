@@ -146,18 +146,25 @@ def run(conf_sec=15, entry_from=15*60+30, entry_to=16*60, sides=("bear", "bull")
                             eqs[k][side] = (a_, e_)
                         if k == st:
                             pos["gov"] = dict(a=a_, e=e_)
+                        if k == "NQ":
+                            pos["nqgov"] = dict(a=a_, e=e_)
 
             # styrerens EQ-linje opdateres med denne bars ekstrem
             gb = bars[st]
             linje = _line(pos["gov"], side, gb[2], gb[1]) if gb is not None else None
 
-            # A1. HAARDT SL i styrerens EQ-anker
-            if hard_stop and pos["exit"] is None and gb is not None:
-                if (gb[1] >= pos["gov"]["a"]) if short else (gb[2] <= pos["gov"]["a"]):
-                    # styrer er NQ  -> stoppet ligger paa den handlede kontrakt
-                    # styrer er ES  -> ES udloeser, NQ lukkes til markedspris
-                    px = pos["gov"]["a"] if st == "NQ" else bars["NQ"][3]
-                    pos["exit"] = (px, "SL", ts)
+            # A1. HAARDT SL. Paa NQ ligger det altid i NQ's EGEN EQ - toppen
+            #     ved short, bunden ved long. Styrer ES, kan ES' anker ogsaa
+            #     udloese, og saa lukkes NQ til markedspris.
+            if hard_stop and pos["exit"] is None:
+                nb = bars["NQ"]
+                if nb is not None and ((nb[1] >= pos["nqgov"]["a"]) if short
+                                       else (nb[2] <= pos["nqgov"]["a"])):
+                    pos["exit"] = (pos["nqgov"]["a"], "SL", ts)
+                elif (st == "ES" and gb is not None and nb is not None
+                      and ((gb[1] >= pos["gov"]["a"]) if short
+                           else (gb[2] <= pos["gov"]["a"]))):
+                    pos["exit"] = (nb[3], "SL-ES", ts)
 
             # A2. samlet TP paa NQ
             if pos["exit"] is None and bars["NQ"] is not None:
@@ -278,8 +285,13 @@ def run(conf_sec=15, entry_from=15*60+30, entry_to=16*60, sides=("bear", "bull")
                 armed = None
             else:
                 armed["seen"] += 1
-                dead = any((bars[k][3] > armed["levels"][k]) if side == "bear"
-                           else (bars[k][3] < armed["levels"][k]) for k in SYMS)
+                # "Lukker et af aktiverne igennem sin EQ-linje EFTER raidet, er
+                # setuppet doedt." Raid-baren selv taeller ikke med: der er
+                # sweepet, og en luk taet paa linjen er netop hvad et rent raid
+                # ser ud som. Uden det her doer 01-04 15:42 paa 0,25 point.
+                dead = (armed["ts"] != ts) and any(
+                    (bars[k][3] > armed["levels"][k]) if side == "bear"
+                    else (bars[k][3] < armed["levels"][k]) for k in SYMS)
                 ok = all((bars[k][3] < bars[k][0]) if side == "bear"
                          else (bars[k][3] > bars[k][0]) for k in SYMS)
                 if dead:
@@ -293,7 +305,9 @@ def run(conf_sec=15, entry_from=15*60+30, entry_to=16*60, sides=("bear", "bull")
                     else:
                         _st = armed["styrer"]
                         pos = dict(side=side, day=d, t0=EM.fmt(ts),
-                                   styrer=_st, gov=dict(armed["gov"]), adds=[],
+                                   styrer=_st, gov=dict(armed["gov"]),
+                                   nqgov=dict(a=armed["anchors"]["NQ"],
+                                              e=bars["NQ"][3]), adds=[],
                                    dagR0=dagR.get(d, 0.0),
                                    risk0=abs(bars[_st][3] -
                                              (armed["gov"]["a"] + armed["gov"]["e"]) / 2.0),
