@@ -54,14 +54,16 @@ def _line(g, side, lo, hi):
     return (g["a"] + g["e"]) / 2.0
 
 
-def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear", "bull"),
-        max_conf_bars=4, max_stop={"ES": 8.0, "NQ": 40.0},
+def run(conf_sec=15, entry_from=15*60+30, entry_to=16*60, sides=("bear", "bull"),
+        max_conf_bars=4,
+        max_stop=None,            # 8/40 er UDE - stammer fra den gamle model.
+                                  # EQ'en er saa stor som den er.
         max_contracts=5,          # traderen: "4-5, det vender vi tilbage til"
         hard_stop=True,           # haardt SL i bunden/toppen af EQ'en (ankeret)
         dagsstop=DAGSSTOP,        # None slaar dagsgraensen fra
         dyn_tp=True,              # forlaeng maalet med dagens tab
         add_needs_conf=True,      # tilfoejelse kraever ogsaa faelles 15s-luk
-        use_be=False,             # BE er ude i denne version
+        use_be=False,             # BE er UDE - stammer ogsaa fra den gamle model
         exit_scope="any",         # 'any' = luk igennem paa ET aktiv lukker begge ben
         add_scope="both",         # 'both' = tilfoejelsen laegges paa begge ben
         gov_delay="candle1m",     # hvornaar er en ny EQ "etableret"?
@@ -74,6 +76,11 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear", "bull"),
         ):
     C = EM._data(conf_sec)
     BAR, M1 = C["bar"], C["m1"]
+    # Entry-vinduet er i DANSK tid, ikke NY-tid. Bevist paa 27-03-2026, hvor
+    # USA er paa sommertid og EU ikke er: journalens 15:39 og 15:57 svarer der
+    # til 10:39 og 10:58 NY, og setuppene ligger praecis der.
+    _t = pd.to_datetime(pd.Series(C["tl"]), unit="s", utc=True).dt.tz_convert("Europe/Copenhagen")
+    CPH = dict(zip(C["tl"], (_t.dt.hour * 60 + _t.dt.minute).tolist()))
     TOD, DAY, TL = C["tod"], C["day"], C["tl"]
     OPEN_MIN, CLOSE_MIN = EM.OPEN_MIN, EM.CLOSE_MIN
 
@@ -277,7 +284,7 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear", "bull"),
                     if l < lvl: raids.append((k, "bull", lvl, a, e, c < lvl))
                     else: eqs[k]["bull"] = (a, e)
 
-        can_enter = entry_from <= tod < entry_to
+        can_enter = entry_from <= CPH[ts] < entry_to
         for (k, side, lvl, anch, ext, through) in raids:
             if not can_enter: break
             if side not in sides or through: continue
