@@ -30,9 +30,22 @@ SYMS = EM.SYMS
 TP_TOTAL = {"ES": 15.0, "NQ": 75.0}      # samlet P/L-maal i point (= 7,5 R)
 
 
-def _tp_price(entries, k, side):
-    n = len(entries); s = sum(entries)
-    return (s - TP_TOTAL[k]) / n if side == "bear" else (s + TP_TOTAL[k]) / n
+R_PR_DAG = 7.5          # dagens slutmaal i R
+DAGSSTOP = -5.0         # naaes den, handles der ikke mere den dag
+
+
+def _maal(k, dagR):
+    """Samlet P/L-maal i point for DENNE handel.
+    Normalt 75 NQ / 15 ES. Har man tabt tidligere paa dagen, forlaenges
+    maalet med tabet, saa dagen stadig kan lukke paa +7,5 R:
+        -2,5 R i bogen  ->  maal 7,5 + 2,5 = 10 R = 100 NQ-point
+    Maalet bliver aldrig mindre end de normale 75/15."""
+    return max(R_PR_DAG - dagR, R_PR_DAG) * EM.R_UNIT[k]
+
+
+def _tp_price(entries, k, side, dagR=0.0):
+    n = len(entries); s = sum(entries); m = _maal(k, dagR)
+    return (s - m) / n if side == "bear" else (s + m) / n
 
 
 def _line(g, side, lo, hi):
@@ -41,9 +54,12 @@ def _line(g, side, lo, hi):
     return (g["a"] + g["e"]) / 2.0
 
 
-def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
+def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear", "bull"),
         max_conf_bars=4, max_stop={"ES": 8.0, "NQ": 40.0},
         max_contracts=5,          # traderen: "4-5, det vender vi tilbage til"
+        hard_stop=True,           # haardt SL i bunden/toppen af EQ'en (ankeret)
+        dagsstop=DAGSSTOP,        # None slaar dagsgraensen fra
+        dyn_tp=True,              # forlaeng maalet med dagens tab
         add_needs_conf=True,      # tilfoejelse kraever ogsaa faelles 15s-luk
         use_be=False,             # BE er ude i denne version
         exit_scope="any",         # 'any' = luk igennem paa ET aktiv lukker begge ben
@@ -66,6 +82,7 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
     pmin = {k: None for k in SYMS}
     pos = armed = addarm = None
     trades, log = [], []
+    dagR = {}
 
     for ts in TL:
         tod, d = TOD[ts], DAY[ts]
@@ -135,10 +152,18 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
                 if bars[k] is None: continue
                 lines[k] = _line(pos["gov"][k], side, bars[k][2], bars[k][1])
 
+            # A2b. HAARDT SL i bunden (long) / toppen (short) af EQ'en
+            if hard_stop:
+                for k in SYMS:
+                    if pos["exit"][k] is not None or bars[k] is None: continue
+                    a = pos["anchor"][k]
+                    if (bars[k][1] >= a) if short else (bars[k][2] <= a):
+                        pos["exit"][k] = (a, "SL", ts)
+
             # A3. samlet TP - pr. ben
             for k in SYMS:
                 if pos["exit"][k] is not None or bars[k] is None: continue
-                tp = _tp_price(pos["entries"][k], k, side)
+                tp = _tp_price(pos["entries"][k], k, side, pos["dagR0"] if dyn_tp else 0.0)
                 if (bars[k][2] <= tp) if short else (bars[k][1] >= tp):
                     pos["exit"][k] = (tp, "TP", ts)
 
@@ -207,6 +232,10 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
                     rec[f"{k}_rr"] = (round(pts / pos["risk0"][k], 2)
                                       if pos["risk0"][k] > 1e-9 else None)
                 rec["adds"] = pos["adds"]
+                rec["dagR_foer"] = round(pos["dagR0"], 2)
+                rec["maal_pt"] = round(_maal("NQ", pos["dagR0"] if dyn_tp else 0.0), 2)
+                dagR[pos["day"]] = dagR.get(pos["day"], 0.0) + rec["NQ_R"]
+                rec["dagR_efter"] = round(dagR[pos["day"]], 2)
                 trades.append(rec)
                 pos = armed = addarm = None
                 for k in SYMS: eqs[k] = {"bear": None, "bull": None}
@@ -240,12 +269,12 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
                 if pc < po and pc < mid and eqs[k]["bear"] is None:
                     a, e = ph, min(pl, l); lvl = (a + e) / 2.0
                     made["bear"][k] = (a, e)
-                    if h >= lvl: raids.append((k, "bear", lvl, a, e, c > lvl))
+                    if h > lvl: raids.append((k, "bear", lvl, a, e, c > lvl))
                     else: eqs[k]["bear"] = (a, e)
                 if pc > po and pc > mid and eqs[k]["bull"] is None:
                     a, e = pl, max(ph, h); lvl = (a + e) / 2.0
                     made["bull"][k] = (a, e)
-                    if l <= lvl: raids.append((k, "bull", lvl, a, e, c < lvl))
+                    if l < lvl: raids.append((k, "bull", lvl, a, e, c < lvl))
                     else: eqs[k]["bull"] = (a, e)
 
         can_enter = entry_from <= tod < entry_to
@@ -265,7 +294,11 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
 
         if armed and all(bars[k] is not None for k in SYMS):
             side = armed["side"]
-            if armed["seen"] >= max_conf_bars or not can_enter:
+            # dagsgraensen skal ogsaa spaerre et setup der blev armeret FOER
+            # graensen blev brudt - ellers slipper en handel igennem bagefter
+            if dagsstop is not None and dagR.get(d, 0.0) <= dagsstop:
+                armed = None
+            elif armed["seen"] >= max_conf_bars or not can_enter:
                 armed = None
             else:
                 armed["seen"] += 1
@@ -284,6 +317,8 @@ def run(conf_sec=15, entry_from=9*60+30, entry_to=10*60, sides=("bear",),
                     else:
                         pos = dict(side=side, day=d, t0=EM.fmt(ts), hit=armed["hit"],
                                    gov=armed["gov"], adds=[],
+                                   anchor=dict(armed["anchors"]),
+                                   dagR0=dagR.get(d, 0.0),
                                    risk0={k: abs(bars[k][3] -
                                           (armed["gov"][k]["a"] + armed["gov"][k]["e"]) / 2.0)
                                           for k in SYMS},
