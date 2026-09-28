@@ -1,7 +1,15 @@
 //@version=6
 // =====================================================================
-//  EQ - Equilibrium Tracker  (v10)
+//  EQ - Equilibrium Tracker  (v11)
 //  ---------------------------------------------------------------
+//  NYT I v11 (ift. v10):
+//    - 0.25- og 0.75-linjer i hver EQ-boks (stiplede). Kan slaas fra.
+//    - KUN DEN SIDSTE brugte EQ vises, og kun naar der IKKE er en live
+//      EQ i samme retning. Bullish og bearish styres hver for sig:
+//        * live bearish EQ  -> ingen frossen bearish EQ vises
+//        * ingen live bearish -> den senest brugte bearish EQ vises
+//      Naar en ny EQ oprettes, slettes den gamle frosne i samme retning.
+//
 //  NYT I v10 (ift. v9):
 //    - OMSKREVET market-open-detektion. v9 byggede et timestamp() for
 //      dagens aabning og sammenlignede bar-tider; det ramte ikke.
@@ -34,6 +42,7 @@
 //                EQ'en FRYSER og bliver staaende. Daekker baade
 //                RAMT (luk paa rigtig side = din entry) og CLOSET OVER
 //                (luk forbi linjen = ugyldig) - i begge tilfaelde BRUGT.
+//                Kun den senest brugte bliver staaende (se v11).
 //  MARKET OPEN : alt slettes - aktive OG frosne. Dagen starter forfra.
 //  Altid max 1 aktiv bearish + 1 aktiv bullish (1 bull + 1 bear samtidig OK).
 //
@@ -51,8 +60,8 @@ creationTF = input.timeframe("1", "EQ oprettes paa timeframe", group = g1,
 g2 = "EQ opfoersel"
 useBear   = input.bool(true, "Vis bearish EQ (vokser nedad)", group = g2)
 useBull   = input.bool(true, "Vis bullish EQ (vokser opad)",  group = g2)
-maxKept   = input.int(20, "Antal frosne (brugte) EQ'er beholdt pr. retning", minval = 0, maxval = 100, group = g2,
-     tooltip = "Aeldste frosne EQ slettes naar graensen naas. Gaelder baade ramte og closet-over. 0 = behold ingen frosne.")
+keepLast  = input.bool(true, "Vis sidste brugte EQ naar ingen er live", group = g2,
+     tooltip = "Gaelder hver retning for sig. Er der en live EQ i samme retning, vises den brugte ikke. Slaa fra for aldrig at vise brugte EQ'er.")
 warnTF    = input.bool(true, "Advar hvis chartet er groevere end oprettelses-TF", group = g2)
 
 g4 = "Market open"
@@ -72,6 +81,8 @@ premiumCol  = input.color(color.new(color.green, 82), "Premium (oevre halvdel)",
 discountCol = input.color(color.new(color.red,   82), "Discount (nedre halvdel)", group = g3)
 eqLineCol   = input.color(color.orange,               "EQ-linje (halvlinjen)",    group = g3)
 borderCol   = input.color(color.new(color.gray, 40),  "Kant",                     group = g3)
+showQt      = input.bool(true, "Vis 0.25- og 0.75-linjer", group = g3)
+qtLineCol   = input.color(color.new(color.orange, 30),  "0.25 / 0.75-linjer",      group = g3)
 
 // ───────── OPRETTELSES-CANDLEN (repainter ikke) ─────────
 // Paa et FINERE chart end creationTF hentes den 1m-candle der lige er
@@ -120,50 +131,84 @@ bool canCreate = showPreOpen or not isPreOpen
 // Synlig kvittering for at nulstillingen faktisk fyrer
 bgcolor(showOpenMarker and resetOnOpen and isOpenBar ? color.new(color.blue, 65) : na, title = "Market open reset")
 
+// ═══════════════════════ TEGNING AF EEN EQ ═══════════════════════
+// hi/lo er boksens top og bund. For bearish: hi = anker, lo = nyeste low.
+// For bullish: hi = nyeste high, lo = anker.
+type EqDraw
+    box  top = na
+    box  bot = na
+    line eq  = na
+    line q25 = na
+    line q75 = na
+
+newDraw(int x1, int x2, float hi, float lo) =>
+    float eq = (hi + lo) / 2
+    float rg = hi - lo
+    EqDraw d = EqDraw.new()
+    d.top := box.new(x1, hi, x2, eq, xloc = xloc.bar_time, border_color = borderCol, bgcolor = premiumCol)
+    d.bot := box.new(x1, eq, x2, lo, xloc = xloc.bar_time, border_color = borderCol, bgcolor = discountCol)
+    d.eq  := line.new(x1, eq, x2, eq, xloc = xloc.bar_time, color = eqLineCol, width = 2)
+    if showQt
+        d.q25 := line.new(x1, lo + 0.25 * rg, x2, lo + 0.25 * rg, xloc = xloc.bar_time, color = qtLineCol, width = 1, style = line.style_dashed)
+        d.q75 := line.new(x1, lo + 0.75 * rg, x2, lo + 0.75 * rg, xloc = xloc.bar_time, color = qtLineCol, width = 1, style = line.style_dashed)
+    d
+
+updDraw(EqDraw d, int x1, int x2, float hi, float lo) =>
+    float eq = (hi + lo) / 2
+    float rg = hi - lo
+    box.set_top(d.top, hi)
+    box.set_bottom(d.top, eq)
+    box.set_right(d.top, x2)
+    box.set_top(d.bot, eq)
+    box.set_bottom(d.bot, lo)
+    box.set_right(d.bot, x2)
+    line.set_xy1(d.eq, x1, eq)
+    line.set_xy2(d.eq, x2, eq)
+    if not na(d.q25)
+        line.set_xy1(d.q25, x1, lo + 0.25 * rg)
+        line.set_xy2(d.q25, x2, lo + 0.25 * rg)
+    if not na(d.q75)
+        line.set_xy1(d.q75, x1, lo + 0.75 * rg)
+        line.set_xy2(d.q75, x2, lo + 0.75 * rg)
+
+delDraw(EqDraw d) =>
+    if not na(d)
+        box.delete(d.top)
+        box.delete(d.bot)
+        line.delete(d.eq)
+        line.delete(d.q25)
+        line.delete(d.q75)
+
 // ═══════════════════════ STATE: BEARISH ═══════════════════════
 var float bAnchor  = na     // 1m-candlens high (fast)
 var int   bAnchorT = na     // 1m-candlens aabningstid
 var float bLow     = na     // nyeste laveste low
-var box   bTop     = na
-var box   bBot     = na
-var line  bEq      = na
+var EqDraw bCur    = na     // den live EQ
+var EqDraw bLast   = na     // den senest brugte (frosne) EQ
 var bool  bActive  = false
-var array<box>  bFrozenB = array.new<box>()
-var array<line> bFrozenL = array.new<line>()
 
 // ═══════════════════════ STATE: BULLISH ═══════════════════════
 var float lAnchor  = na     // 1m-candlens low (fast)
 var int   lAnchorT = na
 var float lHigh    = na     // nyeste hoejeste high
-var box   lTop     = na
-var box   lBot     = na
-var line  lEq      = na
+var EqDraw lCur    = na
+var EqDraw lLast   = na
 var bool  lActive  = false
-var array<box>  lFrozenB = array.new<box>()
-var array<line> lFrozenL = array.new<line>()
 
 // ═══════════════ NULSTILLING VED MARKET OPEN ═══════════════
 // Koeres foerst, saa dagens foerste oprettelses-candle tegner paa et
 // helt rent chart. Aktive EQ'er slettes - de fryser IKKE.
 if resetOnOpen and isOpenBar
-    if bActive
-        box.delete(bTop)
-        box.delete(bBot)
-        line.delete(bEq)
-        bActive := false
-    if lActive
-        box.delete(lTop)
-        box.delete(lBot)
-        line.delete(lEq)
-        lActive := false
-    while array.size(bFrozenB) > 0
-        box.delete(array.pop(bFrozenB))
-    while array.size(bFrozenL) > 0
-        line.delete(array.pop(bFrozenL))
-    while array.size(lFrozenB) > 0
-        box.delete(array.pop(lFrozenB))
-    while array.size(lFrozenL) > 0
-        line.delete(array.pop(lFrozenL))
+    delDraw(bCur)
+    delDraw(bLast)
+    delDraw(lCur)
+    delDraw(lLast)
+    bCur    := na
+    bLast   := na
+    lCur    := na
+    lLast   := na
+    bActive := false
+    lActive := false
 
 // ───────────── OPRETTELSES-CHECK PAA CANDLEN ─────────────
 // eq1 = candlens egen equilibrium (50 % af dens samlede range).
@@ -181,59 +226,46 @@ bool bullTrig = valid and c1 > o1 and c1 > eq1
 if bActive
     bLow := math.min(bLow, low)
     float eq = (bAnchor + bLow) / 2
-    box.set_top(bTop, bAnchor)
-    box.set_bottom(bTop, eq)
-    box.set_right(bTop, time)
-    box.set_top(bBot, eq)
-    box.set_bottom(bBot, bLow)
-    box.set_right(bBot, time)
-    line.set_xy1(bEq, bAnchorT, eq)
-    line.set_xy2(bEq, time, eq)
+    updDraw(bCur, bAnchorT, time, bAnchor, bLow)
     // STOP/BRUGT - kun paa bekraeftet luk, naar prisen naar EQ-linjen.
     // high >= eq daekker baade RAMT (luk under) og CLOSET OVER (luk over).
+    // Den brugte afloeser den forrige brugte - kun een frossen pr. retning.
     if barstate.isconfirmed and high >= eq
-        array.push(bFrozenB, bTop)
-        array.push(bFrozenB, bBot)
-        array.push(bFrozenL, bEq)
-        if array.size(bFrozenL) > maxKept
-            line.delete(array.shift(bFrozenL))
-            box.delete(array.shift(bFrozenB))
-            box.delete(array.shift(bFrozenB))
+        delDraw(bLast)
+        if keepLast
+            bLast := bCur
+        else
+            delDraw(bCur)
+            bLast := na
+        bCur    := na
         bActive := false
 
 // ── OPRETTELSE ──
+// En ny live EQ skjuler den sidste brugte i samme retning.
 if useBear and bearTrig and not bActive
     bAnchor  := h1                      // ankeret er DENNE candles high
     bAnchorT := t1
     bLow     := math.min(l1, low)       // start i candlens egen range
     bActive  := true
-    float eq = (bAnchor + bLow) / 2
-    bTop := box.new(bAnchorT, bAnchor, time, eq, xloc = xloc.bar_time, border_color = borderCol, bgcolor = premiumCol)
-    bBot := box.new(bAnchorT, eq, time, bLow, xloc = xloc.bar_time, border_color = borderCol, bgcolor = discountCol)
-    bEq  := line.new(bAnchorT, eq, time, eq, xloc = xloc.bar_time, color = eqLineCol, width = 2)
+    delDraw(bLast)
+    bLast    := na
+    bCur     := newDraw(bAnchorT, time, bAnchor, bLow)
 
 // ════════════════════════ BULLISH EQ ══════════════════════════
 // ── VAEKST + FRYS ──
 if lActive
     lHigh := math.max(lHigh, high)
     float eq = (lAnchor + lHigh) / 2
-    box.set_top(lTop, lHigh)
-    box.set_bottom(lTop, eq)
-    box.set_right(lTop, time)
-    box.set_top(lBot, eq)
-    box.set_bottom(lBot, lAnchor)
-    box.set_right(lBot, time)
-    line.set_xy1(lEq, lAnchorT, eq)
-    line.set_xy2(lEq, time, eq)
+    updDraw(lCur, lAnchorT, time, lHigh, lAnchor)
     // low <= eq daekker baade RAMT (luk over) og CLOSET OVER (luk under).
     if barstate.isconfirmed and low <= eq
-        array.push(lFrozenB, lTop)
-        array.push(lFrozenB, lBot)
-        array.push(lFrozenL, lEq)
-        if array.size(lFrozenL) > maxKept
-            line.delete(array.shift(lFrozenL))
-            box.delete(array.shift(lFrozenB))
-            box.delete(array.shift(lFrozenB))
+        delDraw(lLast)
+        if keepLast
+            lLast := lCur
+        else
+            delDraw(lCur)
+            lLast := na
+        lCur    := na
         lActive := false
 
 // ── OPRETTELSE ──
@@ -242,10 +274,9 @@ if useBull and bullTrig and not lActive
     lAnchorT := t1
     lHigh    := math.max(h1, high)      // start i candlens egen range
     lActive  := true
-    float eq = (lAnchor + lHigh) / 2
-    lTop := box.new(lAnchorT, lHigh, time, eq, xloc = xloc.bar_time, border_color = borderCol, bgcolor = premiumCol)
-    lBot := box.new(lAnchorT, eq, time, lAnchor, xloc = xloc.bar_time, border_color = borderCol, bgcolor = discountCol)
-    lEq  := line.new(lAnchorT, eq, time, eq, xloc = xloc.bar_time, color = eqLineCol, width = 2)
+    delDraw(lLast)
+    lLast    := na
+    lCur     := newDraw(lAnchorT, time, lHigh, lAnchor)
 
 // ──────── Advarsel hvis chartet er groevere end oprettelses-TF ────────
 var label tfLabel = na

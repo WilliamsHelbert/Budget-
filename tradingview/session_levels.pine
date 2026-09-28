@@ -1,7 +1,11 @@
 //@version=6
 // =====================================================================
-//  Session Levels  (v3)
+//  Session Levels  (v4)
 //  ---------------------------------------------------------------
+//  NYT I v4
+//    - Tykkere linjer (default 2) og stoerre, fed tekst ved linjerne.
+//      Tekststoerrelse og fed kan vaelges under "Linjer".
+//
 //  NYT I v3
 //    - Det 15m-niveau der ER NY PRE's high eller low springes over.
 //      Det er jo allerede tegnet som den lilla NY PRE-linje.
@@ -39,8 +43,17 @@ nySess   = input.session("1400-1530", "NY PRE", group = g1)
 g2 = "Linjer"
 endHour  = input.int(16, "Linjer stopper - time",  minval = 0, maxval = 23, group = g2)
 endMin   = input.int(0,  "Linjer stopper - minut", minval = 0, maxval = 59, group = g2)
-lineW    = input.int(1, "Linjetykkelse", minval = 1, maxval = 4, group = g2)
+lineW    = input.int(2, "Linjetykkelse", minval = 1, maxval = 4, group = g2)
 showLbl  = input.bool(true, "Vis navn ved linjen", group = g2)
+lblSizeS = input.string("Normal", "Tekststoerrelse", options = ["Lille", "Normal", "Stor", "Kaempe"], group = g2)
+lblBold  = input.bool(true, "Fed tekst", group = g2)
+
+lblSize = switch lblSizeS
+    "Lille"  => size.small
+    "Stor"   => size.large
+    "Kaempe" => size.huge
+    => size.normal
+lblFmt = lblBold ? text.format_bold : text.format_none
 
 g3 = "Vis / farver"
 showAsia = input.bool(true, "Asia",   group = g3, inline = "a")
@@ -117,8 +130,8 @@ paint(Sess s, color col, string txt) =>
         if na(s.hiLn)
             s.hiLn := line.new(s.hiT, s.hi, s.hiEnd, s.hi, xloc = xloc.bar_time, color = col, width = lineW)
             s.loLn := line.new(s.loT, s.lo, s.loEnd, s.lo, xloc = xloc.bar_time, color = col, width = lineW)
-            s.hiLb := label.new(s.hiEnd, s.hi, txt, xloc = xloc.bar_time, style = label.style_none, textcolor = col, size = size.small)
-            s.loLb := label.new(s.loEnd, s.lo, txt, xloc = xloc.bar_time, style = label.style_none, textcolor = col, size = size.small)
+            s.hiLb := label.new(s.hiEnd, s.hi, txt, xloc = xloc.bar_time, style = label.style_none, textcolor = col, size = lblSize, text_formatting = lblFmt)
+            s.loLb := label.new(s.loEnd, s.lo, txt, xloc = xloc.bar_time, style = label.style_none, textcolor = col, size = lblSize, text_formatting = lblFmt)
         line.set_xy1(s.hiLn, s.hiT,   s.hi)
         line.set_xy2(s.hiLn, s.hiEnd, s.hi)
         line.set_xy1(s.loLn, s.loT,   s.lo)
@@ -299,7 +312,7 @@ if showM15 and isOpenBar and array.size(m15s) > 0
              : (not na(nCur.lo) and math.abs(m.aLvl - nCur.lo) < tickHalf)
         if not m.dead and not isExtreme
             m.ln := line.new(m.t, m.aLvl, endT, m.aLvl, xloc = xloc.bar_time, color = m15Col, width = lineW)
-            m.lb := label.new(endT, m.aLvl, showLbl ? "15m" : "", xloc = xloc.bar_time, style = label.style_none, textcolor = m15Col, size = size.small)
+            m.lb := label.new(endT, m.aLvl, showLbl ? "15m" : "", xloc = xloc.bar_time, style = label.style_none, textcolor = m15Col, size = lblSize, text_formatting = lblFmt)
 
 // ── 15:31: vaek med dem igen. Det er kun en market open-ting. ──
 if showM15 and m15Gone and array.size(m15s) > 0

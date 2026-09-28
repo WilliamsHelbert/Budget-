@@ -1,7 +1,18 @@
 //@version=6
 // =====================================================================
-//  SMT - Session Sweep + Trade  (v10)
+//  SMT - Session Sweep + Trade  (v11)
 //  ---------------------------------------------------------------
+//  NYT I v11
+//    - 30-POINTS-STREGEN (max SL = 3R). Saa snart der er en SMT og
+//      indikatoren venter paa entry, tegnes en streg over det minut:
+//        Long : 30 points OVER bunden af minut-candlen
+//        Short: 30 points UNDER toppen af minut-candlen
+//      Stregen flytter sig live med minuttets low/high. Lukker 15s-
+//      candlen paa den forkerte side af stregen, er SL over 30 points,
+//      og tradet er ugyldigt ("SL > 30"). Kan slaas fra.
+//    - Advarsel hvis chartet ikke staar paa 15s. Entry-reglen (begge
+//      indeks lukker samme vej) laeses paa chartets candles.
+//
 //  NYT I v10
 //    - BLOKERINGEN taeller nu BEGGE kilder:
 //        * NQ tager et 15m/5m-niveau  (touched)
@@ -70,6 +81,12 @@ tpPoints  = input.float(75, "Max TP / fallback (points)", minval = 1, group = g7
      tooltip = "Ogsaa den yderste graense for hvad der er inden for raekkevidde. Findes der ingen kandidat, bruges dette som TP.")
 needBack  = input.bool(true, "Kraev luk tilbage forbi niveauet", group = g7)
 minSL     = input.float(10, "Minimum SL (points)", minval = 0, group = g7)
+maxSL     = input.float(30, "Max SL (points) - 3R", minval = 1, group = g7,
+     tooltip = "Maales fra bunden (long) eller toppen (short) af det minut-candle entry ligger i. Er afstanden stoerre, er tradet ugyldigt.")
+showMaxLn = input.bool(true, "Tegn max SL-stregen", group = g7)
+blockMax  = input.bool(true, "Ugyldigt trade hvis SL > max", group = g7)
+mxCol     = input.color(color.yellow, "Max SL-streg", group = g7)
+warn15s   = input.bool(true, "Advar hvis chartet ikke er 15s", group = g7)
 boxMins   = input.int(30, "Trade-boksens bredde (minutter)", minval = 1, group = g7)
 keepTrades = input.int(20, "Antal trades beholdt", minval = 1, maxval = 100, group = g7)
 slCol     = input.color(color.red,  "SL", group = g7, inline = "t")
@@ -176,6 +193,7 @@ type Trade
     box    tpB     = na
     line   ln      = na
     line   beLn    = na
+    line   mxLn    = na
     label  lb      = na
 
 // ─────────────────────────── FUNKTIONER ───────────────────────────
@@ -479,7 +497,27 @@ bool dirOK   = armShort ? bothBear : bothBull
 bool backOK  = not needBack or (armShort ? close < armLvl : close > armLvl)
 bool sameMin = minB == armMinB
 
-if useTrade and armed and barstate.isconfirmed and sameMin and dirOK and backOK
+// ── MAX SL-STREGEN: 30 points fra minut-candlens top/bund ──
+var line mxLn = na
+float mxLvl = armShort ? m1Hi - maxSL : m1Lo + maxSL
+bool  slOK  = not blockMax or (armShort ? close >= mxLvl : close <= mxLvl)
+if useTrade and armed and sameMin and showMaxLn
+    int mS = armMinB * 60000
+    if na(mxLn)
+        mxLn := line.new(mS, mxLvl, mS + 60000, mxLvl, xloc = xloc.bar_time, color = mxCol, width = 2)
+    else
+        line.set_y1(mxLn, mxLvl)
+        line.set_y2(mxLn, mxLvl)
+
+// Foerste luk i rigtig retning, men SL er over max -> ugyldigt
+if useTrade and armed and barstate.isconfirmed and sameMin and dirOK and backOK and not slOK
+    armed := false
+    mxLn  := na     // stregen bliver staaende, saa man kan se hvorfor
+    label.new(time, close, "SL > " + str.tostring(maxSL, "#"), xloc = xloc.bar_time,
+         style = armShort ? label.style_label_down : label.style_label_up,
+         color = color.new(color.gray, 20), textcolor = color.white, size = size.small)
+
+if useTrade and armed and barstate.isconfirmed and sameMin and dirOK and backOK and slOK
     armed       := false
     tradesToday += 1
     entShort    := armShort
@@ -549,6 +587,8 @@ if useTrade and armed and barstate.isconfirmed and sameMin and dirOK and backOK
          border_color = color.new(tpCol, 0), border_width = 2, bgcolor = color.new(tpCol, 72))
     t.ln  := line.new(time, t.entry, rEnd, t.entry, xloc = xloc.bar_time,
          color = color.white, width = 2, style = line.style_dashed)
+    t.mxLn := mxLn
+    mxLn   := na
     t.beLn := na(t.be) ? na : line.new(time, t.be, rEnd, t.be, xloc = xloc.bar_time,
          color = beCol, width = 1, style = line.style_dotted)
     t.lb  := label.new(rEnd, t.entry,
@@ -564,6 +604,10 @@ if useTrade and armed and minB != armMinB
     armed := false
 if useTrade and armed and bothSideBlock and sig.hiSide and sig.loSide
     armed := false
+// Intet trade i minuttet -> stregen fjernes igen
+if not armed and not na(mxLn)
+    line.delete(mxLn)
+    mxLn := na
 
 bool anyLive = false
 if array.size(trades) > 0
@@ -583,6 +627,7 @@ while array.size(trades) > keepTrades
     box.delete(t.tpB)
     line.delete(t.ln)
     line.delete(t.beLn)
+    line.delete(t.mxLn)
     label.delete(t.lb)
 
 while array.size(smtLbls) > maxKeep
@@ -592,6 +637,13 @@ var table info = table.new(position.top_right, 1, 1, border_width = 1)
 if showInfo and barstate.islast
     table.cell(info, 0, 0, syminfo.ticker + "   vs   " + cmpSym,
          text_color = color.gray, text_size = size.small, bgcolor = color.new(color.black, 80))
+
+var label tfWarn = na
+if warn15s and barstate.islast
+    label.delete(tfWarn)
+    tfWarn := timeframe.in_seconds() != 15 ? label.new(bar_index, high,
+         "Laeg chartet paa 15s - entry laeses paa 15s-candles",
+         color = color.orange, textcolor = color.black, style = label.style_label_down, size = size.small) : na
 
 plotshape(entLong,  "Entry LONG",  style = shape.triangleup,
      location = location.belowbar, color = tpCol, size = size.normal)
