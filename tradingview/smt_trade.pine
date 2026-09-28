@@ -1,0 +1,604 @@
+//@version=6
+// =====================================================================
+//  SMT - Session Sweep + Trade  (v10)
+//  ---------------------------------------------------------------
+//  NYT I v10
+//    - BLOKERINGEN taeller nu BEGGE kilder:
+//        * NQ tager et 15m/5m-niveau  (touched)
+//        * der kommer en SMT paa den side
+//      Er begge sider ramt af en af delene, er retningen ikke ren, og
+//      nye setups blokeres. v9 saa kun sweeps, og en SMT opstaar netop
+//      naar NQ IKKE tog sit niveau - derfor slap den igennem.
+//    - TP-REGLER: kandidaterne er SESSION LIQ og EQ. En kandidat skal
+//      ligge mellem tpMin (35) og tpMax (75) points fra entry.
+//      Er den for taet paa, springes den over til fordel for den naeste.
+//      Er der ingen inden for raekkevidde, saettes TP paa 75 points.
+//      15m/5m-niveauer bruges IKKE som TP - kun som BE.
+//
+//  BE-KANDIDATER: 15m, 5m, EQ (50%), 25/75% af EQ-boksen.
+//    Short: entry i toppen -> 0.75.  Long: entry i bunden -> 0.25.
+//    Naermeste der ligger mindst beMin (10) points fra entry og foer TP.
+// =====================================================================
+indicator("SMT - Session Sweep + Trade", overlay = true,
+     max_labels_count = 500, max_boxes_count = 500, max_lines_count = 500)
+
+// ─────────────────────────── INPUTS ───────────────────────────
+g1 = "Symboler"
+cmpSym = input.symbol("CME_MINI:ES1!", "Sammenlign med", group = g1)
+
+g2 = "Sessioner"
+tz       = input.string("Europe/Copenhagen", "Tidszone", group = g2)
+asiaSess = input.session("0200-0800", "Asia",   group = g2)
+lonSess  = input.session("0800-1400", "London", group = g2)
+nySess   = input.session("1400-1530", "NY PRE", group = g2)
+
+g3 = "Vindue"
+openHour = input.int(15, "Start - time",  minval = 0, maxval = 23, group = g3)
+openMin  = input.int(30, "Start - minut", minval = 0, maxval = 59, group = g3)
+endHour  = input.int(16, "Slut - time",   minval = 0, maxval = 23, group = g3)
+endMin   = input.int(0,  "Slut - minut",  minval = 0, maxval = 59, group = g3)
+use369   = input.bool(true, "Kun paa 3-6-9 minutter", group = g3)
+
+g4 = "Visning"
+showAsia = input.bool(true, "Asia",   group = g4)
+showLon  = input.bool(true, "London", group = g4)
+showNy   = input.bool(true, "NY PRE", group = g4)
+showInfo = input.bool(true, "Vis symbol-par i hjoernet", group = g4)
+maxKeep  = input.int(40, "Antal SMT'er beholdt", minval = 1, maxval = 400, group = g4)
+bearCol  = input.color(color.red,  "Bearish SMT", group = g4)
+bullCol  = input.color(color.lime, "Bullish SMT", group = g4)
+
+g6 = "NY PRE - intraday niveauer"
+useLv      = input.bool(true, "Led efter SMT paa 15m/5m-niveauer", group = g6)
+showLvLine = input.bool(true, "Tegn niveauerne", group = g6)
+lvCol      = input.color(color.orange, "Farve", group = g6)
+tf15       = input.timeframe("15", "Timeframe A", group = g6)
+tf05       = input.timeframe("5",  "Timeframe B", group = g6)
+nyFromH    = input.int(14, "NY PRE start - time",  minval = 0, maxval = 23, group = g6)
+nyFromM    = input.int(0,  "NY PRE start - minut", minval = 0, maxval = 59, group = g6)
+remH       = input.int(15, "Niveauer udloeber - time",  minval = 0, maxval = 23, group = g6)
+remM       = input.int(31, "Niveauer udloeber - minut", minval = 0, maxval = 59, group = g6)
+
+g7 = "Trade"
+useTrade  = input.bool(true, "Saet trade op naar der kommer SMT", group = g7)
+maxPerDay = input.int(3, "Max trades pr. dag", minval = 0, group = g7)
+bothSideBlock = input.bool(true, "Bloker naar BEGGE sider er ramt", group = g7,
+     tooltip = "Taeller baade sweeps af 15m/5m-niveauer og SMT'er. Er baade en high-side og en low-side ramt siden market open, blokeres nye setups.")
+tpMin     = input.float(35, "TP skal vaere mindst (points) fra entry", minval = 0, group = g7,
+     tooltip = "En session liq eller EQ taettere paa end dette springes over.")
+tpPoints  = input.float(75, "Max TP / fallback (points)", minval = 1, group = g7,
+     tooltip = "Ogsaa den yderste graense for hvad der er inden for raekkevidde. Findes der ingen kandidat, bruges dette som TP.")
+needBack  = input.bool(true, "Kraev luk tilbage forbi niveauet", group = g7)
+minSL     = input.float(10, "Minimum SL (points)", minval = 0, group = g7)
+boxMins   = input.int(30, "Trade-boksens bredde (minutter)", minval = 1, group = g7)
+keepTrades = input.int(20, "Antal trades beholdt", minval = 1, maxval = 100, group = g7)
+slCol     = input.color(color.red,  "SL", group = g7, inline = "t")
+tpCol     = input.color(color.teal, "TP", group = g7, inline = "t")
+
+g8 = "Break even"
+useBE   = input.bool(true, "Flyt SL til entry ved BE-niveau", group = g8)
+beMin   = input.float(10, "BE skal vaere mindst (points) fra entry", minval = 0, group = g8)
+useBe15 = input.bool(true, "15m-niveau som BE",  group = g8)
+useBe05 = input.bool(true, "5m-niveau som BE",   group = g8)
+useBeEq = input.bool(true, "EQ (50%) som BE",    group = g8)
+useBeQt = input.bool(true, "25/75% EQ som BE",   group = g8)
+beCol   = input.color(color.orange, "BE-linje", group = g8)
+
+// ───────── SAMMENLIGNINGSSYMBOLET ─────────
+[cmpHi, cmpLo, cmpOp, cmpCl] = request.security(cmpSym, timeframe.period, [high, low, open, close],
+     gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)
+
+bool bothBear = close < open and not na(cmpCl) and not na(cmpOp) and cmpCl < cmpOp
+bool bothBull = close > open and not na(cmpCl) and not na(cmpOp) and cmpCl > cmpOp
+
+int minB = int(time / 60000)
+
+// ─────────────────── VINDUE + TID ───────────────────
+int  tMin  = hour(time, tz) * 60 + minute(time, tz)
+int  winS  = openHour * 60 + openMin
+int  winE  = endHour  * 60 + endMin
+bool inWin = tMin >= winS and tMin < winE
+int  dNow  = dayofmonth(time, tz)
+
+int  mn    = minute(time, tz)
+int  ones  = mn % 10
+int  tens  = int((mn - ones) / 10)
+int  dsum  = tens + ones
+bool is369 = not use369 or dsum == 3 or dsum == 6 or dsum == 9
+bool canShow = inWin and is369
+
+var float m1Hi = na
+var float m1Lo = na
+bool newMin = mn != mn[1]
+m1Hi := newMin ? high : math.max(nz(m1Hi, high), high)
+m1Lo := newMin ? low  : math.min(nz(m1Lo, low),  low)
+
+int  aT = time(timeframe.period, asiaSess, tz)
+int  lT = time(timeframe.period, lonSess,  tz)
+int  nT = time(timeframe.period, nySess,   tz)
+
+bool aOn = not na(aT)
+bool lOn = not na(lT)
+bool nOn = not na(nT)
+
+bool aStart = aOn and na(aT[1])
+bool lStart = lOn and na(lT[1])
+bool nStart = nOn and na(nT[1])
+
+int  nyFrom  = nyFromH * 60 + nyFromM
+int  remMin  = remH    * 60 + remM
+bool inNy    = tMin >= nyFrom and tMin < winS
+bool nyBegin = inNy and not inNy[1]
+bool lvLive  = tMin >= winS and tMin < remMin
+
+var array<label> smtLbls = array.new<label>()
+
+// ─────────────────────────── TYPER ───────────────────────────
+type Lvl
+    float aHi    = na
+    float aLo    = na
+    float bHi    = na
+    float bLo    = na
+    bool  hiUsed = false
+    bool  loUsed = false
+
+type Lv
+    float  aLvl    = na
+    float  bLvl    = na
+    int    t       = na
+    bool   isHi    = false
+    bool   dead    = false
+    bool   used    = false
+    bool   touched = false
+    string src     = ""
+    line   ln      = na
+    label  lb      = na
+
+// hiSide/loSide taendes af BAADE sweeps og SMT'er. Nulstilles ved open.
+type Sig
+    bool  fired   = false
+    bool  isShort = false
+    float lvl     = na
+    bool  hiSide  = false
+    bool  loSide  = false
+
+type Trade
+    bool   isShort = false
+    float  entry   = na
+    float  sl      = na
+    float  tp      = na
+    string tpSrc   = "75p"
+    float  be      = na
+    string beSrc   = "-"
+    bool   beHit   = false
+    bool   live    = true
+    box    slB     = na
+    box    tpB     = na
+    line   ln      = na
+    line   beLn    = na
+    label  lb      = na
+
+// ─────────────────────────── FUNKTIONER ───────────────────────────
+build(Lvl s, bool isStart) =>
+    s.aHi    := isStart ? high  : math.max(s.aHi, high)
+    s.aLo    := isStart ? low   : math.min(s.aLo, low)
+    s.bHi    := isStart ? cmpHi : (na(cmpHi) ? s.bHi : math.max(s.bHi, cmpHi))
+    s.bLo    := isStart ? cmpLo : (na(cmpLo) ? s.bLo : math.min(s.bLo, cmpLo))
+    s.hiUsed := isStart ? false : s.hiUsed
+    s.loUsed := isStart ? false : s.loUsed
+
+sweepHi(Lvl s, Sig g, string nm, bool ok) =>
+    bool fired = false
+    if ok and not s.hiUsed and not na(s.aHi) and not na(s.bHi) and not na(cmpHi)
+        bool aTook = high  >= s.aHi
+        bool bTook = cmpHi >= s.bHi
+        if aTook or bTook
+            s.hiUsed := true
+            fired := canShow and aTook != bTook
+            if fired
+                g.fired   := true
+                g.isShort := true
+                g.lvl     := s.aHi
+                g.hiSide  := true
+                label lb = label.new(time, s.aHi, "SMT", xloc = xloc.bar_time,
+                     style = label.style_label_down, color = color.new(bearCol, 15),
+                     textcolor = color.white, size = size.small)
+                label.set_tooltip(lb, nm + "-high taget af kun det ene indeks")
+                array.push(smtLbls, lb)
+    fired
+
+sweepLo(Lvl s, Sig g, string nm, bool ok) =>
+    bool fired = false
+    if ok and not s.loUsed and not na(s.aLo) and not na(s.bLo) and not na(cmpLo)
+        bool aTook = low   <= s.aLo
+        bool bTook = cmpLo <= s.bLo
+        if aTook or bTook
+            s.loUsed := true
+            fired := canShow and aTook != bTook
+            if fired
+                g.fired   := true
+                g.isShort := false
+                g.lvl     := s.aLo
+                g.loSide  := true
+                label lb = label.new(time, s.aLo, "SMT", xloc = xloc.bar_time,
+                     style = label.style_label_up, color = color.new(bullCol, 15),
+                     textcolor = color.black, size = size.small)
+                label.set_tooltip(lb, nm + "-low taget af kun det ene indeks")
+                array.push(smtLbls, lb)
+    fired
+
+// TP-kandidat: i profit-retningen og MELLEM tpMin og tpPoints fra entry.
+tpCand(float px, float lvl, bool avail, bool below, float best) =>
+    bool  dir   = not na(lvl) and (below ? lvl < px : lvl > px)
+    float d     = na(lvl) ? na : math.abs(px - lvl)
+    bool  rng   = not na(d) and d >= tpMin and d <= tpPoints
+    bool  ok    = avail and dir and rng
+    bool  nearer = na(best) or (below ? lvl > best : lvl < best)
+    ok and nearer ? lvl : best
+
+// BE-kandidat: i profit-retningen, mindst beMin vaek, og foer TP.
+beCand(float px, float lvl, bool avail, bool below, float tpPx, float best) =>
+    bool dir    = not na(lvl) and (below ? lvl < px : lvl > px)
+    bool far    = not na(lvl) and math.abs(px - lvl) >= beMin
+    bool pre    = not na(lvl) and not na(tpPx) and (below ? lvl > tpPx : lvl < tpPx)
+    bool ok     = avail and dir and far and pre
+    bool nearer = na(best) or (below ? lvl > best : lvl < best)
+    ok and nearer ? lvl : best
+
+inNyAt(int t) =>
+    int m = na(t) ? na : hour(t, tz) * 60 + minute(t, tz)
+    not na(m) and m >= nyFrom and m < winS
+
+pushLv(array<Lv> arr, float qh, float ql, float eh, float el, int t, string src) =>
+    Lv a = Lv.new()
+    a.aLvl := qh
+    a.bLvl := eh
+    a.t    := t
+    a.isHi := true
+    a.src  := src
+    array.push(arr, a)
+    Lv b = Lv.new()
+    b.aLvl := ql
+    b.bLvl := el
+    b.t    := t
+    b.isHi := false
+    b.src  := src
+    array.push(arr, b)
+
+// ─────────────────── STATE ───────────────────
+var Lvl asia = Lvl.new()
+var Lvl lon  = Lvl.new()
+var Lvl ny   = Lvl.new()
+var Sig sig  = Sig.new()
+
+sig.fired := false
+
+var int lastOpenDay = na
+var int tradesToday = 0
+bool isOpenBar = tMin >= winS and nz(lastOpenDay, -1) != dNow
+if isOpenBar
+    lastOpenDay := dNow
+    tradesToday := 0
+    sig.hiSide  := false
+    sig.loSide  := false
+
+if aOn
+    build(asia, aStart)
+if lOn
+    build(lon, lStart)
+if nOn
+    build(ny, nStart)
+
+bool bearA = sweepHi(asia, sig, "Asia",   showAsia and not aOn)
+bool bullA = sweepLo(asia, sig, "Asia",   showAsia and not aOn)
+bool bearL = sweepHi(lon,  sig, "London", showLon  and not lOn)
+bool bullL = sweepLo(lon,  sig, "London", showLon  and not lOn)
+bool bearN = sweepHi(ny,   sig, "NY PRE", showNy   and not nOn)
+bool bullN = sweepLo(ny,   sig, "NY PRE", showNy   and not nOn)
+
+// ═════════════ EQ-MODELLEN ═════════════
+m1Bar() =>
+    [open[1], high[1], low[1], close[1], time[1]]
+
+[o1, h1, l1, c1, t1] = request.security(syminfo.tickerid, "1", m1Bar(), lookahead = barmerge.lookahead_on)
+
+var int lastT1 = na
+bool new1m = not na(t1) and t1 != nz(lastT1, -1)
+if new1m
+    lastT1 := t1
+
+float eqOwn = na(h1) or na(l1) ? na : (h1 + l1) / 2
+bool bearEq = new1m and not na(c1) and not na(o1) and c1 < o1 and c1 < eqOwn
+bool bullEq = new1m and not na(c1) and not na(o1) and c1 > o1 and c1 > eqOwn
+
+var float bqTop = na
+var float bqBot = na
+var bool  bqAct = false
+if bqAct
+    bqBot := math.min(bqBot, low)
+    if barstate.isconfirmed and high >= (bqTop + bqBot) / 2
+        bqAct := false
+if bearEq and not bqAct
+    bqTop := h1
+    bqBot := math.min(l1, low)
+    bqAct := true
+
+var float lqBot = na
+var float lqTop = na
+var bool  lqAct = false
+if lqAct
+    lqTop := math.max(lqTop, high)
+    if barstate.isconfirmed and low <= (lqBot + lqTop) / 2
+        lqAct := false
+if bullEq and not lqAct
+    lqBot := l1
+    lqTop := math.max(h1, high)
+    lqAct := true
+
+// ═════════════ NY PRE: 15m + 5m NIVEAUER ═════════════
+lvBar() =>
+    [high[1], low[1], time[1]]
+
+[q15H, q15L, q15T] = request.security(syminfo.tickerid, tf15, lvBar(), lookahead = barmerge.lookahead_on)
+[e15H, e15L, e15T] = request.security(cmpSym,           tf15, lvBar(), lookahead = barmerge.lookahead_on)
+[q05H, q05L, q05T] = request.security(syminfo.tickerid, tf05, lvBar(), lookahead = barmerge.lookahead_on)
+[e05H, e05L, e05T] = request.security(cmpSym,           tf05, lvBar(), lookahead = barmerge.lookahead_on)
+
+var int last15 = na
+bool new15 = not na(q15T) and q15T != nz(last15, -1)
+if new15
+    last15 := q15T
+
+var int last05 = na
+bool new05 = not na(q05T) and q05T != nz(last05, -1)
+if new05
+    last05 := q05T
+
+float tickHalf = syminfo.mintick / 2
+var array<Lv> lvs = array.new<Lv>()
+var bool lvCleared = false
+
+if nyBegin
+    lvCleared := false
+if useLv and nyBegin and array.size(lvs) > 0
+    while array.size(lvs) > 0
+        Lv m = array.pop(lvs)
+        line.delete(m.ln)
+        label.delete(m.lb)
+
+if useLv and new15 and inNyAt(q15T) and not na(q15H) and not na(e15H)
+    pushLv(lvs, q15H, q15L, e15H, e15L, q15T, "15m")
+if useLv and new05 and inNyAt(q05T) and not na(q05H) and not na(e05H)
+    pushLv(lvs, q05H, q05L, e05H, e05L, q05T, "5m")
+
+if useLv and inNy and array.size(lvs) > 0
+    for i = 0 to array.size(lvs) - 1
+        Lv m = array.get(lvs, i)
+        bool aHit = m.isHi ? high >= m.aLvl : low <= m.aLvl
+        bool bHit = m.isHi ? (not na(cmpHi) and cmpHi >= m.bLvl) : (not na(cmpLo) and cmpLo <= m.bLvl)
+        if not m.dead and (aHit or bHit)
+            m.dead := true
+
+// Efter market open: NQ tager et niveau -> brugt op, og siden er ramt
+if useLv and tMin >= winS and array.size(lvs) > 0
+    for i = 0 to array.size(lvs) - 1
+        Lv m = array.get(lvs, i)
+        bool hit = m.isHi ? high >= m.aLvl : low <= m.aLvl
+        if not m.dead and not m.touched and hit
+            m.touched  := true
+            sig.hiSide := sig.hiSide or m.isHi
+            sig.loSide := sig.loSide or not m.isHi
+
+bool lvBear = false
+bool lvBull = false
+if useLv and lvLive and array.size(lvs) > 0
+    for i = 0 to array.size(lvs) - 1
+        Lv m = array.get(lvs, i)
+        bool isExtreme = m.isHi
+             ? (not na(ny.aHi) and math.abs(m.aLvl - ny.aHi) < tickHalf)
+             : (not na(ny.aLo) and math.abs(m.aLvl - ny.aLo) < tickHalf)
+        bool aTook = m.isHi ? high >= m.aLvl : low <= m.aLvl
+        bool bTook = m.isHi ? (not na(cmpHi) and cmpHi >= m.bLvl) : (not na(cmpLo) and cmpLo <= m.bLvl)
+        bool go    = not m.dead and not m.used and not isExtreme and (aTook or bTook)
+        if go
+            m.used := true
+        if go and canShow and aTook != bTook
+            lvBear := lvBear or m.isHi
+            lvBull := lvBull or not m.isHi
+            sig.fired   := true
+            sig.isShort := m.isHi
+            sig.lvl     := m.aLvl
+            sig.hiSide  := sig.hiSide or m.isHi
+            sig.loSide  := sig.loSide or not m.isHi
+            color c = m.isHi ? bearCol : bullCol
+            label lb = label.new(time, m.aLvl, "SMT", xloc = xloc.bar_time,
+                 style = m.isHi ? label.style_label_down : label.style_label_up,
+                 color = color.new(c, 15), textcolor = m.isHi ? color.white : color.black,
+                 size = size.small)
+            label.set_tooltip(lb, m.src + "-niveau taget af kun det ene indeks")
+            array.push(smtLbls, lb)
+
+bool anyBear = bearA or bearL or bearN or lvBear
+bool anyBull = bullA or bullL or bullN or lvBull
+
+if useLv and showLvLine and isOpenBar and array.size(lvs) > 0
+    int lvEnd = time + (winE - tMin) * 60000
+    for i = 0 to array.size(lvs) - 1
+        Lv m = array.get(lvs, i)
+        bool isExtreme = m.isHi
+             ? (not na(ny.aHi) and math.abs(m.aLvl - ny.aHi) < tickHalf)
+             : (not na(ny.aLo) and math.abs(m.aLvl - ny.aLo) < tickHalf)
+        if not m.dead and not isExtreme
+            m.ln := line.new(m.t, m.aLvl, lvEnd, m.aLvl, xloc = xloc.bar_time, color = lvCol, width = 1)
+            m.lb := label.new(lvEnd, m.aLvl, m.src, xloc = xloc.bar_time,
+                 style = label.style_none, textcolor = lvCol, size = size.small)
+
+// ═════════════════════ TRADES ═════════════════════
+var bool  armed    = false
+var bool  armShort = false
+var float armLvl   = na
+var int   armMinB  = na
+
+var array<Trade> trades = array.new<Trade>()
+
+bool entLong  = false
+bool entShort = false
+
+if array.size(trades) > 0
+    for i = 0 to array.size(trades) - 1
+        Trade t = array.get(trades, i)
+        bool beReach = useBE and t.live and not t.beHit and not na(t.be)
+             and (t.isShort ? low <= t.be : high >= t.be)
+        if beReach
+            t.beHit := true
+            t.sl    := t.entry
+            box.set_top(t.slB, t.entry)
+            box.set_bottom(t.slB, t.entry)
+        bool hitSL = t.isShort ? high >= t.sl : low  <= t.sl
+        bool hitTP = t.isShort ? low  <= t.tp : high >= t.tp
+        if t.live and (hitSL or hitTP)
+            t.live := false
+            box.set_right(t.slB, time)
+            box.set_right(t.tpB, time)
+            line.set_x2(t.ln, time)
+            line.set_x2(t.beLn, time)
+            label.set_x(t.lb, time)
+            label.set_text(t.lb, hitTP ? "TP" : (t.beHit ? "BE" : "SL"))
+            label.set_color(t.lb, color.new(hitTP ? tpCol : (t.beHit ? beCol : slCol), 10))
+
+bool roomLeft = maxPerDay <= 0 or tradesToday < maxPerDay
+bool sidesOK  = not bothSideBlock or not (sig.hiSide and sig.loSide)
+
+if useTrade and sig.fired and not armed and roomLeft and sidesOK
+    armed    := true
+    armShort := sig.isShort
+    armLvl   := sig.lvl
+    armMinB  := minB
+
+bool dirOK   = armShort ? bothBear : bothBull
+bool backOK  = not needBack or (armShort ? close < armLvl : close > armLvl)
+bool sameMin = minB == armMinB
+
+if useTrade and armed and barstate.isconfirmed and sameMin and dirOK and backOK
+    armed       := false
+    tradesToday += 1
+    entShort    := armShort
+    entLong     := not armShort
+
+    Trade t = Trade.new()
+    t.isShort := armShort
+    t.entry   := close
+    t.sl      := armShort ? math.max(m1Hi, close + minSL) : math.min(m1Lo, close - minSL)
+
+    bool below = armShort
+
+    // EQ-boksen i handelsretningen
+    float qLo  = below ? bqBot : lqBot
+    float qHi  = below ? bqTop : lqTop
+    float qMid = na(qLo) or na(qHi) ? na : (qLo + qHi) / 2
+    float qQt  = na(qLo) or na(qHi) ? na : qLo + (below ? 0.75 : 0.25) * (qHi - qLo)
+
+    // ── TP: kun session liq og EQ, 35-75 points vaek, naermeste ──
+    float tgt = na
+    tgt := tpCand(close, below ? asia.aLo : asia.aHi, below ? not asia.loUsed : not asia.hiUsed, below, tgt)
+    tgt := tpCand(close, below ? lon.aLo  : lon.aHi,  below ? not lon.loUsed  : not lon.hiUsed,  below, tgt)
+    tgt := tpCand(close, below ? ny.aLo   : ny.aHi,   below ? not ny.loUsed   : not ny.hiUsed,   below, tgt)
+    tgt := tpCand(close, qMid, true, below, tgt)
+    t.tp := na(tgt) ? (below ? close - tpPoints : close + tpPoints) : tgt
+
+    string ts = "75p"
+    if not na(tgt) and not na(qMid) and math.abs(tgt - qMid) < tickHalf
+        ts := "EQ"
+    if not na(tgt) and not na(asia.aLo) and math.abs(tgt - (below ? asia.aLo : asia.aHi)) < tickHalf
+        ts := "Asia"
+    if not na(tgt) and not na(lon.aLo) and math.abs(tgt - (below ? lon.aLo : lon.aHi)) < tickHalf
+        ts := "London"
+    if not na(tgt) and not na(ny.aLo) and math.abs(tgt - (below ? ny.aLo : ny.aHi)) < tickHalf
+        ts := "NY PRE"
+    t.tpSrc := ts
+
+    // ── BE: 15m, 5m, EQ, 25/75% - naermeste mindst beMin vaek og foer TP ──
+    float be = na
+    if array.size(lvs) > 0
+        for i = 0 to array.size(lvs) - 1
+            Lv m = array.get(lvs, i)
+            bool useIt = m.src == "15m" ? useBe15 : useBe05
+            if m.isHi != below and not m.dead and not m.touched and useIt
+                be := beCand(close, m.aLvl, true, below, t.tp, be)
+    be := beCand(close, qMid, useBeEq, below, t.tp, be)
+    be := beCand(close, qQt,  useBeQt, below, t.tp, be)
+    t.be := be
+
+    string src = "-"
+    if not na(be) and not na(qMid) and math.abs(be - qMid) < tickHalf
+        src := "EQ"
+    if not na(be) and not na(qQt) and math.abs(be - qQt) < tickHalf
+        src := below ? "75% EQ" : "25% EQ"
+    if not na(be) and array.size(lvs) > 0
+        for i = 0 to array.size(lvs) - 1
+            Lv m = array.get(lvs, i)
+            if not na(m.aLvl) and not m.touched and math.abs(be - m.aLvl) < tickHalf
+                src := m.src
+    t.beSrc := src
+
+    int   rEnd = time + boxMins * 60000
+    float rr   = math.abs(t.tp - t.entry) / math.max(math.abs(t.entry - t.sl), syminfo.mintick)
+    t.slB := box.new(time, t.entry, rEnd, t.sl, xloc = xloc.bar_time,
+         border_color = color.new(slCol, 0), border_width = 2, bgcolor = color.new(slCol, 72))
+    t.tpB := box.new(time, t.entry, rEnd, t.tp, xloc = xloc.bar_time,
+         border_color = color.new(tpCol, 0), border_width = 2, bgcolor = color.new(tpCol, 72))
+    t.ln  := line.new(time, t.entry, rEnd, t.entry, xloc = xloc.bar_time,
+         color = color.white, width = 2, style = line.style_dashed)
+    t.beLn := na(t.be) ? na : line.new(time, t.be, rEnd, t.be, xloc = xloc.bar_time,
+         color = beCol, width = 1, style = line.style_dotted)
+    t.lb  := label.new(rEnd, t.entry,
+         (below ? "SHORT" : "LONG") + "   SL " + str.tostring(math.abs(t.entry - t.sl), "#.#")
+         + "   TP " + str.tostring(math.abs(t.tp - t.entry), "#.#") + " (" + t.tpSrc + ")"
+         + (na(t.be) ? "   BE -" : "   BE " + str.tostring(math.abs(t.be - t.entry), "#.#") + " (" + t.beSrc + ")")
+         + "   " + str.tostring(rr, "#.#") + "R",
+         xloc = xloc.bar_time, style = label.style_label_left,
+         color = color.new(below ? slCol : tpCol, 10), textcolor = color.white, size = size.normal)
+    array.push(trades, t)
+
+if useTrade and armed and minB != armMinB
+    armed := false
+if useTrade and armed and bothSideBlock and sig.hiSide and sig.loSide
+    armed := false
+
+bool anyLive = false
+if array.size(trades) > 0
+    for i = 0 to array.size(trades) - 1
+        anyLive := anyLive or array.get(trades, i).live
+
+if useLv and showLvLine and not lvCleared and tMin >= remMin and not anyLive and array.size(lvs) > 0
+    lvCleared := true
+    for i = 0 to array.size(lvs) - 1
+        Lv m = array.get(lvs, i)
+        line.delete(m.ln)
+        label.delete(m.lb)
+
+while array.size(trades) > keepTrades
+    Trade t = array.shift(trades)
+    box.delete(t.slB)
+    box.delete(t.tpB)
+    line.delete(t.ln)
+    line.delete(t.beLn)
+    label.delete(t.lb)
+
+while array.size(smtLbls) > maxKeep
+    label.delete(array.shift(smtLbls))
+
+var table info = table.new(position.top_right, 1, 1, border_width = 1)
+if showInfo and barstate.islast
+    table.cell(info, 0, 0, syminfo.ticker + "   vs   " + cmpSym,
+         text_color = color.gray, text_size = size.small, bgcolor = color.new(color.black, 80))
+
+plotshape(entLong,  "Entry LONG",  style = shape.triangleup,
+     location = location.belowbar, color = tpCol, size = size.normal)
+plotshape(entShort, "Entry SHORT", style = shape.triangledown,
+     location = location.abovebar, color = slCol, size = size.normal)
+
+alertcondition(anyBear, "Bearish SMT", "Bearish SMT")
+alertcondition(anyBull, "Bullish SMT", "Bullish SMT")
+alertcondition(entLong,  "Entry LONG",  "Long entry sat op")
+alertcondition(entShort, "Entry SHORT", "Short entry sat op")

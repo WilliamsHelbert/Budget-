@@ -1,0 +1,256 @@
+//@version=6
+// =====================================================================
+//  EQ - Equilibrium Tracker  (v10)
+//  ---------------------------------------------------------------
+//  NYT I v10 (ift. v9):
+//    - OMSKREVET market-open-detektion. v9 byggede et timestamp() for
+//      dagens aabning og sammenlignede bar-tider; det ramte ikke.
+//      v10 bruger i stedet ur-tid + dagsnummer: foerste bar paa dagen
+//      hvor klokken er >= aabningstiden nulstiller. Kan ikke ramme
+//      forbi selv om der er huller, weekender eller helligdage.
+//    - NYT: synlig markering (blaa baggrund) paa den bar hvor der
+//      nulstilles, saa du kan SE om det sker. Kan slaas fra.
+//    - RETTET: paa et chart med SAMME timeframe som creationTF laeste
+//      request.security den FORRIGE candle, saa EQ'en blev ankret en
+//      candle for tidligt og skabt en candle for sent. Nu laeses
+//      candlen direkte naar timeframes er ens - korrekt paa baade
+//      1m- og 15s-chart.
+//
+//  OPRETTELSE - bearish EQ, naar en 1m-candle LUKKER og BEGGE gaelder:
+//      1) close < open                  -> den lukkede reelt bearish.
+//                                          En bullish doji er ugyldig,
+//                                          selv om den lukker under midten.
+//      2) close < (high + low) / 2      -> den lukkede under sin EGEN EQ.
+//    Bullish EQ er spejlvendt: close > open OG close > (high+low)/2.
+//    Hver 1m-candle vurderes for sig. Ingen pivots, intet anker fra
+//    tidligere candles.
+//
+//  ANKER       : bearish = den candles high (fast). bullish = dens low.
+//  VAEKST      : live / intrabar paa chart-timeframet. Bearish EQ foelger
+//                nye lows nedad, bullish nye highs opad, saa EQ-linjen
+//                flytter sig. Starter i den udloesende candles egen range.
+//  STOP/BRUGT  : paa en bekraeftet luk hvor prisen NAAR EQ-linjen
+//                (high >= EQ for bearish, low <= EQ for bullish):
+//                EQ'en FRYSER og bliver staaende. Daekker baade
+//                RAMT (luk paa rigtig side = din entry) og CLOSET OVER
+//                (luk forbi linjen = ugyldig) - i begge tilfaelde BRUGT.
+//  MARKET OPEN : alt slettes - aktive OG frosne. Dagen starter forfra.
+//  Altid max 1 aktiv bearish + 1 aktiv bullish (1 bull + 1 bear samtidig OK).
+//
+//  Laeg den paa 15s (finest oploesning) eller 1m. Groevere end 1m giver
+//  advarsel, for saa bliver vaekst og frysning for grovkornet.
+// =====================================================================
+indicator("EQ - Equilibrium Tracker", overlay = true, max_boxes_count = 500,
+     max_lines_count = 500, max_labels_count = 50)
+
+// ─────────────────────────── INPUTS ───────────────────────────
+g1 = "Oprettelse (1m candles)"
+creationTF = input.timeframe("1", "EQ oprettes paa timeframe", group = g1,
+     tooltip = "Hver FAERDIG candle paa dette timeframe testes for sig. En EQ bygges kun af den ene candle - aldrig af en candle foer den.")
+
+g2 = "EQ opfoersel"
+useBear   = input.bool(true, "Vis bearish EQ (vokser nedad)", group = g2)
+useBull   = input.bool(true, "Vis bullish EQ (vokser opad)",  group = g2)
+maxKept   = input.int(20, "Antal frosne (brugte) EQ'er beholdt pr. retning", minval = 0, maxval = 100, group = g2,
+     tooltip = "Aeldste frosne EQ slettes naar graensen naas. Gaelder baade ramte og closet-over. 0 = behold ingen frosne.")
+warnTF    = input.bool(true, "Advar hvis chartet er groevere end oprettelses-TF", group = g2)
+
+g4 = "Market open"
+resetOnOpen    = input.bool(true, "Nulstil ALLE EQ'er ved market open", group = g4,
+     tooltip = "Paa dagens foerste bar fra og med aabningstiden slettes baade aktive og frosne EQ'er, og dagen starter helt forfra.")
+showPreOpen    = input.bool(true, "Vis EQ'er fra foer market open", group = g4,
+     tooltip = "Slaa fra for at holde chartet rent indtil aabningen - saa oprettes der slet ingen EQ'er i timerne foer market open.")
+showOpenMarker = input.bool(true, "Marker nulstillings-baren (blaa baggrund)", group = g4,
+     tooltip = "Farver den bar hvor nulstillingen sker. Slaa fra naar du har bekraeftet at den rammer rigtigt.")
+openHour       = input.int(15, "Market open - time",  minval = 0, maxval = 23, group = g4)
+openMin        = input.int(30, "Market open - minut", minval = 0, maxval = 59, group = g4)
+sessTz         = input.string("Europe/Copenhagen", "Tidszone", group = g4,
+     tooltip = "Tidszonen som klokkeslettet ovenfor laeses i. Europe/Copenhagen 15:30 = dansk aabning. Vaelg America/New_York 09:30 hvis du vil vaere immun over for at DST skifter paa forskellige datoer i EU og USA.")
+
+g3 = "Udseende"
+premiumCol  = input.color(color.new(color.green, 82), "Premium (oevre halvdel)",  group = g3)
+discountCol = input.color(color.new(color.red,   82), "Discount (nedre halvdel)", group = g3)
+eqLineCol   = input.color(color.orange,               "EQ-linje (halvlinjen)",    group = g3)
+borderCol   = input.color(color.new(color.gray, 40),  "Kant",                     group = g3)
+
+// ───────── OPRETTELSES-CANDLEN (repainter ikke) ─────────
+// Paa et FINERE chart end creationTF hentes den 1m-candle der lige er
+// LUKKET. lookahead_on + [1] er no-repaint-moenstret: praecis samme
+// vaerdier historisk og live, ingen fremtidsdata.
+htfBar() =>
+    [open[1], high[1], low[1], close[1], time[1]]
+
+[oS, hS, lS, cS, tS] = request.security(syminfo.tickerid, creationTF, htfBar(),
+     lookahead = barmerge.lookahead_on)
+
+// Ligger chartet PAA creationTF, ville security() give den forrige candle.
+// Saa laeser vi candlen direkte i stedet og handler paa dens egen luk.
+bool sameTF = timeframe.in_seconds() == timeframe.in_seconds(creationTF)
+
+float o1 = sameTF ? open  : oS
+float h1 = sameTF ? high  : hS
+float l1 = sameTF ? low   : lS
+float c1 = sameTF ? close : cS
+int   t1 = sameTF ? time  : tS
+
+// Reager kun EEN gang pr. oprettelses-candle
+var int lastT = na
+bool tfChanged = not na(t1) and t1 != nz(lastT, -1)
+if tfChanged
+    lastT := t1
+bool newBar = sameTF ? barstate.isconfirmed : tfChanged
+
+// ───────────────── MARKET OPEN (session-skift) ─────────────────
+// Ur-tid i minutter siden midnat, laest i den valgte tidszone.
+// Nulstil paa dagens FOERSTE bar hvor klokken er >= aabningstiden.
+// Dagsnummeret sikrer at det sker praecis een gang pr. dag, ogsaa naar
+// der er huller i data (weekender, helligdage, sen aabning).
+int  tMin  = hour(time, sessTz) * 60 + minute(time, sessTz)
+int  openM = openHour * 60 + openMin
+int  dNow  = dayofmonth(time, sessTz)
+
+var int lastResetDay = na
+bool isOpenBar = tMin >= openM and nz(lastResetDay, -1) != dNow
+if isOpenBar
+    lastResetDay := dNow
+
+bool isPreOpen = tMin < openM
+bool canCreate = showPreOpen or not isPreOpen
+
+// Synlig kvittering for at nulstillingen faktisk fyrer
+bgcolor(showOpenMarker and resetOnOpen and isOpenBar ? color.new(color.blue, 65) : na, title = "Market open reset")
+
+// ═══════════════════════ STATE: BEARISH ═══════════════════════
+var float bAnchor  = na     // 1m-candlens high (fast)
+var int   bAnchorT = na     // 1m-candlens aabningstid
+var float bLow     = na     // nyeste laveste low
+var box   bTop     = na
+var box   bBot     = na
+var line  bEq      = na
+var bool  bActive  = false
+var array<box>  bFrozenB = array.new<box>()
+var array<line> bFrozenL = array.new<line>()
+
+// ═══════════════════════ STATE: BULLISH ═══════════════════════
+var float lAnchor  = na     // 1m-candlens low (fast)
+var int   lAnchorT = na
+var float lHigh    = na     // nyeste hoejeste high
+var box   lTop     = na
+var box   lBot     = na
+var line  lEq      = na
+var bool  lActive  = false
+var array<box>  lFrozenB = array.new<box>()
+var array<line> lFrozenL = array.new<line>()
+
+// ═══════════════ NULSTILLING VED MARKET OPEN ═══════════════
+// Koeres foerst, saa dagens foerste oprettelses-candle tegner paa et
+// helt rent chart. Aktive EQ'er slettes - de fryser IKKE.
+if resetOnOpen and isOpenBar
+    if bActive
+        box.delete(bTop)
+        box.delete(bBot)
+        line.delete(bEq)
+        bActive := false
+    if lActive
+        box.delete(lTop)
+        box.delete(lBot)
+        line.delete(lEq)
+        lActive := false
+    while array.size(bFrozenB) > 0
+        box.delete(array.pop(bFrozenB))
+    while array.size(bFrozenL) > 0
+        line.delete(array.pop(bFrozenL))
+    while array.size(lFrozenB) > 0
+        box.delete(array.pop(lFrozenB))
+    while array.size(lFrozenL) > 0
+        line.delete(array.pop(lFrozenL))
+
+// ───────────── OPRETTELSES-CHECK PAA CANDLEN ─────────────
+// eq1 = candlens egen equilibrium (50 % af dens samlede range).
+float eq1   = na(h1) or na(l1) ? na : (h1 + l1) / 2
+bool  valid = newBar and canCreate and not na(o1) and not na(c1) and not na(eq1)
+
+// Bearish: lukkede bearish OG under sin egen EQ.
+bool bearTrig = valid and c1 < o1 and c1 < eq1
+// Bullish: lukkede bullish OG over sin egen EQ.
+bool bullTrig = valid and c1 > o1 and c1 > eq1
+
+// ════════════════════════ BEARISH EQ ══════════════════════════
+// ── VAEKST + FRYS (koeres FOER oprettelse, saa en ny EQ kan starte
+//    paa samme bar hvor den gamle blev brugt) ──
+if bActive
+    bLow := math.min(bLow, low)
+    float eq = (bAnchor + bLow) / 2
+    box.set_top(bTop, bAnchor)
+    box.set_bottom(bTop, eq)
+    box.set_right(bTop, time)
+    box.set_top(bBot, eq)
+    box.set_bottom(bBot, bLow)
+    box.set_right(bBot, time)
+    line.set_xy1(bEq, bAnchorT, eq)
+    line.set_xy2(bEq, time, eq)
+    // STOP/BRUGT - kun paa bekraeftet luk, naar prisen naar EQ-linjen.
+    // high >= eq daekker baade RAMT (luk under) og CLOSET OVER (luk over).
+    if barstate.isconfirmed and high >= eq
+        array.push(bFrozenB, bTop)
+        array.push(bFrozenB, bBot)
+        array.push(bFrozenL, bEq)
+        if array.size(bFrozenL) > maxKept
+            line.delete(array.shift(bFrozenL))
+            box.delete(array.shift(bFrozenB))
+            box.delete(array.shift(bFrozenB))
+        bActive := false
+
+// ── OPRETTELSE ──
+if useBear and bearTrig and not bActive
+    bAnchor  := h1                      // ankeret er DENNE candles high
+    bAnchorT := t1
+    bLow     := math.min(l1, low)       // start i candlens egen range
+    bActive  := true
+    float eq = (bAnchor + bLow) / 2
+    bTop := box.new(bAnchorT, bAnchor, time, eq, xloc = xloc.bar_time, border_color = borderCol, bgcolor = premiumCol)
+    bBot := box.new(bAnchorT, eq, time, bLow, xloc = xloc.bar_time, border_color = borderCol, bgcolor = discountCol)
+    bEq  := line.new(bAnchorT, eq, time, eq, xloc = xloc.bar_time, color = eqLineCol, width = 2)
+
+// ════════════════════════ BULLISH EQ ══════════════════════════
+// ── VAEKST + FRYS ──
+if lActive
+    lHigh := math.max(lHigh, high)
+    float eq = (lAnchor + lHigh) / 2
+    box.set_top(lTop, lHigh)
+    box.set_bottom(lTop, eq)
+    box.set_right(lTop, time)
+    box.set_top(lBot, eq)
+    box.set_bottom(lBot, lAnchor)
+    box.set_right(lBot, time)
+    line.set_xy1(lEq, lAnchorT, eq)
+    line.set_xy2(lEq, time, eq)
+    // low <= eq daekker baade RAMT (luk over) og CLOSET OVER (luk under).
+    if barstate.isconfirmed and low <= eq
+        array.push(lFrozenB, lTop)
+        array.push(lFrozenB, lBot)
+        array.push(lFrozenL, lEq)
+        if array.size(lFrozenL) > maxKept
+            line.delete(array.shift(lFrozenL))
+            box.delete(array.shift(lFrozenB))
+            box.delete(array.shift(lFrozenB))
+        lActive := false
+
+// ── OPRETTELSE ──
+if useBull and bullTrig and not lActive
+    lAnchor  := l1                      // ankeret er DENNE candles low
+    lAnchorT := t1
+    lHigh    := math.max(h1, high)      // start i candlens egen range
+    lActive  := true
+    float eq = (lAnchor + lHigh) / 2
+    lTop := box.new(lAnchorT, lHigh, time, eq, xloc = xloc.bar_time, border_color = borderCol, bgcolor = premiumCol)
+    lBot := box.new(lAnchorT, eq, time, lAnchor, xloc = xloc.bar_time, border_color = borderCol, bgcolor = discountCol)
+    lEq  := line.new(lAnchorT, eq, time, eq, xloc = xloc.bar_time, color = eqLineCol, width = 2)
+
+// ──────── Advarsel hvis chartet er groevere end oprettelses-TF ────────
+var label tfLabel = na
+if warnTF and barstate.islast
+    label.delete(tfLabel)
+    tfLabel := timeframe.in_seconds() > timeframe.in_seconds(creationTF) ? label.new(bar_index, high,
+         "Chartet er groevere end oprettelses-timeframet - laeg det paa " + creationTF + " eller finere",
+         color = color.orange, textcolor = color.black, style = label.style_label_down, size = size.small) : na
