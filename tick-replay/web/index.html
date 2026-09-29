@@ -5,144 +5,103 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tick Replay</title>
   <link rel="icon" href="favicon.png">
-  <link rel="stylesheet" href="landing.css">
+  <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-  <div class="glow" aria-hidden="true"></div>
+  <div class="shell">
+    <aside class="side">
+      <a href="#dashboard" class="brand"><img src="favicon.png" alt="" width="26" height="26"><span>TICK REPLAY</span></a>
 
-  <nav class="nav">
-    <div class="wrap nav-inner">
-      <a href="./" class="brand"><img src="favicon.png" alt="" width="24" height="24"> Tick Replay</a>
-      <div class="nav-links">
-        <a href="#sessions">Sessions</a>
-        <a href="#how">How it works</a>
-        <a href="#library">Data</a>
-      </div>
-      <a href="chart.html" class="btn btn-ghost btn-sm" id="navChart">Open chart</a>
-    </div>
-  </nav>
+      <a class="nav-item" href="#dashboard" data-view="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        <span>Dashboard</span>
+      </a>
+      <a class="nav-item" href="#sessions" data-view="sessions">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>
+        <span>Sessions</span>
+      </a>
+      <a class="nav-item" href="#trades" data-view="trades">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/><path d="M4 20h16" opacity=".5"/></svg>
+        <span>Trades</span>
+      </a>
+      <a class="nav-item" href="#analytics" data-view="analytics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-6"/></svg>
+        <span>Analytics</span>
+      </a>
+      <a class="nav-item" href="#data" data-view="data">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+        <span>Data</span>
+      </a>
 
-  <header class="hero wrap">
-    <div class="hero-copy">
-      <span class="pill"><span class="dot"></span> Real ticks · real timing · 1x</span>
-      <h1>Trade the open.<br><span class="grad">Again and again.</span></h1>
-      <p class="lead">
-        Every NQ and ES trade, replayed at the exact millisecond it printed.
-        No 1-second candle hops. The bell rings, the tape explodes and you're in it, just like live.
-      </p>
-
-      <div class="sym-switch" id="symSwitch" role="tablist" aria-label="Symbol"></div>
-
-      <div class="cta-row">
-        <button class="btn btn-gold btn-lg" id="heroOpen" disabled>
-          <span class="bell">🔔</span> <span id="heroOpenLabel">Market Open</span>
-        </button>
-        <a class="btn btn-ghost btn-lg" id="heroFree" href="chart.html">Free replay</a>
-      </div>
-
-      <dl class="hero-stats">
-        <div><dt>Sessions</dt><dd id="statSessions">–</dd></div>
-        <div><dt>Precision</dt><dd>1 ms</dd></div>
-        <div><dt>Quotes</dt><dd id="statQuotes">–</dd></div>
-      </dl>
-    </div>
-
-    <div class="live-card" id="liveCard">
-      <div class="live-head">
-        <div>
-          <div class="live-sym" id="liveSym">–</div>
-          <div class="live-date" id="liveDate">Loading replay…</div>
+      <div class="side-foot">
+        <div class="quick">
+          <h4>🔔 Quick practice</h4>
+          <p id="quickSub">Jump into the latest open, live at 1x.</p>
+          <a class="btn btn-gold btn-sm" id="quickBtn" href="chart.html">Market Open</a>
         </div>
-        <div class="live-badge" id="liveBadge"><span class="dot"></span> REPLAY 1x</div>
+        <span class="small muted" style="padding: 0 10px">Local · your data stays on this PC</span>
       </div>
-      <div class="live-price-row">
-        <div class="live-price" id="livePrice">–</div>
-        <div class="live-chg" id="liveChg"></div>
-        <div class="live-clock" id="liveClock"></div>
-      </div>
-      <div class="live-chart" id="liveChart"></div>
-      <div class="live-tape" id="liveTape"></div>
-    </div>
-  </header>
+    </aside>
 
-  <section class="wrap section" id="sessions">
-    <div class="section-head">
-      <div>
-        <h2>Pick a session</h2>
-        <p class="muted">Each card is one regular session (09:30–16:00 New York). Market Open starts at 09:25 and plays live.</p>
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <h1 id="title">Dashboard</h1>
+          <div class="sub" id="subtitle"></div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-gold" id="newBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            New session
+          </button>
+        </div>
       </div>
-      <div class="sym-switch small" id="symSwitch2"></div>
-    </div>
-    <div class="cards" id="cards">
-      <div class="card skeleton"></div><div class="card skeleton"></div><div class="card skeleton"></div>
-    </div>
-  </section>
+      <div id="view"></div>
+    </main>
+  </div>
 
-  <section class="wrap section" id="how">
-    <h2>How it works</h2>
-    <div class="steps">
-      <div class="step">
-        <span class="num">1</span>
-        <h3>Load real ticks</h3>
-        <p>Drop in Databento TBBO/trades, NinjaTrader or any CSV. With several contracts in a file, the most-traded one is kept for each day.</p>
+  <dialog id="dlg">
+    <form method="dialog" id="dlgForm">
+      <div class="modal-head">
+        <h2 id="dlgTitle">New backtest session</h2>
+        <p class="muted small" style="margin:4px 0 0">A session keeps its own balance, trades and replay position.</p>
       </div>
-      <div class="step">
-        <span class="num">2</span>
-        <h3>Sit through the bell</h3>
-        <p>Market Open puts you at 09:25 New York with the whole overnight session on the chart. The clock runs at real speed. Nothing skips ahead.</p>
-      </div>
-      <div class="step">
-        <span class="num">3</span>
-        <h3>Execute like it's live</h3>
-        <p>Buy on the ask, sell on the bid, see your P&amp;L in dollars. Space pauses, → steps one tick. Hotkeys: <kbd>B</kbd> <kbd>S</kbd> <kbd>F</kbd>.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="wrap section two-col" id="library">
-    <div>
-      <h2>Your data</h2>
-      <div class="lib" id="lib"><p class="muted">Loading…</p></div>
-    </div>
-
-    <div id="import">
-      <h2>Import ticks</h2>
-      <form id="importForm" class="import-card">
-        <label class="drop" id="drop">
-          <input id="impFiles" type="file" multiple accept=".csv,.txt,.zst" hidden>
-          <span class="drop-icon">⇪</span>
-          <span class="drop-title" id="dropTitle">Drop tick files here</span>
-          <span class="muted small" id="dropSub">or click to choose · .csv · .csv.zst · .txt</span>
+      <div class="modal-body">
+        <label class="field">Name
+          <input class="input" id="fName" maxlength="80" placeholder="e.g. NQ opens – September" required>
         </label>
-        <div class="import-row">
-          <label>
-            <span>Symbol</span>
-            <input id="impSym" list="symList" value="NQ" required maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_\-]*">
-            <datalist id="symList"><option>NQ</option><option>ES</option><option>MNQ</option><option>MES</option></datalist>
-          </label>
-          <label>
-            <span>Time zone in file</span>
-            <select id="impTz">
-              <option value="Europe/Copenhagen">Denmark (my PC)</option>
-              <option value="America/New_York">New York</option>
-              <option value="America/Chicago">Chicago (CME)</option>
-              <option value="UTC">UTC</option>
+        <div class="field" id="fSymsField">Symbols
+          <div class="sym-pick" id="fSyms"></div>
+        </div>
+        <div class="two" id="fDates">
+          <label class="field">Start date <input class="input" type="date" id="fStart" required></label>
+          <label class="field">End date <input class="input" type="date" id="fEnd" required></label>
+        </div>
+        <div class="two">
+          <label class="field">Start time (New York)
+            <select class="input" id="fStartTime">
+              <option value="09:25">09:25 – just before the open</option>
+              <option value="08:30">08:30 – news / data releases</option>
+              <option value="00:00">00:00 – overnight</option>
             </select>
           </label>
-          <button type="submit" class="btn btn-gold" id="impBtn" disabled>Import</button>
+          <label class="field">Starting balance ($) <input class="input" type="number" id="fBal" value="50000" min="100" step="100" required></label>
         </div>
-        <div class="bar" id="impBar" hidden><span></span></div>
-        <p class="hint" id="impMsg">Databento files carry their own time zone, so the setting only matters for NinjaTrader and plain CSV.</p>
-      </form>
-    </div>
-  </section>
+        <label class="field">Commission per contract per side ($)
+          <input class="input" type="number" id="fFee" value="0" min="0" max="100" step="0.01">
+        </label>
+        <p class="hint err" id="dlgErr" hidden></p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" value="cancel" formnovalidate>Cancel</button>
+        <button class="btn btn-gold" id="dlgOk" value="ok">Create session</button>
+      </div>
+    </form>
+  </dialog>
 
-  <footer class="wrap foot">
-    <span><kbd>Space</kbd> play/pause · <kbd>→</kbd> next tick · <kbd>Shift</kbd>+<kbd>→</kbd> next candle · <kbd>B</kbd>/<kbd>S</kbd>/<kbd>F</kbd> trade</span>
-    <span>Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a> Lightweight Charts</span>
-  </footer>
+  <div class="tip" id="tip" hidden></div>
 
   <script src="vendor/lightweight-charts.standalone.production.js"></script>
-  <script src="landing.js"></script>
+  <script src="dashboard.js"></script>
 </body>
 </html>

@@ -63,7 +63,22 @@ Data is stored as one Parquet file per UTC day in `data/ticks/<SYMBOL>/<YYYY-MM-
 with the columns `ts` (int64 ms UTC), `price` and `size`. The `data/` folder is git-ignored.
 Set `TICK_DATA_DIR` to keep the data somewhere else.
 
-## Using the replay
+## The workspace
+
+The start page is a workspace with a sidebar:
+
+| Page | What's there |
+|---|---|
+| **Dashboard** | Time invested, historical time replayed, trades taken (long/short), win rate, net P&L, profit factor; time invested per month, win rate and P&L by month, trades by symbol; a live 1x preview of the latest open; recent sessions |
+| **Sessions** | Backtest sessions (name, symbols, date range, starting balance, commission). ▶ continues exactly where you stopped. Edit, duplicate (fresh start), summary, delete |
+| **Trades** | Every closed trade across sessions, filter by session, export CSV |
+| **Analytics** | Equity curve, expectancy, profit factor, max drawdown, P&L by weekday and by entry hour (New York), long vs short |
+| **Data** | Your tick data (BID/ASK or TRADES badge) and drag & drop import |
+
+Inside a session the chart shows the session name and your balance. Closed trades are saved immediately,
+and progress (replay position, time spent, market time replayed) is saved every 10 seconds and when you leave.
+Sessions are stored in `data/backtests.json`.
+
 
 The start page (`/`) lists your data. Pick a symbol and session and press **🔔 Market Open**.
 The chart opens at 09:25 New York with the whole overnight session as history and plays **live at 1x,

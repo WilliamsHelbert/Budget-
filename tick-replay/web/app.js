@@ -97,7 +97,10 @@
     tape: [],
     dirty: false,
     buf: null,
-    pos: { qty: 0, avg: 0, realized: 0, fills: [] },
+    pos: { qty: 0, avg: 0, realized: 0, fills: [], openTs: 0 },
+    bt: null,           // backtest session (?bt=<id>): range, balance, saved trades
+    spentMs: 0,         // real time spent / market time replayed since the last save
+    replayedMs: 0,
   };
 
   function newBuffer(t) {
@@ -266,18 +269,57 @@
     const quoted = S.bid !== null && S.ask !== null;
     const pos = S.pos, px = quoted ? (signedQty > 0 ? S.ask : S.bid) : S.last, pv = S.sym.point_value;
     const p = pos.qty, q = signedQty;
+    const feePerSide = S.bt ? S.bt.fee_per_side || 0 : 0;
     if (p === 0 || Math.sign(p) === Math.sign(q)) {
+      if (p === 0) pos.openTs = S.t;
       pos.avg = (pos.avg * Math.abs(p) + px * Math.abs(q)) / Math.abs(p + q);
     } else {
       const closing = Math.min(Math.abs(q), Math.abs(p));
-      pos.realized += closing * (px - pos.avg) * Math.sign(p) * pv;
-      if (Math.abs(q) > Math.abs(p)) pos.avg = px; // flipped
+      const gross = closing * (px - pos.avg) * Math.sign(p) * pv;
+      const fees = closing * feePerSide * 2; // entry + exit commission for the closed contracts
+      pos.realized += gross - fees;
+      recordTrade({
+        symbol: S.sym.symbol, side: Math.sign(p), qty: closing,
+        entry_ts: pos.openTs, entry_px: pos.avg, exit_ts: S.t, exit_px: px,
+        pnl: Math.round((gross - fees) * 100) / 100, fees,
+      });
+      if (Math.abs(q) > Math.abs(p)) { pos.avg = px; pos.openTs = S.t; } // flipped
     }
     pos.qty = p + q;
     if (pos.qty === 0) pos.avg = 0;
     pos.fills.push({ t: S.t, qty: q, px });
     refreshMarkers();
     render(true);
+  }
+
+  function recordTrade(trade) {
+    if (!S.bt) return;
+    S.bt.trades.push(trade);
+    fetch(`/api/backtests/${S.bt.id}/trades`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(trade),
+    }).catch(() => status("Could not save the trade", 4000));
+  }
+
+  // ---- backtest session progress ------------------------------------------
+
+  function progressBody() {
+    const body = JSON.stringify({
+      current_ts: Math.round(S.t), current_symbol: S.sym ? S.sym.symbol : null,
+      add_time_ms: Math.round(S.spentMs), add_replayed_ms: Math.round(S.replayedMs),
+    });
+    S.spentMs = 0;
+    S.replayedMs = 0;
+    return body;
+  }
+
+  function saveProgress() {
+    if (!S.bt || !S.sym) return;
+    fetch(`/api/backtests/${S.bt.id}/progress`, { method: "POST", body: progressBody() }).catch(() => {});
+  }
+
+  function saveProgressOnExit() {
+    if (!S.bt || !S.sym) return;
+    navigator.sendBeacon(`/api/backtests/${S.bt.id}/progress`, progressBody());
   }
 
   function refreshMarkers() {
@@ -333,6 +375,11 @@
     $("pnlClosed").textContent = money(pos.realized);
     $("pnlClosed").className = pos.realized > 0 ? "pos" : pos.realized < 0 ? "neg" : "";
     $("fills").textContent = pos.fills.length;
+    if (S.bt) {
+      const bal = S.bt.balance + pos.realized + open;
+      $("balance").textContent = money(bal);
+      $("balance").className = bal > S.bt.balance ? "pos" : bal < S.bt.balance ? "neg" : "";
+    }
 
     const rows = S.tape.slice(-TAPE_ROWS).reverse();
     $("tape").innerHTML = rows.map(([ts, px, sz, dir, aggr]) =>
@@ -360,11 +407,17 @@
   function frame(now) {
     const dt = Math.min(now - lastFrame, 250); // don't leap after a background tab
     lastFrame = now;
+    if (!document.hidden && S.bt) S.spentMs += dt;
     if (S.playing && S.buf) {
-      const buf = S.buf;
+      const buf = S.buf, t0 = S.t;
       maybeSkipGap();
       consumeUpTo(S.t + dt * S.speed);
       maybeSkipGap();
+      S.replayedMs += S.t - t0;
+      if (S.bt && S.t >= S.bt.end_ts) {
+        S.playing = false;
+        status("End of this session's date range", 5000);
+      }
       if (!buf.eof && buf.covered - S.t < S.speed * 8000) fetchMore();
       if (buf.eof && buf.i >= buf.ts.length) {
         S.playing = false;
@@ -428,6 +481,13 @@
     render(true);
   }
 
+  /** Keep a time inside the data and, in a backtest session, inside its date range. */
+  function clampToRange(t) {
+    let lo = S.sym.first_ts, hi = S.sym.last_ts;
+    if (S.bt) { lo = Math.max(lo, S.bt.start_ts); hi = Math.min(hi, S.bt.end_ts); }
+    return Math.min(Math.max(t, lo), Math.max(lo, hi));
+  }
+
   function defaultStart(sym) {
     // 09:30 New York on the second session in the data (so there is history to the left)
     const guess = sym.first_ts + 36 * 3600 * 1000;
@@ -447,7 +507,7 @@
     $("stepBar").addEventListener("click", stepBar);
     $("go").addEventListener("click", () => {
       if (!$("start").value) return;
-      load(parseNY($("start").value));
+      load(clampToRange(parseNY($("start").value)));
     });
     $("marketOpen").addEventListener("click", () => {
       const day = ($("start").value || toInputNY(S.t)).slice(0, 10);
@@ -457,9 +517,13 @@
     $("sell").addEventListener("click", () => order(-Math.max(1, +$("qty").value | 0)));
     $("flat").addEventListener("click", () => { if (S.pos.qty) order(-S.pos.qty); });
     $("symbol").addEventListener("change", (e) => {
+      if (S.pos.qty !== 0) {
+        e.target.value = S.sym.symbol;
+        return status("Close your position before switching symbol", 3000);
+      }
       S.sym = S.symbols.find((s) => s.symbol === e.target.value);
-      S.pos = { qty: 0, avg: 0, realized: 0, fills: [] };
-      const t = Math.min(Math.max(S.t, S.sym.first_ts), S.sym.last_ts);
+      S.pos = { qty: 0, avg: 0, realized: S.bt ? S.pos.realized : 0, fills: [], openTs: 0 };
+      const t = clampToRange(S.t);
       $("start").value = toInputNY(t);
       load(t);
     });
@@ -478,20 +542,35 @@
       status("No tick data yet. Go to the start page (Home) to import your tick files.", 0);
       return;
     }
-    // URL options from the start page: ?symbol=NQ&date=2024-03-05&open=1&tf=60&t=<ms>
+    // URL options: ?bt=<session id> or ?symbol=NQ&date=2024-03-05&open=1&tf=60&t=<ms>
     const q = new URLSearchParams(location.search);
+    if (q.get("bt")) {
+      S.bt = await api(`/api/backtests/${encodeURIComponent(q.get("bt"))}`);
+      S.symbols = S.symbols.filter((s) => S.bt.symbols.includes(s.symbol));
+      if (!S.symbols.length) return status("The data for this session's symbols was deleted.", 0);
+      S.pos.realized = S.bt.trades.reduce((a, t) => a + t.pnl, 0);
+      $("btName").textContent = S.bt.name;
+      $("btName").hidden = false;
+      $("balanceRow").hidden = false;
+      $("balanceRowVal").hidden = false;
+      $("homeLink").href = "./#sessions";
+      document.title = `${S.bt.name} · Tick Replay`;
+      setInterval(saveProgress, 10000);
+      addEventListener("pagehide", saveProgressOnExit);
+    }
     $("symbol").innerHTML = S.symbols.map((s) => `<option>${s.symbol}</option>`).join("");
-    S.sym = S.symbols.find((s) => s.symbol === (q.get("symbol") || "").toUpperCase()) || S.symbols[0];
+    const wanted = (q.get("symbol") || (S.bt && S.bt.current_symbol) || "").toUpperCase();
+    S.sym = S.symbols.find((s) => s.symbol === wanted) || S.symbols[0];
     $("symbol").value = S.sym.symbol;
     if (TIMEFRAMES.some(([s]) => s === +q.get("tf"))) S.tf = +q.get("tf");
     setTf(S.tf, false);
     requestAnimationFrame(frame);
 
     if (q.get("open") && q.get("date")) return marketOpen(q.get("date"));
-    let start = defaultStart(S.sym);
+    let start = S.bt ? S.bt.current_ts : defaultStart(S.sym);
     if (q.get("date")) start = parseNY(`${q.get("date")}T${RTH_OPEN}`);
     if (q.get("t")) start = +q.get("t");
-    start = Math.min(Math.max(start, S.sym.first_ts), S.sym.last_ts);
+    start = clampToRange(start);
     $("start").value = toInputNY(start);
     await load(start);
   }

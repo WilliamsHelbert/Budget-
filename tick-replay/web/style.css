@@ -127,3 +127,4 @@ button.buy:hover, button.sell:hover { filter: brightness(1.1); }
 .quote { font-variant-numeric: tabular-nums; font-family: ui-monospace, Menlo, Consolas, monospace; }
 .muted { color: var(--muted); }
 .tape tr.big td { font-weight: 700; background: rgba(245, 166, 35, .10); }
+.bt-name { font-weight: 700; color: #fff; background: #2a2e39; border-radius: 4px; padding: 4px 8px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

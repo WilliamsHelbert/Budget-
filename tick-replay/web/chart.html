@@ -9,7 +9,8 @@
 </head>
 <body>
   <header class="toolbar">
-    <a href="./" class="home" title="Back to start page">◂ Home</a>
+    <a href="./" class="home" id="homeLink" title="Back to the dashboard">◂ Home</a>
+    <span id="btName" class="bt-name" hidden></span>
     <select id="symbol" title="Symbol"></select>
     <div class="group" id="tfs"></div>
     <div class="sep"></div>
@@ -43,6 +44,7 @@
           <button id="flat" title="Close position (F)">Flat</button>
         </div>
         <dl class="stats">
+          <dt id="balanceRow" hidden>Balance</dt><dd id="balanceRowVal" hidden><span id="balance">--</span></dd>
           <dt>Position</dt><dd id="posQty">0</dd>
           <dt>Avg price</dt><dd id="posAvg">--</dd>
           <dt>Open P&amp;L</dt><dd id="pnlOpen">$0</dd>

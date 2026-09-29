@@ -15,12 +15,14 @@ from pathlib import Path
 
 import numpy as np
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from tools.import_ticks import clean, concat, read_ticks, write_days
 
+from .backtests import BacktestStore
 from .store import Store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -31,6 +33,7 @@ WEB_DIR = Path(os.environ.get("TICK_WEB_DIR", ROOT / "web"))
 TIMEFRAMES = {1, 5, 15, 30, 60, 180, 300, 900, 1800, 3600, 14400}
 
 store = Store(DATA_DIR)
+backtests = BacktestStore(Path(os.environ.get("TICK_BACKTESTS", DATA_DIR.parent / "backtests.json")))
 app = FastAPI(title="Tick Replay")
 app.add_middleware(GZipMiddleware, minimum_size=2048)
 
@@ -57,11 +60,112 @@ def symbols():
     return store.symbols()
 
 
-@app.get("/api/sessions")
-def sessions(symbol: str):
+@app.get("/api/days")
+def days(symbol: str):
     """Regular-hours summary per trading day, newest first."""
     _check_symbol(symbol)
     return store.sessions(symbol)[::-1]
+
+
+# ---- backtest sessions -------------------------------------------------------
+
+class NewBacktest(BaseModel):
+    name: str = Field("", max_length=80)
+    symbols: list[str] = Field(..., min_length=1, max_length=4)
+    start_ts: int
+    end_ts: int
+    balance: float = Field(50_000, gt=0, le=1e9)
+    fee_per_side: float = Field(0, ge=0, le=100)
+
+
+class EditBacktest(BaseModel):
+    name: str | None = Field(None, max_length=80)
+    end_ts: int | None = None
+    balance: float | None = Field(None, gt=0, le=1e9)
+    fee_per_side: float | None = Field(None, ge=0, le=100)
+
+
+class Progress(BaseModel):
+    current_ts: int | None = None
+    current_symbol: str | None = None
+    add_time_ms: int = 0
+    add_replayed_ms: int = 0
+
+
+class Trade(BaseModel):
+    symbol: str
+    side: int = Field(..., description="+1 long, -1 short")
+    qty: int = Field(..., gt=0)
+    entry_ts: int
+    entry_px: float
+    exit_ts: int
+    exit_px: float
+    pnl: float
+    fees: float = 0
+
+
+def _bt(sid: str) -> dict:
+    try:
+        return backtests.get(sid)
+    except KeyError:
+        raise HTTPException(404, "session not found")
+
+
+@app.get("/api/backtests")
+def list_backtests():
+    return backtests.list()
+
+
+@app.post("/api/backtests")
+def create_backtest(body: NewBacktest):
+    syms = [x.strip().upper() for x in body.symbols]
+    for x in syms:
+        _check_symbol(x)
+    if body.end_ts <= body.start_ts:
+        raise HTTPException(400, "end must be after start")
+    return backtests.create(body.name, syms, body.start_ts, body.end_ts, body.balance, body.fee_per_side)
+
+
+@app.get("/api/backtests/{sid}")
+def get_backtest(sid: str):
+    return _bt(sid)
+
+
+@app.patch("/api/backtests/{sid}")
+def edit_backtest(sid: str, body: EditBacktest):
+    _bt(sid)
+    return backtests.update(sid, body.model_dump())
+
+
+@app.post("/api/backtests/{sid}/progress")
+async def backtest_progress(sid: str, request: Request):
+    # accepts text/plain too, so the page can use navigator.sendBeacon when it closes
+    try:
+        body = Progress.model_validate_json(await request.body())
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    _bt(sid)
+    s = backtests.progress(sid, body.current_ts, body.current_symbol, body.add_time_ms, body.add_replayed_ms)
+    return {"ok": True, "current_ts": s["current_ts"]}
+
+
+@app.post("/api/backtests/{sid}/trades")
+def backtest_trade(sid: str, body: Trade):
+    _bt(sid)
+    return backtests.add_trade(sid, body.model_dump())
+
+
+@app.post("/api/backtests/{sid}/duplicate")
+def duplicate_backtest(sid: str):
+    _bt(sid)
+    return backtests.duplicate(sid)
+
+
+@app.delete("/api/backtests/{sid}")
+def delete_backtest(sid: str):
+    _bt(sid)
+    backtests.delete(sid)
+    return {"deleted": sid}
 
 
 @app.get("/api/candles")
