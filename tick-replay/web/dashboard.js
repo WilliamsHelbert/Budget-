@@ -85,7 +85,6 @@
 
   let symbols = [];
   let backtests = [];
-  const daysCache = new Map();
 
   async function loadAll() {
     [symbols, backtests] = await Promise.all([api("/api/symbols"), api("/api/backtests")]);
@@ -378,41 +377,6 @@
     </div>`;
   }
 
-  /** Pick a symbol and day and jump into the open, live at 1x. */
-  function practiceCard() {
-    const opts = symbols.map((s) => `<option value="${esc(s.symbol)}">${esc(s.symbol)}</option>`).join("");
-    return `<div class="practice-card">
-      <div class="eyebrow">🔔 Practice the open</div>
-      <p class="muted small">Starts 09:25 New York and plays live at 1x, tick by tick. No session, nothing saved.</p>
-      <div class="practice-form">
-        <label class="field">Symbol<select class="input" id="pSym">${opts}</select></label>
-        <label class="field">Day<select class="input" id="pDay"><option>Loading…</option></select></label>
-      </div>
-      <a class="btn btn-gold btn-lg practice-go" id="pGo" href="chart.html">Market Open</a>
-    </div>`;
-  }
-
-  async function wirePractice() {
-    const sym = $("pSym"), day = $("pDay"), go = $("pGo");
-    if (!sym) return;
-    const pref = previewSymbol();
-    if (pref) sym.value = pref;
-    const fill = async () => {
-      const list = await days(sym.value).catch(() => []);
-      if (!document.body.contains(day)) return;
-      day.innerHTML = list.length ? list.slice(0, 40).map((s) => `<option value="${s.date}">${DAY_NAMES[new Date(s.date + "T12:00:00Z").getUTCDay()]} ${shortDate(s.date)}</option>`).join("")
-        : "<option value=''>No regular sessions</option>";
-      update();
-    };
-    const update = () => {
-      go.href = day.value ? `chart.html?${new URLSearchParams({ symbol: sym.value, date: day.value, open: 1, tf: 60 })}` : "chart.html";
-      go.classList.toggle("disabled", !day.value);
-    };
-    sym.addEventListener("change", fill);
-    day.addEventListener("change", update);
-    fill();
-  }
-
   /** Shown until the user has data, a session and a trade. */
   function checklist(st) {
     const hasReal = symbols.some((s) => !/-DEMO$/i.test(s.symbol));
@@ -459,7 +423,7 @@
     $("title").textContent = greeting();
 
     v.innerHTML = `
-      <div class="hero-row">${continueCard()}${practiceCard()}</div>
+      ${continueCard()}
       ${checklist(st)}
 
       <div class="grid tiles">
@@ -491,7 +455,6 @@
       eqv += t.pnl;
       return { v: eqv, tip: `#${k + 1} ${esc(t.symbol)} ${signedMoney(t.pnl)} · ${esc(t.session)}<br>Total: <b>${signedMoney(eqv)}</b>` };
     })), { base: 0, axis: (t) => (Math.abs(t) >= 10000 ? `${(t / 1000).toFixed(0)}k` : t), empty: "Your equity curve appears after the first closed trade" });
-    wirePractice();
 
     // time invested per month (last 12)
     const byMonth = new Map();
@@ -764,30 +727,13 @@
         msg.textContent = `✓ ${r.ticks.toLocaleString("en-US")} tick${r.ticks === 1 ? "" : "s"} into ${r.symbol} (${r.days} day${r.days === 1 ? "" : "s"}${r.has_quotes ? ", with bid/ask" : ""}). ` +
           `First ${fmt(r.first_ts)}, last ${fmt(r.last_ts)} New York. If those times are hours off, import again with another time zone.`;
         files.value = ""; picked();
-        daysCache.delete(r.symbol);
         symbols = await api("/api/symbols");
         drawLibrary();
-        updateQuick();
       };
       xhr.onerror = () => { done(); msg.className = "hint err"; msg.textContent = "Import failed: the program is not responding."; };
       xhr.send(fd);
     });
   }
-
-  // ---- practice-the-open helpers --------------------------------------------
-
-  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  function previewSymbol() {
-    const real = symbols.filter((s) => !/-DEMO$/i.test(s.symbol));
-    return (real.find((s) => s.symbol === "NQ") || real[0] || symbols.find((s) => s.symbol === "NQ-DEMO") || symbols[0] || {}).symbol;
-  }
-  async function days(sym) {
-    if (!daysCache.has(sym)) daysCache.set(sym, await api(`/api/days?symbol=${encodeURIComponent(sym)}`));
-    return daysCache.get(sym);
-  }
-
-  // after an import: new days may exist for the practice picker
-  function updateQuick() { daysCache.clear(); if ($("pSym")) route(); }
 
   // ---- new / edit session dialog --------------------------------------------
 
@@ -864,7 +810,6 @@
       const s = el.dataset.delSym;
       if (!confirm(`Delete all ${s} tick data from this computer?`)) return;
       await api(`/api/symbols/${encodeURIComponent(s)}`, { method: "DELETE" }).catch((ex) => alert(ex.message));
-      daysCache.delete(s);
       symbols = await api("/api/symbols");
       drawLibrary();
       return;
@@ -925,7 +870,6 @@
         symbols = await api("/api/symbols");
       }
     }
-    updateQuick();
     route();
     fetch("version.json").then((r) => r.json()).then((v) => { $("ver").textContent = v.version === "dev" ? "dev build" : "v" + v.version; }).catch(() => {});
     // Trading opens the most recently played session, or a free replay

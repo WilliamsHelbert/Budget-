@@ -80,10 +80,10 @@ and progress (replay position, time spent, market time replayed) is saved every 
 Sessions are stored in `data/backtests.json`.
 
 
-The start page (`/`) lists your data. Pick a symbol and session and press **🔔 Market Open**.
-The chart opens at 09:25 New York with the whole overnight session as history and plays **live at 1x,
+On the chart page, pick a day in the date field and press **🔔 Market Open**.
+The chart jumps at 09:25 New York with the whole overnight session as history and plays **live at 1x,
 tick by tick**, so you sit through the last minutes before the bell and trade the open as it happens.
-A countdown shows the time left to 09:30. The same button is on the chart page and uses the date in the date field.
+A countdown shows the time left to 09:30.
 
 | Control | What it does |
 |---|---|
