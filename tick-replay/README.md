@@ -114,7 +114,18 @@ A countdown shows the time left to 09:30. The same button is on the chart page a
 * **Replay bar:** play/pause, next tick, next candle, speed, skip closed. Drag it by the grip.
 * **Settings (gear):** candle colours, volume, background, grid, crosshair, watermark, scale text and lines, right margin,
   side panel, fill markers, default drawing colour and default R:R for the position tool. Saved on this PC.
-* **Bottom bar:** Buy at the ask / Sell at the bid, quantity, Flat, open position and P&L, session balance.
+* **Layout (Tradesea style):** account strip (session, Bal, RP&L, UP&L, version), app menu on the left, chart card with
+  tools, Bid/Ask labels on the price axis, Orders / Positions / Fills tabs below, DOM + order panel on the right.
+* **Orders on the chart:** hover next to the price axis and click ⊕ to place a Buy/Sell Limit or Stop at that price (the type
+  follows the price vs. the market), or click a price in the DOM's My Bid / My Ask column (right-click cancels). Drag an order label
+  to move it (an entry dragged across the market switches limit ↔ stop); ✕ cancels. The position label shows avg price and live P&L
+  with +TP, +SL, reverse and close.
+* **Brackets:** tick "Bracket" and set TP/SL in ticks; every entry (market, limit or stop) gets a take-profit limit and stop-loss
+  stop as an OCO pair. Exits never grow the position and disappear when you are flat.
+* **Fills:** limits fill when price trades through them (or touches, see Settings → Trading); stops fill at the trade that triggers
+  them, so slippage is real; market orders fill at the ask/bid.
+* **Order panel:** lots with quick sizes, Buy / Sell, Join Bid / Join Ask, Close Position / Reverse, Cancel All / Flatten All,
+  and an Order tab for exact limit/stop prices.
 
 ## Licenses
 

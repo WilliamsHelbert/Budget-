@@ -8,121 +8,171 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- ============ top bar ============ -->
-  <header class="topbar">
-    <a href="./" class="tb-btn home" id="homeLink" title="Back to the dashboard">
-      <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
-    </a>
-    <span id="btName" class="bt-name" hidden></span>
-    <div class="tb-sym" title="Symbol">
-      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>
-      <select id="symbol"></select>
+  <!-- ============ account strip ============ -->
+  <header class="acct">
+    <a href="./" class="brand"><img src="favicon.png" alt="" width="22" height="22"><span>tick<b>replay</b></span></a>
+    <div class="acct-main">
+      <span class="acct-chip"><span class="tag">Replay</span><span id="acctName">Free replay</span></span>
+      <span class="acct-stat">Bal <b id="hBal">--</b></span>
+      <span class="acct-stat">RP&amp;L <b id="hRpl">$0</b></span>
+      <span class="acct-stat">UP&amp;L <b id="hUpl">$ --</b></span>
     </div>
-    <span class="tb-sep"></span>
-    <div class="tfs" id="tfs"></div>
-    <span class="tb-sep"></span>
-    <div class="tb-menu" id="typeMenu">
-      <button class="tb-btn" id="typeBtn" title="Chart type"></button>
-      <div class="dropdown" id="typeDrop"></div>
-    </div>
-    <div class="tb-menu" id="indMenu">
-      <button class="tb-btn text" id="indBtn" title="Indicators">
-        <svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 3 5-8 4 5"/></svg><span>Indicators</span>
+    <div class="acct-badge" id="modeBadge">REPLAY</div>
+    <div class="acct-right">
+      <span class="ver" id="ver"></span>
+      <button class="icon" id="settingsBtn2" title="Chart settings">
+        <svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
       </button>
-      <div class="dropdown" id="indDrop"></div>
+      <button class="icon" id="fullBtn" title="Full screen">
+        <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      </button>
     </div>
-    <span class="tb-sep"></span>
-    <input type="datetime-local" id="start" step="1" title="Replay start (New York time)">
-    <button class="tb-btn text" id="go" title="Jump to this time">Go</button>
-    <button class="tb-btn text gold" id="marketOpen" title="Start at 09:25 New York on this day and play live at 1x">🔔 Market Open</button>
-    <span class="spacer"></span>
-    <span id="countdown" class="countdown"></span>
-    <span id="clock" class="clock" title="Replay time, New York">--</span>
-    <span class="tb-sep"></span>
-    <button class="tb-btn" id="shotBtn" title="Save a screenshot (PNG)">
-      <svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
-    </button>
-    <button class="tb-btn" id="settingsBtn" title="Chart settings">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-    </button>
-    <button class="tb-btn" id="panelBtn" title="Show / hide the side panel">
-      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
-    </button>
-    <button class="tb-btn" id="fullBtn" title="Full screen">
-      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
-    </button>
   </header>
 
-  <div class="workspace">
-    <!-- ============ drawing tools ============ -->
-    <nav class="tools" id="tools" aria-label="Drawing tools"></nav>
+  <div class="app">
+    <!-- ============ app navigation ============ -->
+    <nav class="nav" id="nav">
+      <a class="nav-item on" href="#" onclick="return false"><svg viewBox="0 0 24 24"><path d="M5 20V10M10 20V4M15 20v-7M20 20V8"/></svg><span>Trading</span></a>
+      <a class="nav-item" href="./#dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>Dashboard</span></a>
+      <a class="nav-item" href="./#sessions" id="navSessions"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg><span>Sessions</span></a>
+      <a class="nav-item" href="./#trades"><svg viewBox="0 0 24 24"><path d="M7 17 17 7M9 7h8v8"/></svg><span>Trades</span></a>
+      <a class="nav-item" href="./#analytics"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-6"/></svg><span>Analytics</span></a>
+      <a class="nav-item" href="./#data"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><span>Data</span></a>
+      <span class="spacer"></span>
+      <button class="nav-item collapse" id="navCollapse" title="Collapse menu"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg><span>Collapse</span></button>
+    </nav>
 
-    <!-- ============ chart ============ -->
-    <section class="chart-wrap">
-      <div id="chart"></div>
-      <canvas id="draw"></canvas>
-      <div class="legend" id="legend"></div>
-      <div class="replay-bar" id="replayBar">
-        <span class="grip" id="grip" title="Drag to move">⋮⋮</span>
-        <button class="rb-btn" id="play" title="Play / pause (Space)"></button>
-        <button class="rb-btn" id="stepTick" title="Next tick (→)">
-          <svg viewBox="0 0 24 24"><path d="M6 5v14l9-7zM18 5v14"/></svg>
-        </button>
-        <button class="rb-btn" id="stepBar" title="Next candle (Shift+→)">
-          <svg viewBox="0 0 24 24"><path d="M4 5v14l7-7zM12 5v14l7-7z"/></svg>
-        </button>
-        <select id="speed" class="rb-speed" title="Replay speed"></select>
-        <label class="rb-check" title="Jump over closed-market periods (no trades for 5+ minutes)">
-          <input type="checkbox" id="skipGaps" checked><span>skip closed</span>
-        </label>
-      </div>
-      <div class="text-edit" id="textEdit" hidden>
-        <input id="textInput" maxlength="120" placeholder="Text…">
-      </div>
-    </section>
-
-    <!-- ============ side panel ============ -->
-    <aside class="side" id="side">
-      <section class="panel">
-        <div class="quote-box">
-          <div><div class="muted small">Last</div><div id="last" class="last">--</div></div>
-          <div class="right"><div class="muted small">Bid × Ask</div><div id="quote" class="quote">--</div></div>
+    <!-- ============ chart card ============ -->
+    <main class="card">
+      <div class="ctool">
+        <div class="sym-box" title="Symbol">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>
+          <select id="symbol"></select>
         </div>
-        <dl class="stats">
-          <dt id="balanceRow" hidden>Balance</dt><dd id="balanceRowVal" hidden><span id="balance">--</span></dd>
-          <dt>Position</dt><dd id="posQty">0</dd>
-          <dt>Avg price</dt><dd id="posAvg">--</dd>
-          <dt>Open P&amp;L</dt><dd id="pnlOpen">$0.00</dd>
-          <dt>Closed P&amp;L</dt><dd id="pnlClosed">$0.00</dd>
-          <dt>Fills</dt><dd id="fills">0</dd>
-        </dl>
-        <p class="hint" id="fillNote"></p>
+        <span class="c-sep"></span>
+        <div class="tb-menu">
+          <button class="tb-btn text" id="tfBtn" title="Timeframe">1m</button>
+          <div class="dropdown tf-drop" id="tfDrop"></div>
+        </div>
+        <div class="tb-menu">
+          <button class="tb-btn" id="typeBtn" title="Chart type"></button>
+          <div class="dropdown" id="typeDrop"></div>
+        </div>
+        <div class="tb-menu">
+          <button class="tb-btn text" id="indBtn" title="Indicators">
+            <span class="fx">f<sub>x</sub></span><span>Indicators</span>
+          </button>
+          <div class="dropdown" id="indDrop"></div>
+        </div>
+        <span class="spacer"></span>
+        <button class="tb-btn" id="shotBtn" title="Save a screenshot (PNG)">
+          <svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        </button>
+        <button class="tb-btn" id="settingsBtn" title="Chart settings">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+        </button>
+        <button class="tb-btn" id="panelBtn" title="Show / hide the order panel">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+        </button>
+      </div>
+
+      <div class="cbody">
+        <nav class="tools" id="tools" aria-label="Drawing tools"></nav>
+        <section class="chart-wrap">
+          <div id="chart"></div>
+          <canvas id="draw"></canvas>
+          <div class="legend" id="legend"></div>
+          <div class="orders-layer" id="ordersLayer"></div>
+          <button class="axis-plus" id="axisPlus" hidden title="Place an order at this price">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg><span id="axisPlusPx"></span>
+          </button>
+          <div class="order-menu" id="orderMenu" hidden></div>
+
+          <div class="replay-bar" id="replayBar">
+            <span class="grip" id="grip" title="Drag to move">⋮⋮</span>
+            <input type="datetime-local" id="start" step="1" title="Replay start (New York time)">
+            <button class="rb-btn txt" id="go" title="Jump to this time">Go</button>
+            <span class="rb-sep"></span>
+            <button class="rb-btn" id="play" title="Play / pause (Space)"></button>
+            <button class="rb-btn" id="stepTick" title="Next tick (→)">
+              <svg viewBox="0 0 24 24"><path d="M6 5v14l9-7zM18 5v14"/></svg>
+            </button>
+            <button class="rb-btn" id="stepBar" title="Next candle (Shift+→)">
+              <svg viewBox="0 0 24 24"><path d="M4 5v14l7-7zM12 5v14l7-7z"/></svg>
+            </button>
+            <select id="speed" class="rb-speed" title="Replay speed"></select>
+            <label class="rb-check" title="Jump over closed-market periods (no trades for 5+ minutes)">
+              <input type="checkbox" id="skipGaps" checked><span>skip closed</span>
+            </label>
+            <span class="rb-sep"></span>
+            <button class="rb-btn txt gold" id="marketOpen" title="Start at 09:25 New York on this day and play live at 1x">🔔 Open</button>
+            <span id="countdown" class="countdown"></span>
+            <span id="clock" class="clock" title="Replay time, New York">--</span>
+          </div>
+          <div class="text-edit" id="textEdit" hidden>
+            <input id="textInput" maxlength="120" placeholder="Text…">
+          </div>
+        </section>
+      </div>
+
+      <!-- ============ bottom tabs ============ -->
+      <section class="btabs" id="btabs">
+        <div class="btabs-head">
+          <button data-btab="orders" class="on">Orders <span class="cnt" id="cntOrders"></span></button>
+          <button data-btab="positions">Positions <span class="cnt" id="cntPos"></span></button>
+          <button data-btab="fills">Fills <span class="cnt" id="cntFills"></span></button>
+          <span class="spacer"></span>
+          <button class="icon" id="btabsToggle" title="Show / hide"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
+        </div>
+        <div class="btabs-body" id="btabsBody"></div>
       </section>
-      <section class="panel tape">
-        <h2>Time &amp; Sales</h2>
-        <table>
-          <thead><tr><th>Time (NY)</th><th>Price</th><th>Size</th></tr></thead>
-          <tbody id="tape"></tbody>
-        </table>
-      </section>
+    </main>
+
+    <!-- ============ order panel (DOM) ============ -->
+    <aside class="dom" id="side">
+      <div class="dom-tabs">
+        <button data-dtab="dom" class="on">DOM</button>
+        <button data-dtab="order">Order</button>
+      </div>
+      <div class="dom-sym"><span id="domSym">--</span><label class="dom-center" title="Keep the last price centred"><input type="checkbox" id="domCenter" checked> auto-centre</label></div>
+
+      <div class="dpane" data-dpane="dom">
+        <div class="ladder-head"><span>My Bid</span><span>Bid</span><span>Price</span><span>Ask</span><span>My Ask</span><span>Vol</span></div>
+        <div class="ladder" id="ladder"></div>
+      </div>
+      <div class="dpane" data-dpane="order" hidden>
+        <div class="ord-form">
+          <div class="seg" id="ordType">
+            <button data-otype="market" class="on">Market</button><button data-otype="limit">Limit</button><button data-otype="stop">Stop</button>
+          </div>
+          <label class="f">Price <input type="number" id="ordPrice" step="0.25"></label>
+          <p class="muted small" id="ordHint">Market orders fill at the ask (buy) or bid (sell).</p>
+        </div>
+      </div>
+
+      <div class="dom-foot">
+        <div class="lots">
+          <div class="stepper"><button id="qtyDown">−</button><input type="number" id="qty" value="1" min="1" max="100"><span>lots</span><button id="qtyUp">+</button></div>
+          <div class="quick" id="quickQty"><button>1</button><button>3</button><button>5</button><button>10</button><button>15</button></div>
+        </div>
+        <div class="bracket">
+          <label><input type="checkbox" id="brOn"> Bracket</label>
+          <label>TP <input type="number" id="brTp" value="40" min="1" max="2000"> t</label>
+          <label>SL <input type="number" id="brSl" value="20" min="1" max="2000"> t</label>
+        </div>
+        <div class="grid2">
+          <button class="big buy" id="buy">Buy <small id="askLbl"></small></button>
+          <button class="big sell" id="sell">Sell <small id="bidLbl"></small></button>
+          <button class="sm" id="joinBid">Join Bid</button>
+          <button class="sm" id="joinAsk">Join Ask</button>
+          <button class="sm" id="closePos">Close Position</button>
+          <button class="sm" id="reverse">Reverse</button>
+          <button class="sm" id="cancelAll">Cancel All</button>
+          <button class="sm" id="flat">Flatten All</button>
+        </div>
+      </div>
     </aside>
   </div>
-
-  <!-- ============ bottom trade bar ============ -->
-  <footer class="bottombar">
-    <button class="trade-btn buy" id="buy" title="Buy market (B)">Buy <span id="askLbl"></span></button>
-    <div class="qty">
-      <button id="qtyDown" aria-label="Less">−</button>
-      <input type="number" id="qty" value="1" min="1" max="100">
-      <button id="qtyUp" aria-label="More">+</button>
-    </div>
-    <button class="trade-btn sell" id="sell" title="Sell market (S)">Sell <span id="bidLbl"></span></button>
-    <button class="trade-btn flat" id="flat" title="Close position (F)">Flat</button>
-    <span class="bb-pos" id="bbPos"></span>
-    <span class="spacer"></span>
-    <span class="bb-item" id="bbBalance" hidden></span>
-    <span class="bb-keys muted small">Space play · → tick · Shift+→ bar · B/S/F trade · Esc cancel tool · Del delete drawing</span>
-  </footer>
 
   <!-- ============ settings ============ -->
   <dialog id="settings">
@@ -164,8 +214,12 @@
         </div>
         <div class="set-pane" data-pane="trading" hidden>
           <h4>Panels</h4>
-          <div class="set-row"><label>Time &amp; Sales + position panel</label><span><input type="checkbox" data-set="sidePanel"></span></div>
+          <div class="set-row"><label>Order panel (DOM)</label><span><input type="checkbox" data-set="sidePanel"></span></div>
+          <div class="set-row"><label>Bid / Ask labels on the price axis</label><span><input type="checkbox" data-set="bidAsk"></span></div>
           <div class="set-row"><label>Fill markers on chart</label><span><input type="checkbox" data-set="markers"></span></div>
+          <h4>Order fills</h4>
+          <div class="set-row"><label>Limit orders fill when price</label><span>
+            <select data-set="limitFill"><option value="through">trades through (realistic)</option><option value="touch">touches</option></select></span></div>
           <h4>Drawings</h4>
           <div class="set-row"><label>Default drawing color</label><span><input type="color" data-set="drawColor"></span></div>
           <div class="set-row"><label>Position tool reward : risk</label><span><input type="number" data-set="rr" min="0.5" max="10" step="0.5" style="width:70px"></span></div>

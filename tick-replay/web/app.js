@@ -95,6 +95,7 @@
     ask: null,
     lastDir: 0,
     tape: [],
+    vap: new Map(),     // price -> {b: buy-aggressor volume, s: sell-aggressor volume}
     dirty: false,
     buf: null,
     pos: { qty: 0, avg: 0, realized: 0, fills: [], openTs: 0 },
@@ -112,9 +113,9 @@
   const DEFAULTS = {
     upColor: "#26a69a", downColor: "#ef5350", wickUp: "#26a69a", wickDown: "#ef5350",
     border: false, borderUp: "#26a69a", borderDown: "#ef5350", volume: true,
-    bg: "#0b0e14", grid: "both", gridColor: "#1a1f2b", crosshair: "normal", crossColor: "#758696",
+    bg: "#111318", grid: "both", gridColor: "#1b1f27", crosshair: "normal", crossColor: "#758696",
     watermark: "hidden", text: "#b2b5be", fontSize: "12", scaleLine: "#242b39", rightOffset: 8,
-    sidePanel: true, markers: true, drawColor: "#2962ff", rr: 2,
+    sidePanel: true, markers: true, drawColor: "#2962ff", rr: 2, bidAsk: true, limitFill: "through",
     chartType: "candles", indicators: [],
   };
   const SETTINGS_KEY = "tickreplay.chartSettings";
@@ -273,10 +274,13 @@
     }
     if (S.last !== null && px !== S.last) S.lastDir = px > S.last ? 1 : -1;
     S.last = px;
-    // colour by aggressor when the data has it, else by uptick/downtick
-    S.tape.push([ts, px, sz, side || S.lastDir, side !== 0]);
-    if (S.tape.length > TAPE_ROWS * 2) S.tape.splice(0, S.tape.length - TAPE_ROWS);
+    // volume traded at each price since the replay started, split by aggressor (DOM ladder)
+    const aggr = side || S.lastDir || 1, key = px.toFixed(2);
+    const v = S.vap.get(key) || { b: 0, s: 0 };
+    if (aggr > 0) v.b += sz; else v.s += sz;
+    S.vap.set(key, v);
     S.dirty = true;
+    if (TR.orders.length) checkOrders(px, ts);
   }
 
   // ---- tick buffer ----------------------------------------------------------
@@ -380,19 +384,34 @@
     S.bid = S.ask = null;
     S.dirty = false;
     S.tape = [];
+    S.vap = new Map();
+    domCenterPx = null;
     refreshMarkers();
     chart.timeScale().scrollToRealTime();
     fetchMore();
     render(true);
   }
 
-  // ---- trading --------------------------------------------------------------
+  // ---- trading engine ---------------------------------------------------------
+  //
+  // Working orders are checked against every replayed trade:
+  //   buy limit  fills when a trade prints below its price (or at it, with "touch" fills)
+  //   sell limit fills when a trade prints above its price
+  //   buy stop   triggers when a trade prints at/above its price and fills at that trade (slippage)
+  //   sell stop  triggers when a trade prints at/below its price
+  // Entry orders can carry a bracket: on fill, a take-profit limit and a stop-loss stop are
+  // attached as an OCO pair; exits never grow a position and vanish when it is flat.
 
-  function order(signedQty) {
-    if (S.last === null) return status("No price yet");
-    // with quotes, market orders pay the spread: buys fill at the ask, sells at the bid
-    const quoted = S.bid !== null && S.ask !== null;
-    const pos = S.pos, px = quoted ? (signedQty > 0 ? S.ask : S.bid) : S.last, pv = S.sym.point_value;
+  const TR = { orders: [], seq: 1, fillLog: [] };
+  const tick = () => (S.sym ? S.sym.tick_size : 0.25);
+  const roundTick = (p) => Math.round(p / tick()) * tick();
+  const lots = () => Math.max(1, Math.min(100, +$("qty").value | 0 || 1));
+  const bracketCfg = () => ($("brOn").checked ? { tp: Math.max(1, +$("brTp").value | 0), sl: Math.max(1, +$("brSl").value | 0) } : null);
+  const refPx = (side) => (side > 0 ? (S.ask ?? S.last) : (S.bid ?? S.last));
+
+  /** Execute a fill against the position (the old market-order logic). */
+  function execute(signedQty, px, how) {
+    const pos = S.pos, pv = S.sym.point_value;
     const p = pos.qty, q = signedQty;
     const feePerSide = S.bt ? S.bt.fee_per_side || 0 : 0;
     if (p === 0 || Math.sign(p) === Math.sign(q)) {
@@ -413,9 +432,99 @@
     pos.qty = p + q;
     if (pos.qty === 0) pos.avg = 0;
     pos.fills.push({ t: S.t, qty: q, px });
+    TR.fillLog.unshift({ t: S.t, qty: q, px, how });
+    syncExits();
     refreshMarkers();
+    ordersDirty = true;
+  }
+
+  function market(signedQty, bracket = bracketCfg()) {
+    if (S.last === null) return status("No price yet");
+    const side = Math.sign(signedQty), px = refPx(side);
+    execute(signedQty, px, "Market");
+    if (bracket) attachBracket(side, Math.abs(signedQty), px, bracket);
     render(true);
   }
+
+  function attachBracket(side, qty, entryPx, br) {
+    const oco = "oco" + TR.seq;
+    addOrder({ side: -side, type: "limit", price: roundTick(entryPx + side * br.tp * tick()), qty, role: "tp", oco });
+    addOrder({ side: -side, type: "stop", price: roundTick(entryPx - side * br.sl * tick()), qty, role: "sl", oco });
+  }
+
+  function addOrder(o) {
+    const ord = { id: TR.seq++, placed: S.t, ...o, price: roundTick(o.price) };
+    // a limit on the wrong side of the market is marketable: fill it now at the quote
+    if (ord.role === "entry" && ord.type === "limit" && S.last !== null) {
+      const q = refPx(ord.side);
+      if ((ord.side > 0 && ord.price >= q) || (ord.side < 0 && ord.price <= q)) {
+        execute(ord.side * ord.qty, q, "Limit");
+        if (ord.bracket) attachBracket(ord.side, ord.qty, q, ord.bracket);
+        render(true);
+        return null;
+      }
+    }
+    TR.orders.push(ord);
+    ordersDirty = true;
+    return ord;
+  }
+
+  /** Place an entry order at a price; limit or stop is picked from where the price is vs. the market. */
+  function placeAt(side, price, qty = lots()) {
+    if (S.last === null) return status("No price yet");
+    price = roundTick(price);
+    const q = refPx(side);
+    const type = side > 0 ? (price <= q ? "limit" : "stop") : (price >= q ? "limit" : "stop");
+    addOrder({ side, type, price, qty, role: "entry", bracket: bracketCfg() });
+    render(true);
+  }
+
+  function cancelOrder(id) {
+    const o = TR.orders.find((x) => x.id === id);
+    TR.orders = TR.orders.filter((x) => x.id !== id);
+    // cancelling one side of a bracket keeps the other: it is still a valid exit
+    if (o) ordersDirty = true;
+  }
+  function cancelAll() { TR.orders = []; ordersDirty = true; render(true); }
+
+  /** Exits never outsize the position; with no position they are gone. */
+  function syncExits() {
+    const q = S.pos.qty;
+    TR.orders = TR.orders.filter((o) => {
+      if (o.role === "entry") return true;
+      if (q === 0 || Math.sign(o.side) === Math.sign(q)) return false;
+      o.qty = Math.min(o.qty, Math.abs(q));
+      return true;
+    });
+  }
+
+  function checkOrders(px) {
+    const touch = cfg.limitFill === "touch";
+    for (const o of TR.orders.slice()) {
+      if (!TR.orders.includes(o)) continue;          // cancelled by an OCO sibling this tick
+      let fillPx = null;
+      if (o.type === "limit") {
+        if (o.side > 0 ? (px < o.price || (touch && px === o.price)) : (px > o.price || (touch && px === o.price))) fillPx = o.price;
+      } else if (o.side > 0 ? px >= o.price : px <= o.price) {
+        fillPx = o.side > 0 ? Math.max(o.price, px) : Math.min(o.price, px);   // stops slip to the trade that triggered them
+      }
+      if (fillPx === null) continue;
+      TR.orders = TR.orders.filter((x) => x !== o && (!o.oco || x.oco !== o.oco));
+      let qty = o.qty;
+      if (o.role !== "entry") {
+        qty = Math.min(qty, Math.abs(S.pos.qty));
+        if (!qty || Math.sign(S.pos.qty) === o.side) continue;
+      }
+      const how = o.role === "tp" ? "Take profit" : o.role === "sl" ? "Stop loss" : o.type === "limit" ? "Limit" : "Stop";
+      execute(o.side * qty, fillPx, how);
+      if (o.role === "entry" && o.bracket) attachBracket(o.side, qty, fillPx, o.bracket);
+      status(`${how} filled: ${o.side > 0 ? "bought" : "sold"} ${qty} @ ${fillPx.toFixed(2)}`, 2500);
+    }
+  }
+
+  function closePosition() { if (S.pos.qty) market(-S.pos.qty, null); }
+  function reversePosition() { if (S.pos.qty) market(-2 * S.pos.qty, null); }
+  function flattenAll() { TR.orders = []; closePosition(); ordersDirty = true; render(true); }
 
   function recordTrade(trade) {
     if (!S.bt) return;
@@ -502,6 +611,7 @@
       S.dirty = false;
     }
     draw.redraw();
+    placeOrderLabels();
     $("clock").textContent = S.sym ? fmtNY(S.t) : "--";
     $("countdown").textContent = S.sym ? openCountdown(S.t) : "";
     if (playShown !== S.playing) {
@@ -514,42 +624,198 @@
     if (!force && now - lastPanelRender < 100) return; // DOM panels at ~10 fps
     lastPanelRender = now;
     if (!hovering) renderLegend(bars.length - 1);
-
-    const pos = S.pos, pv = S.sym ? S.sym.point_value : 1;
-    const open = pos.qty && S.last !== null ? (S.last - pos.avg) * pos.qty * pv : 0;
-    $("last").textContent = S.last === null ? "--" : S.last.toFixed(2);
-    $("last").className = "last " + (S.lastDir > 0 ? "pos" : S.lastDir < 0 ? "neg" : "");
-    $("posQty").textContent = pos.qty;
-    $("posAvg").textContent = pos.qty ? pos.avg.toFixed(2) : "--";
-    $("pnlOpen").textContent = money(open);
-    $("pnlOpen").className = open > 0 ? "pos" : open < 0 ? "neg" : "";
-    $("pnlClosed").textContent = money(pos.realized);
-    $("pnlClosed").className = pos.realized > 0 ? "pos" : pos.realized < 0 ? "neg" : "";
-    $("fills").textContent = pos.fills.length;
-    if (S.bt) {
-      const bal = S.bt.balance + pos.realized + open;
-      $("balance").textContent = money(bal);
-      $("balance").className = bal > S.bt.balance ? "pos" : bal < S.bt.balance ? "neg" : "";
-    }
-
-    const rows = S.tape.slice(-TAPE_ROWS).reverse();
-    $("tape").innerHTML = rows.map(([ts, px, sz, dir, aggr]) =>
-      `<tr class="${dir > 0 ? "up" : dir < 0 ? "down" : ""}${aggr && sz >= BIG_PRINT ? " big" : ""}"><td>${fmtNY(ts, false)}</td><td>${px.toFixed(2)}</td><td>${sz}</td></tr>`
-    ).join("");
-    $("quote").textContent = S.bid !== null ? `${S.bid.toFixed(2)} × ${S.ask.toFixed(2)}` : "--";
+    renderHeader();
+    renderBidAsk();
+    renderLadder();
+    // labels carry live P&L, so refresh them while anything is on the chart (not mid-click)
+    if ((ordersDirty || force || TR.orders.length || S.pos.qty || ordLabels.size) && !layerBusy) buildOrderLabels();
+    if (ordersDirty || force || now - lastBottom > 500) { renderBottom(); ordersDirty = false; }
     $("askLbl").textContent = S.ask !== null ? S.ask.toFixed(2) : S.last !== null ? S.last.toFixed(2) : "";
     $("bidLbl").textContent = S.bid !== null ? S.bid.toFixed(2) : S.last !== null ? S.last.toFixed(2) : "";
-    $("bbPos").innerHTML = pos.qty
-      ? `<span class="${pos.qty > 0 ? "pos" : "neg"}">${pos.qty > 0 ? "LONG" : "SHORT"} ${Math.abs(pos.qty)} @ ${pos.avg.toFixed(2)}</span> · <span class="${open > 0 ? "pos" : open < 0 ? "neg" : ""}">${money(open)}</span>`
-      : "";
-    if (S.bt) {
-      const bal = S.bt.balance + pos.realized + open;
-      $("bbBalance").hidden = false;
-      $("bbBalance").textContent = money(bal);
+  }
+
+  const openPnl = () => (S.pos.qty && S.last !== null ? (S.last - S.pos.avg) * S.pos.qty * S.sym.point_value : 0);
+  const signed$ = (v) => (v > 0 ? "+" : v < 0 ? "−" : "") + "$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const cls = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "");
+
+  function renderHeader() {
+    if (!S.sym) return;
+    const start = S.bt ? S.bt.balance : 50000, open = openPnl();
+    $("hBal").textContent = money(start + S.pos.realized + open);
+    $("hRpl").textContent = signed$(S.pos.realized); $("hRpl").className = cls(S.pos.realized);
+    $("hUpl").textContent = S.pos.qty ? signed$(open) : "$ --"; $("hUpl").className = cls(open);
+  }
+
+  // ---- bid / ask labels on the price axis ------------------------------------
+
+  let bidLine = null, askLine = null, shownQuote = "";
+  function renderBidAsk() {
+    const want = cfg.bidAsk && S.bid !== null && main ? `${S.bid}|${S.ask}` : "";
+    if (want === shownQuote && (!want || (bidLine && askLine))) return;
+    shownQuote = want;
+    if (bidLine) { try { main.removePriceLine(bidLine); } catch { /* series replaced */ } bidLine = null; }
+    if (askLine) { try { main.removePriceLine(askLine); } catch { /* series replaced */ } askLine = null; }
+    if (!want) return;
+    const common = { lineVisible: false, axisLabelVisible: true, lineWidth: 1 };
+    askLine = main.createPriceLine({ ...common, price: S.ask, color: "#e0474c", title: "Ask" });
+    bidLine = main.createPriceLine({ ...common, price: S.bid, color: "#2f6bff", title: "Bid" });
+  }
+
+  // ---- orders on the chart -----------------------------------------------------
+
+  let ordersDirty = true, lastBottom = 0, dragOrd = null, layerBusy = false;
+  const ordLabels = new Map();   // id -> {el, line}
+  const ordTitle = (o) => o.role === "tp" ? "TP" : o.role === "sl" ? "SL" : `${o.side > 0 ? "BUY" : "SELL"} ${o.type === "limit" ? "LMT" : "STP"}`;
+  const ordClass = (o) => o.role === "tp" ? "tp" : o.role === "sl" ? "sl" : o.side > 0 ? "buy" : "sell";
+  const ordColor = (o) => ({ tp: "#0f9d76", sl: "#e0474c", buy: "#2f6bff", sell: "#e0474c" })[ordClass(o)];
+
+  /** What an order is worth vs. the position (exits) or the market (entries). */
+  function ordDetail(o) {
+    const pv = S.sym.point_value;
+    if (o.role !== "entry" && S.pos.qty) {
+      const pnl = (o.price - S.pos.avg) * Math.sign(S.pos.qty) * o.qty * pv;
+      const t = Math.round((o.price - S.pos.avg) / tick()) * Math.sign(S.pos.qty);
+      return `<span class="pnl ${cls(pnl)}">${t > 0 ? "+" : ""}${t}t ${signed$(pnl)}</span>`;
     }
-    $("fillNote").textContent = S.bid !== null || (S.sym && S.sym.quotes)
-      ? "Market orders fill at the ask (buy) / bid (sell)."
-      : "No bid/ask in this data: market orders fill at the last trade.";
+    const ref = S.last ?? o.price, t = Math.round(Math.abs(o.price - ref) / tick());
+    return `<span class="muted">${t}t away</span>`;
+  }
+
+  function buildOrderLabels() {
+    const layer = $("ordersLayer");
+    const wanted = new Set();
+    const items = TR.orders.map((o) => ({ key: "o" + o.id, o }));
+    if (S.pos.qty) items.push({ key: "pos", pos: true });
+    for (const it of items) {
+      wanted.add(it.key);
+      let rec = ordLabels.get(it.key);
+      if (!rec) {
+        const line = document.createElement("div"); line.className = "ord-line";
+        const el = document.createElement("div");
+        layer.append(line, el);
+        rec = { el, line };
+        ordLabels.set(it.key, rec);
+      }
+      if (it.pos) {
+        const q = S.pos.qty, open = openPnl();
+        rec.el.className = "ord posl";
+        rec.el.innerHTML = `<span class="side">${q > 0 ? "LONG" : "SHORT"} ${Math.abs(q)}</span>
+          <span class="body">${S.pos.avg.toFixed(2)} <span class="pnl ${cls(open)}">${signed$(open)}</span></span>
+          <span class="act" data-pact="tp" title="Add a take profit">+TP</span><span class="act" data-pact="sl" title="Add a stop loss">+SL</span>
+          <span class="act" data-pact="rev" title="Reverse">⇅</span><span class="x" data-pact="close" title="Close position">✕</span>`;
+        rec.price = S.pos.avg; rec.color = q > 0 ? "#0f9d76" : "#e0474c"; rec.el.dataset.key = "pos";
+      } else {
+        const o = it.o;
+        rec.el.className = `ord ${ordClass(o)}`;
+        rec.el.innerHTML = `<span class="side">${ordTitle(o)}</span><span class="body">${o.qty} @ ${o.price.toFixed(2)} ${ordDetail(o)}</span><span class="x" data-cancel="${o.id}" title="Cancel">✕</span>`;
+        rec.price = o.price; rec.color = ordColor(o); rec.el.dataset.key = it.key; rec.el.dataset.id = o.id;
+      }
+      rec.line.style.borderColor = rec.color;
+    }
+    for (const [k, rec] of ordLabels) if (!wanted.has(k)) { rec.el.remove(); rec.line.remove(); ordLabels.delete(k); }
+    placeOrderLabels();
+  }
+
+  /** Keep labels on their price every frame (the price scale moves while playing). */
+  function placeOrderLabels() {
+    if (!main || !ordLabels.size) return;
+    const w = chart.timeScale().width(), paneR = $("chart").clientWidth - w;  // price-scale width
+    const placed = [];   // labels that sit close in price slide left instead of overlapping
+    const items = [...ordLabels].map(([k, rec]) => {
+      const price = dragOrd && dragOrd.key === k ? dragOrd.price : rec.price;
+      return { k, rec, y: main.priceToCoordinate(price) };
+    }).sort((a, b) => (a.k === "pos" ? -1 : b.k === "pos" ? 1 : (a.y ?? 0) - (b.y ?? 0)));
+    for (const { k, rec, y } of items) {
+      const vis = y !== null && y > 0 && y < $("chart").clientHeight - 26;
+      rec.el.style.display = rec.line.style.display = vis ? "" : "none";
+      if (!vis) continue;
+      const width = rec.el.offsetWidth || 180;
+      let right = paneR + (k === "pos" ? 240 : 12);
+      for (let guard = 0; guard < 8; guard++) {
+        const hit = placed.find((q) => Math.abs(q.y - y) < 24 && right < q.right + q.width + 6 && right + width + 6 > q.right);
+        if (!hit) break;
+        right = hit.right + hit.width + 8;
+      }
+      placed.push({ y, right, width });
+      rec.el.style.top = y + "px";
+      rec.el.style.right = right + "px";
+      rec.line.style.top = y + "px";
+      rec.line.style.width = w + "px";
+    }
+  }
+
+  // ---- DOM ladder --------------------------------------------------------------
+
+  let domCenterPx = null;
+  function renderLadder() {
+    if (!S.sym || $("side").hidden) return;
+    const lad = $("ladder");
+    const rows = Math.max(5, Math.floor(lad.clientHeight / 22));
+    const tk = tick(), last = S.last;
+    if (last === null) return;
+    if ($("domCenter").checked || domCenterPx === null) domCenterPx = last;
+    const top = roundTick(domCenterPx + Math.floor(rows / 2) * tk);
+    let maxV = 1;
+    for (const v of S.vap.values()) maxV = Math.max(maxV, v.b + v.s);
+    const my = new Map();
+    for (const o of TR.orders) {
+      const k = o.price.toFixed(2) + (o.side > 0 ? "b" : "a");
+      const e = my.get(k) || { q: 0, role: o.role };
+      e.q += o.qty; if (o.role !== "entry") e.role = o.role;
+      my.set(k, e);
+    }
+    // rows stay in place and only their contents change, so clicks never land on a replaced element
+    if (lad.children.length !== rows) {
+      lad.innerHTML = Array.from({ length: rows }, () =>
+        '<div class="lrow"><span class="mb"></span><span class="bv"></span><span class="p"></span><span class="av"></span><span class="ma"></span><span class="v"><i></i><b></b></span></div>').join("");
+    }
+    const avgPx = S.pos.qty ? roundTick(S.pos.avg) : null;
+    for (let r = 0; r < rows; r++) {
+      const row = lad.children[r], c = row.children;
+      const p = roundTick(top - r * tk), key = p.toFixed(2), v = S.vap.get(key) || { b: 0, s: 0 };
+      const mb = my.get(key + "b"), ma = my.get(key + "a"), tot = v.b + v.s;
+      row.dataset.p = key;
+      row.className = "lrow" + (p === last ? " last" : "") + (S.bid !== null && p === S.bid ? " bidrow" : "")
+        + (S.ask !== null && p === S.ask ? " askrow" : "") + (avgPx !== null && Math.abs(p - avgPx) < tk / 2 ? " avg" : "");
+      c[0].className = "mb" + (mb ? " " + (mb.role === "entry" ? "has" : mb.role) : ""); c[0].textContent = mb ? mb.q : "";
+      c[1].textContent = v.s || "";
+      c[2].textContent = key;
+      c[3].textContent = v.b || "";
+      c[4].className = "ma" + (ma ? " " + (ma.role === "entry" ? "has" : ma.role) : ""); c[4].textContent = ma ? ma.q : "";
+      c[5].firstChild.style.width = tot ? Math.round((tot / maxV) * 100) + "%" : "0";
+      c[5].lastChild.textContent = tot || "";
+    }
+  }
+
+  // ---- bottom tabs --------------------------------------------------------------
+
+  let btab = "orders";
+  function renderBottom() {
+    lastBottom = performance.now();
+    $("cntOrders").textContent = TR.orders.length || "";
+    $("cntPos").textContent = S.pos.qty ? 1 : "";
+    $("cntFills").textContent = TR.fillLog.length || "";
+    const body = $("btabsBody");
+    if (btab === "orders") {
+      body.innerHTML = TR.orders.length ? `<table class="bt"><thead><tr><th>Side</th><th>Type</th><th>Qty</th><th>Price</th><th>Role</th><th>Distance</th><th>Placed (NY)</th><th></th></tr></thead><tbody>${
+        TR.orders.map((o) => `<tr><td class="${o.side > 0 ? "b" : "s"}">${o.side > 0 ? "Buy" : "Sell"}</td><td>${o.type === "limit" ? "Limit" : "Stop"}</td>
+          <td class="num">${o.qty}</td><td class="num">${o.price.toFixed(2)}</td><td>${o.role === "tp" ? "Take profit" : o.role === "sl" ? "Stop loss" : "Entry" + (o.bracket ? " + bracket" : "")}</td>
+          <td class="num">${S.last !== null ? Math.round(Math.abs(o.price - S.last) / tick()) + "t" : ""}</td><td class="num">${fmtNY(o.placed, false).slice(0, 8)}</td>
+          <td><button data-cancel="${o.id}">Cancel</button></td></tr>`).join("")}</tbody></table>`
+        : `<div class="empty-row">No working orders. Click ⊕ next to the price axis, a price in the DOM, or use Join Bid / Join Ask.</div>`;
+    } else if (btab === "positions") {
+      const q = S.pos.qty, open = openPnl();
+      body.innerHTML = q ? `<table class="bt"><thead><tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Avg price</th><th>Last</th><th>Ticks</th><th>Open P&amp;L</th><th></th></tr></thead><tbody>
+        <tr><td><b>${S.sym.symbol}</b></td><td class="${q > 0 ? "b" : "s"}">${q > 0 ? "Long" : "Short"}</td><td class="num">${Math.abs(q)}</td>
+        <td class="num">${S.pos.avg.toFixed(2)}</td><td class="num">${S.last.toFixed(2)}</td><td class="num">${Math.round(((S.last - S.pos.avg) * Math.sign(q)) / tick())}</td>
+        <td class="num ${cls(open)}">${signed$(open)}</td><td><button data-pact="close">Close</button> <button data-pact="rev">Reverse</button></td></tr></tbody></table>`
+        : `<div class="empty-row">Flat. Realized P&amp;L this session: <b class="${cls(S.pos.realized)}">${signed$(S.pos.realized)}</b></div>`;
+    } else {
+      body.innerHTML = TR.fillLog.length ? `<table class="bt"><thead><tr><th>Time (NY)</th><th>Side</th><th>Qty</th><th>Price</th><th>Order</th></tr></thead><tbody>${
+        TR.fillLog.slice(0, 200).map((f) => `<tr><td class="num">${fmtNY(f.t)}</td><td class="${f.qty > 0 ? "b" : "s"}">${f.qty > 0 ? "Buy" : "Sell"}</td>
+          <td class="num">${Math.abs(f.qty)}</td><td class="num">${f.px.toFixed(2)}</td><td>${f.how}</td></tr>`).join("")}</tbody></table>`
+        : `<div class="empty-row">No fills yet.</div>`;
+    }
   }
 
   /** "Open in 04:12" during the 30 minutes before the 09:30 New York open. */
@@ -621,7 +887,8 @@
 
   function setTf(tf, reload = true) {
     S.tf = tf;
-    for (const b of $("tfs").children) b.classList.toggle("active", +b.dataset.tf === tf);
+    $("tfBtn").textContent = tfLabel(tf);
+    for (const b of $("tfDrop").querySelectorAll("[data-tf]")) b.classList.toggle("on", +b.dataset.tf === tf);
     chart.applyOptions({ timeScale: { secondsVisible: tf < 60 } });
     if (S.sym && reload) return load(S.t);
   }
@@ -659,8 +926,16 @@
   }
 
   async function init() {
-    $("tfs").innerHTML = TIMEFRAMES.map(([s, l]) => `<button data-tf="${s}">${l}</button>`).join("");
-    $("tfs").addEventListener("click", (e) => { if (e.target.dataset.tf) setTf(+e.target.dataset.tf); });
+    const tfGroups = [["Seconds", (s) => s < 60], ["Minutes", (s) => s >= 60 && s < 3600], ["Hours", (s) => s >= 3600]];
+    $("tfDrop").innerHTML = tfGroups.map(([ttl, f]) => `<div class="ttl">${ttl}</div>` +
+      TIMEFRAMES.filter(([s]) => f(s)).map(([s, l]) => `<button data-tf="${s}">${l}</button>`).join("")).join("");
+    $("tfBtn").addEventListener("click", (e) => { e.stopPropagation(); openDrop($("tfBtn"), $("tfDrop")); });
+    $("tfDrop").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-tf]");
+      if (!b) return;
+      $("tfDrop").classList.remove("open");
+      setTf(+b.dataset.tf);
+    });
     $("speed").innerHTML = SPEEDS.map((s) => `<option value="${s}" ${s === 1 ? "selected" : ""}>${s}x</option>`).join("");
     $("speed").addEventListener("change", (e) => setSpeed(+e.target.value));
     $("skipGaps").addEventListener("change", (e) => { S.skipGaps = e.target.checked; });
@@ -675,9 +950,28 @@
       const day = ($("start").value || toInputNY(S.t)).slice(0, 10);
       marketOpen(day).catch((e) => status("Load failed: " + e.message, 5000));
     });
-    $("buy").addEventListener("click", () => order(Math.max(1, +$("qty").value | 0)));
-    $("sell").addEventListener("click", () => order(-Math.max(1, +$("qty").value | 0)));
-    $("flat").addEventListener("click", () => { if (S.pos.qty) order(-S.pos.qty); });
+    const sideAction = (side) => {
+      const onOrderTab = !$("side").querySelector('[data-dpane="order"]').hidden;
+      const type = $("ordType").querySelector(".on").dataset.otype;
+      if (onOrderTab && type !== "market") {
+        const price = +$("ordPrice").value;
+        if (!price) return status("Enter a price");
+        const q = refPx(side);
+        if (type === "limit" && (side > 0 ? price > q : price < q)) return status("A buy limit goes below the market, a sell limit above", 3000);
+        if (type === "stop" && (side > 0 ? price <= q : price >= q)) return status("A buy stop goes above the market, a sell stop below", 3000);
+        addOrder({ side, type, price, qty: lots(), role: "entry", bracket: bracketCfg() });
+        return render(true);
+      }
+      market(side * lots());
+    };
+    $("buy").addEventListener("click", () => sideAction(1));
+    $("sell").addEventListener("click", () => sideAction(-1));
+    $("flat").addEventListener("click", flattenAll);
+    $("closePos").addEventListener("click", closePosition);
+    $("reverse").addEventListener("click", reversePosition);
+    $("cancelAll").addEventListener("click", cancelAll);
+    $("joinBid").addEventListener("click", () => { const p = S.bid ?? S.last; if (p !== null) { addOrder({ side: 1, type: "limit", price: p, qty: lots(), role: "entry", bracket: bracketCfg() }); render(true); } });
+    $("joinAsk").addEventListener("click", () => { const p = S.ask ?? S.last; if (p !== null) { addOrder({ side: -1, type: "limit", price: p, qty: lots(), role: "entry", bracket: bracketCfg() }); render(true); } });
     $("symbol").addEventListener("change", (e) => {
       if (S.pos.qty !== 0) {
         e.target.value = S.sym.symbol;
@@ -685,6 +979,8 @@
       }
       S.sym = S.symbols.find((s) => s.symbol === e.target.value);
       S.pos = { qty: 0, avg: 0, realized: S.bt ? S.pos.realized : 0, fills: [], openTs: 0 };
+      TR.orders = []; ordersDirty = true;
+      $("domSym").textContent = S.sym.symbol;
       const t = clampToRange(S.t);
       $("start").value = toInputNY(t);
       load(t);
@@ -700,6 +996,7 @@
       else if (e.key === "b" || e.key === "B") $("buy").click();
       else if (e.key === "s" || e.key === "S") $("sell").click();
       else if (e.key === "f" || e.key === "F") $("flat").click();
+      else if (e.key === "Escape") { $("orderMenu").hidden = true; }
     });
 
     S.symbols = await api("/api/symbols");
@@ -714,11 +1011,7 @@
       S.symbols = S.symbols.filter((s) => S.bt.symbols.includes(s.symbol));
       if (!S.symbols.length) return status("The data for this session's symbols was deleted.", 0);
       S.pos.realized = S.bt.trades.reduce((a, t) => a + t.pnl, 0);
-      $("btName").textContent = S.bt.name;
-      $("btName").hidden = false;
-      $("balanceRow").hidden = false;
-      $("balanceRowVal").hidden = false;
-      $("homeLink").href = "./#sessions";
+      $("acctName").textContent = S.bt.name;
       document.title = `${S.bt.name} · Tick Replay`;
       setInterval(saveProgress, 10000);
       addEventListener("pagehide", saveProgressOnExit);
@@ -727,6 +1020,7 @@
     const wanted = (q.get("symbol") || (S.bt && S.bt.current_symbol) || "").toUpperCase();
     S.sym = S.symbols.find((s) => s.symbol === wanted) || S.symbols[0];
     $("symbol").value = S.sym.symbol;
+    $("domSym").textContent = S.sym.symbol;
     if (TIMEFRAMES.some(([s]) => s === +q.get("tf"))) S.tf = +q.get("tf");
     setTf(S.tf, false);
     applySettings();
@@ -814,6 +1108,7 @@
     });
 
     draw.mountToolbar($("tools"));
+    setupTradingUI();
 
     chart.subscribeCrosshairMove((p) => {
       if (!p || p.time === undefined) { hovering = false; return; }
@@ -837,8 +1132,6 @@
     $("fullBtn").addEventListener("click", () => {
       if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {});
     });
-    $("qtyUp").addEventListener("click", () => { $("qty").value = Math.min(100, (+$("qty").value || 1) + 1); });
-    $("qtyDown").addEventListener("click", () => { $("qty").value = Math.max(1, (+$("qty").value || 1) - 1); });
 
     // draggable replay bar
     const rb = $("replayBar");
@@ -885,6 +1178,173 @@
       if (dlg.returnValue === "ok") saveCfg();
       else if (before) { cfg = before; applySettings(); renderTypeMenu(); }
     });
+  }
+
+  // ---- trading UI: DOM, order labels, ⊕ at the axis, tabs, nav -------------------
+
+  function setupTradingUI() {
+    // app nav + version
+    const nav = $("nav");
+    try { if (localStorage.getItem("tickreplay.navMin") === "1") nav.classList.add("min"); } catch { /* ignore */ }
+    $("navCollapse").addEventListener("click", () => {
+      nav.classList.toggle("min");
+      try { localStorage.setItem("tickreplay.navMin", nav.classList.contains("min") ? "1" : "0"); } catch { /* ignore */ }
+    });
+    fetch("version.json").then((r) => r.json()).then((v) => { $("ver").textContent = v.version === "dev" ? "dev build" : "v" + v.version; }).catch(() => {});
+    $("settingsBtn2").addEventListener("click", () => $("settingsBtn").click());
+
+    // lots
+    $("qtyUp").addEventListener("click", () => { $("qty").value = Math.min(100, lots() + 1); });
+    $("qtyDown").addEventListener("click", () => { $("qty").value = Math.max(1, lots() - 1); });
+    $("quickQty").addEventListener("click", (e) => { if (e.target.tagName === "BUTTON") $("qty").value = e.target.textContent; });
+    // bracket settings are remembered
+    try {
+      const br = JSON.parse(localStorage.getItem("tickreplay.bracket") || "null");
+      if (br) { $("brOn").checked = br.on; $("brTp").value = br.tp; $("brSl").value = br.sl; }
+    } catch { /* ignore */ }
+    const saveBr = () => { try { localStorage.setItem("tickreplay.bracket", JSON.stringify({ on: $("brOn").checked, tp: $("brTp").value, sl: $("brSl").value })); } catch { /* ignore */ } };
+    ["brOn", "brTp", "brSl"].forEach((id) => $(id).addEventListener("change", saveBr));
+
+    // DOM / Order tabs
+    document.querySelector(".dom-tabs").addEventListener("click", (e) => {
+      const t = e.target.dataset.dtab;
+      if (!t) return;
+      document.querySelectorAll(".dom-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.dtab === t));
+      document.querySelectorAll(".dpane").forEach((p) => { p.hidden = p.dataset.dpane !== t; });
+      if (t === "order" && S.last !== null && !$("ordPrice").value) $("ordPrice").value = S.last.toFixed(2);
+    });
+    $("ordType").addEventListener("click", (e) => {
+      const t = e.target.dataset.otype;
+      if (!t) return;
+      $("ordType").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.otype === t));
+      $("ordHint").textContent = t === "market" ? "Market orders fill at the ask (buy) or bid (sell)."
+        : t === "limit" ? "Buy limits go below the market, sell limits above. They fill when price trades through."
+        : "Buy stops go above the market, sell stops below. They fill at the trade that triggers them (slippage included).";
+      if (S.last !== null) $("ordPrice").value = S.last.toFixed(2);
+    });
+
+    // ladder: click My Bid / My Ask to place, right-click to cancel, wheel to scroll
+    $("ladder").addEventListener("click", (e) => {
+      const cell = e.target.closest(".mb, .ma"), row = e.target.closest(".lrow");
+      if (!cell || !row) return;
+      placeAt(cell.classList.contains("mb") ? 1 : -1, +row.dataset.p);
+    });
+    $("ladder").addEventListener("contextmenu", (e) => {
+      const cell = e.target.closest(".mb, .ma"), row = e.target.closest(".lrow");
+      if (!cell || !row) return;
+      e.preventDefault();
+      const side = cell.classList.contains("mb") ? 1 : -1, p = +row.dataset.p;
+      TR.orders = TR.orders.filter((o) => !(o.side === side && Math.abs(o.price - p) < tick() / 2));
+      ordersDirty = true; render(true);
+    });
+    $("ladder").addEventListener("wheel", (e) => {
+      e.preventDefault();
+      $("domCenter").checked = false;
+      domCenterPx = roundTick((domCenterPx ?? S.last ?? 0) + (e.deltaY < 0 ? 3 : -3) * tick());
+      renderLadder();
+    }, { passive: false });
+
+    // bottom tabs
+    document.querySelector(".btabs-head").addEventListener("click", (e) => {
+      const t = e.target.closest("[data-btab]");
+      if (!t) return;
+      btab = t.dataset.btab;
+      document.querySelectorAll("[data-btab]").forEach((b) => b.classList.toggle("on", b.dataset.btab === btab));
+      $("btabs").classList.remove("min");
+      renderBottom();
+    });
+    $("btabsToggle").addEventListener("click", () => $("btabs").classList.toggle("min"));
+
+    // cancel / position actions anywhere (labels, tables)
+    document.addEventListener("click", (e) => {
+      const c = e.target.closest("[data-cancel]");
+      if (c) { cancelOrder(+c.dataset.cancel); render(true); return; }
+      const a = e.target.closest("[data-pact]");
+      if (!a) return;
+      const act = a.dataset.pact, side = Math.sign(S.pos.qty), q = Math.abs(S.pos.qty);
+      if (!side) return;
+      if (act === "close") closePosition();
+      if (act === "rev") reversePosition();
+      if (act === "tp") addOrder({ side: -side, type: "limit", price: S.pos.avg + side * (+$("brTp").value || 40) * tick(), qty: q, role: "tp", oco: "pos" + TR.seq });
+      if (act === "sl") addOrder({ side: -side, type: "stop", price: S.pos.avg - side * (+$("brSl").value || 20) * tick(), qty: q, role: "sl", oco: "pos" + TR.seq });
+      render(true);
+    });
+
+    // drag order labels to move the order
+    const layer = $("ordersLayer"), wrap = document.querySelector(".chart-wrap");
+    layer.addEventListener("mousedown", (e) => {
+      layerBusy = true;
+      const el = e.target.closest(".ord");
+      if (!el || e.target.closest("[data-cancel],[data-pact]") || el.dataset.key === "pos") return;
+      e.preventDefault();
+      const o = TR.orders.find((x) => x.id === +el.dataset.id);
+      if (!o) return;
+      dragOrd = { key: el.dataset.key, o, price: o.price };
+      el.classList.add("drag");
+    });
+    addEventListener("mousemove", (e) => {
+      if (!dragOrd) return;
+      const y = e.clientY - wrap.getBoundingClientRect().top;
+      const p = main.coordinateToPrice(y);
+      if (p !== null) dragOrd.price = roundTick(p);
+    });
+    addEventListener("mouseup", () => {
+      layerBusy = false;
+      if (!dragOrd) return;
+      const { o, price } = dragOrd;
+      dragOrd = null;
+      const q = refPx(o.side);
+      // an entry dragged across the market switches between limit and stop, like on a real DOM
+      if (o.role === "entry" && S.last !== null) o.type = o.side > 0 ? (price <= q ? "limit" : "stop") : (price >= q ? "limit" : "stop");
+      if (o.role === "tp" && S.pos.qty && (price - S.pos.avg) * Math.sign(S.pos.qty) <= 0) o.type = "stop";
+      o.price = price;
+      ordersDirty = true;
+      render(true);
+    });
+
+    // ⊕ next to the price axis: place an order at the hovered price
+    const plus = $("axisPlus"), menu = $("orderMenu");
+    let plusPrice = null;
+    wrap.addEventListener("mousemove", (e) => {
+      if (!main || !menu.hidden || dragOrd) return;
+      const r = wrap.getBoundingClientRect(), y = e.clientY - r.top, x = e.clientX - r.left;
+      const w = chart.timeScale().width();
+      const p = y < $("chart").clientHeight - 28 ? main.coordinateToPrice(y) : null;
+      if (p === null || x > w + 2 || e.target.closest(".ord, .replay-bar, .axis-plus")) {
+        if (!e.target.closest(".axis-plus")) plus.hidden = true;
+        return;
+      }
+      plusPrice = roundTick(p);
+      plus.hidden = false;
+      $("axisPlusPx").textContent = plusPrice.toFixed(2);
+      plus.style.top = main.priceToCoordinate(plusPrice) + "px";
+      plus.style.left = w - plus.offsetWidth - 4 + "px";
+    });
+    wrap.addEventListener("mouseleave", () => { plus.hidden = true; });
+    plus.addEventListener("mousedown", (e) => e.stopPropagation());
+    plus.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (plusPrice === null || S.last === null) return;
+      const p = plusPrice, q = lots(), px = p.toFixed(2);
+      const buyType = p <= refPx(1) ? "Limit" : "Stop", sellType = p >= refPx(-1) ? "Limit" : "Stop";
+      menu.innerHTML = `<button data-om="1"><span class="b">Buy ${buyType} ${q}</span><span class="px">@ ${px}</span></button>
+        <button data-om="-1"><span class="s">Sell ${sellType} ${q}</span><span class="px">@ ${px}</span></button>
+        ${S.pos.qty ? `<button data-om="exit"><span>${(p - S.pos.avg) * Math.sign(S.pos.qty) > 0 ? "Take profit" : "Stop loss"} for position</span><span class="px">@ ${px}</span></button>` : ""}`;
+      menu.hidden = false;
+      menu.style.top = plus.offsetTop + 14 + "px";
+      menu.style.left = Math.max(8, plus.offsetLeft - 150) + "px";
+      menu.onclick = (ev) => {
+        const b = ev.target.closest("[data-om]");
+        if (!b) return;
+        if (b.dataset.om === "exit") {
+          const side = Math.sign(S.pos.qty), profit = (p - S.pos.avg) * side > 0;
+          addOrder({ side: -side, type: profit ? "limit" : "stop", price: p, qty: Math.abs(S.pos.qty), role: profit ? "tp" : "sl" });
+        } else placeAt(+b.dataset.om, p);
+        menu.hidden = true;
+        render(true);
+      };
+    });
+    document.addEventListener("mousedown", (e) => { if (!menu.hidden && !menu.contains(e.target)) menu.hidden = true; });
   }
 
   // tells the desktop program a window is still open

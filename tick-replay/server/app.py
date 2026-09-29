@@ -37,6 +37,16 @@ backtests = BacktestStore(Path(os.environ.get("TICK_BACKTESTS", DATA_DIR.parent 
 app = FastAPI(title="Tick Replay")
 app.add_middleware(GZipMiddleware, minimum_size=2048)
 
+@app.middleware("http")
+async def no_stale_pages(request: Request, call_next):
+    # The app window keeps its browser cache between program versions; make it revalidate
+    # the page files every time so an update is never hidden behind old JavaScript.
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 # Last time an open page checked in; the desktop launcher quits when pages stop pinging.
 last_ping = {"t": 0.0}
 
@@ -240,6 +250,17 @@ def delete_symbol(symbol: str):
     shutil.rmtree(store._sym_dir(symbol))
     store.invalidate()
     return {"deleted": symbol}
+
+
+@app.get("/version.json")
+def version():
+    """Build stamp written by the Windows build; "dev" when running from source."""
+    import json
+
+    try:
+        return json.loads((WEB_DIR / "version.json").read_text())
+    except (OSError, ValueError):
+        return {"version": "dev"}
 
 
 app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
