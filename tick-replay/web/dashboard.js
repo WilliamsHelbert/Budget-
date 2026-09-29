@@ -863,5 +863,8 @@
     }
     updateQuick();
     route();
+    fetch("version.json").then((r) => r.json()).then((v) => { $("ver").textContent = v.version === "dev" ? "dev build" : "v" + v.version; }).catch(() => {});
+    // Trading opens the most recently played session, or a free replay
+    if (backtests.length) $("navTrading").href = `chart.html?bt=${backtests[0].id}`;
   })();
 })();

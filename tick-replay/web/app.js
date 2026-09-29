@@ -522,6 +522,30 @@
     }
   }
 
+  // In a backtest session the open position and working orders survive closing the window.
+  const liveKey = () => (S.bt ? `tickreplay.live.${S.bt.id}` : null);
+  let liveRestored = false;   // never overwrite the saved state before it has been read back
+  function saveLive() {
+    const k = liveKey();
+    if (!k || !S.sym || !liveRestored) return;
+    const live = { symbol: S.sym.symbol, pos: { qty: S.pos.qty, avg: S.pos.avg, openTs: S.pos.openTs }, orders: TR.orders, seq: TR.seq };
+    try { localStorage.setItem(k, JSON.stringify(live)); } catch { /* storage blocked */ }
+  }
+  function restoreLive() {
+    const k = liveKey();
+    if (!k) return;
+    liveRestored = true;
+    try {
+      const live = JSON.parse(localStorage.getItem(k) || "null");
+      if (!live || live.symbol !== S.sym.symbol) return;
+      Object.assign(S.pos, live.pos);
+      TR.orders = live.orders || [];
+      TR.seq = Math.max(TR.seq, live.seq || 1);
+      ordersDirty = true;
+      if (S.pos.qty || TR.orders.length) status(`Restored ${S.pos.qty ? "your open position" : ""}${S.pos.qty && TR.orders.length ? " and " : ""}${TR.orders.length ? TR.orders.length + " working order" + (TR.orders.length === 1 ? "" : "s") : ""}`, 4000);
+    } catch { /* ignore */ }
+  }
+
   function closePosition() { if (S.pos.qty) market(-S.pos.qty, null); }
   function reversePosition() { if (S.pos.qty) market(-2 * S.pos.qty, null); }
   function flattenAll() { TR.orders = []; closePosition(); ordersDirty = true; render(true); }
@@ -629,6 +653,7 @@
     renderLadder();
     // labels carry live P&L, so refresh them while anything is on the chart (not mid-click)
     if ((ordersDirty || force || TR.orders.length || S.pos.qty || ordLabels.size) && !layerBusy) buildOrderLabels();
+    if (ordersDirty) saveLive();
     if (ordersDirty || force || now - lastBottom > 500) { renderBottom(); ordersDirty = false; }
     $("askLbl").textContent = S.ask !== null ? S.ask.toFixed(2) : S.last !== null ? S.last.toFixed(2) : "";
     $("bidLbl").textContent = S.bid !== null ? S.bid.toFixed(2) : S.last !== null ? S.last.toFixed(2) : "";
@@ -1014,7 +1039,7 @@
       $("acctName").textContent = S.bt.name;
       document.title = `${S.bt.name} · Tick Replay`;
       setInterval(saveProgress, 10000);
-      addEventListener("pagehide", saveProgressOnExit);
+      addEventListener("pagehide", () => { saveProgressOnExit(); saveLive(); });
     }
     $("symbol").innerHTML = S.symbols.map((s) => `<option>${s.symbol}</option>`).join("");
     const wanted = (q.get("symbol") || (S.bt && S.bt.current_symbol) || "").toUpperCase();
@@ -1033,6 +1058,8 @@
     start = clampToRange(start);
     $("start").value = toInputNY(start);
     await load(start);
+    restoreLive();
+    refreshMarkers();
   }
 
   // ---- drawings ---------------------------------------------------------------
@@ -1345,6 +1372,20 @@
       };
     });
     document.addEventListener("mousedown", (e) => { if (!menu.hidden && !menu.contains(e.target)) menu.hidden = true; });
+
+    // right-click on empty chart space: same order menu at that price (drawings keep their own menu)
+    wrap.addEventListener("contextmenu", (e) => {
+      if (e.defaultPrevented || !main || S.last === null) return;
+      const r = wrap.getBoundingClientRect(), y = e.clientY - r.top;
+      const p = main.coordinateToPrice(y);
+      if (p === null || e.clientX - r.left > chart.timeScale().width()) return;
+      e.preventDefault();
+      plusPrice = roundTick(p);
+      plus.style.top = main.priceToCoordinate(plusPrice) + "px";
+      plus.click();
+      menu.style.left = Math.min(e.clientX - r.left, r.width - 240) + "px";
+      menu.style.top = y + 6 + "px";
+    });
   }
 
   // tells the desktop program a window is still open
