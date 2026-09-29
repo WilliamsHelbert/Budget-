@@ -453,7 +453,7 @@
 
     S.symbols = await api("/api/symbols");
     if (!S.symbols.length) {
-      status("No tick data found. Run tools/make_sample.py or tools/import_ticks.py first.", 0);
+      status("No tick data yet. Go to the start page (Home) to import your tick files.", 0);
       return;
     }
     // URL options from the start page: ?symbol=NQ&date=2024-03-05&open=1&tf=60&t=<ms>
@@ -473,6 +473,11 @@
     $("start").value = toInputNY(start);
     await load(start);
   }
+
+  // tells the desktop program a window is still open
+  const ping = () => fetch("/api/ping").catch(() => {});
+  ping();
+  setInterval(ping, 20000);
 
   init().catch((e) => status("Startup failed: " + e.message, 0));
 })();

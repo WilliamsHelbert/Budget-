@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tick Replay</title>
+  <link rel="icon" href="favicon.png">
   <link rel="stylesheet" href="landing.css">
 </head>
 <body>
@@ -62,10 +63,39 @@
   <section class="data">
     <h2>Available data</h2>
     <table>
-      <thead><tr><th>Symbol</th><th>From</th><th>To</th><th>Days</th></tr></thead>
-      <tbody id="dataRows"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
+      <thead><tr><th>Symbol</th><th>From</th><th>To</th><th>Days</th><th></th></tr></thead>
+      <tbody id="dataRows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
     </table>
-    <p class="muted small">Add more with <code>python tools/import_ticks.py --symbol NQ yourfile.csv --tz America/New_York</code></p>
+  </section>
+
+  <section class="data" id="import">
+    <h2>Import tick data</h2>
+    <p class="muted small">
+      NinjaTrader tick exports (.txt), Databento, Sierra Chart or any CSV with time, price and volume columns.
+      Importing the same days again replaces them.
+    </p>
+    <form id="importForm" class="launch import">
+      <label>
+        <span>Symbol</span>
+        <input id="impSym" list="symList" value="NQ" required maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_\-]*">
+        <datalist id="symList"><option>NQ</option><option>ES</option><option>MNQ</option><option>MES</option></datalist>
+      </label>
+      <label>
+        <span>Time zone in the file</span>
+        <select id="impTz">
+          <option value="Europe/Copenhagen">Denmark (my PC's time)</option>
+          <option value="America/New_York">New York</option>
+          <option value="America/Chicago">Chicago (CME)</option>
+          <option value="UTC">UTC</option>
+        </select>
+      </label>
+      <label class="file">
+        <span>Files</span>
+        <input id="impFiles" type="file" multiple required accept=".csv,.txt">
+      </label>
+      <button type="submit" class="cta" id="impBtn">Import</button>
+    </form>
+    <p class="hint" id="impMsg">NinjaTrader saves exports in your PC's time zone. Databento files already include the time zone, so this setting doesn't matter for them.</p>
   </section>
 
   <footer class="foot">

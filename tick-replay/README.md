@@ -4,24 +4,37 @@ Replays historical NQ / ES futures ticks at millisecond resolution in a TradingV
 Each tick has a millisecond timestamp, and the price stays on screen until the next tick's timestamp is reached.
 Candles form tick by tick, just like a live market, and you can place simulated trades while it plays.
 
-## Quick start (Windows)
+## Install the program (Windows)
 
-Download or clone the repo, open the `tick-replay` folder and double-click **`start.bat`**.
-It installs the Python packages, generates sample data the first time, starts the server and opens
-http://localhost:8000. Keep the black window open while you use the site.
+1. Go to the repo's **Releases** page and open **Tick Replay (latest build)**
+   (or: Actions → *Tick Replay – Windows program* → latest run → *TickReplay-windows*).
+2. Download **TickReplay-windows.zip** and unzip it somewhere, e.g. `Documents\TickReplay`.
+3. Double-click **TickReplay.exe**. The first time, Windows SmartScreen may say "Windows protected your PC".
+   Click **More info → Run anyway** (the program isn't code-signed).
 
-## Quick start (manual)
+The program opens in its own window (it uses Microsoft Edge, which is built into Windows, in app mode).
+Close the window to quit. Your data is stored in the `data` folder next to `TickReplay.exe`.
+Demo data (`NQ-DEMO`, `ES-DEMO`) is created on first start. Import your own ticks from the start page.
+Once you have real data, you can delete the demo data there too.
+
+A new build is made automatically every time the `tick-replay` folder changes on GitHub.
+
+## Run from source (developers)
 
 ```bash
 cd tick-replay
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-
-python tools/make_sample.py          # fake NQ + ES ticks so you can try it right away
-python -m uvicorn server.app:app     # then open http://localhost:8000
+python desktop.py                    # same as the program: own window, demo data, quits when closed
+# or the plain web server:
+python tools/make_sample.py && python -m uvicorn server.app:app   # http://localhost:8000
 ```
 
+Build the .exe yourself on Windows: `pip install pyinstaller` and then `pyinstaller --noconfirm TickReplay.spec`.
+
 ## Importing your real tick data
+
+In the program, use **Import tick data** on the start page. Choose the symbol and the time zone the file was
+saved in, then pick the files. From the command line:
 
 ```bash
 python tools/import_ticks.py --symbol NQ path/to/NQ_ticks.csv --tz America/New_York

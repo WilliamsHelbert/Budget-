@@ -58,19 +58,23 @@ def gen_symbol(sym: str, sess: list, rng: np.random.Generator, rth_rate: float, 
     return np.concatenate(ts_all), np.concatenate(px_all), np.concatenate(sz_all)
 
 
+def generate(out: Path, days: int = 5, seed: int = 7, suffix: str = "-DEMO") -> None:
+    """Write fake NQ/ES data as e.g. NQ-DEMO / ES-DEMO, so it never mixes with real NQ / ES data."""
+    rng = np.random.default_rng(seed)
+    sess = sessions(days)
+    for root, rth, eth in (("NQ", 6.0, 0.8), ("ES", 4.0, 0.5)):
+        ts, px, sz = gen_symbol(root, sess, rng, rth, eth)
+        n = write_days(out, root + suffix, ts, px, sz)
+        print(f"{root + suffix}: {len(ts):,} ticks in {n} day files")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--days", type=int, default=5)
     ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent.parent / "data" / "ticks")
     ap.add_argument("--seed", type=int, default=7)
     args = ap.parse_args()
-
-    rng = np.random.default_rng(args.seed)
-    sess = sessions(args.days)
-    for sym, rth, eth in (("NQ", 6.0, 0.8), ("ES", 4.0, 0.5)):
-        ts, px, sz = gen_symbol(sym, sess, rng, rth, eth)
-        n = write_days(args.out, sym, ts, px, sz)
-        print(f"{sym}: {len(ts):,} ticks in {n} day files")
+    generate(args.out, args.days, args.seed)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ their file order is the order they traded in.
 from __future__ import annotations
 
 import datetime as dt
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -17,6 +18,7 @@ import numpy as np
 import pyarrow.parquet as pq
 
 DAY_MS = 86_400_000
+SYMBOL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}")
 
 # Contract specs used by the UI for P&L. Unknown symbols fall back to DEFAULT_SPEC.
 SPECS = {
@@ -26,6 +28,15 @@ SPECS = {
     "MES": {"tick_size": 0.25, "point_value": 5.0},
 }
 DEFAULT_SPEC = {"tick_size": 0.01, "point_value": 1.0}
+
+
+def spec_for(symbol: str) -> dict:
+    """Contract spec by root symbol, so "NQ-DEMO" or "NQH4" use the NQ spec."""
+    s = symbol.upper()
+    for root in sorted(SPECS, key=len, reverse=True):  # MNQ before NQ
+        if s.startswith(root):
+            return SPECS[root]
+    return DEFAULT_SPEC
 
 # How far back /candles may walk looking for history (covers long weekends/holidays).
 MAX_LOOKBACK_DAYS = 120
@@ -104,6 +115,11 @@ class Store:
         self._day_ticks = lru_cache(maxsize=6)(self._load_day)
         self._day_bars = lru_cache(maxsize=256)(self._bars_1s_for_day)
 
+    def invalidate(self) -> None:
+        """Forget cached day data after files on disk changed."""
+        self._day_ticks.cache_clear()
+        self._day_bars.cache_clear()
+
     # ---- catalog -------------------------------------------------------------
 
     def symbols(self) -> list[dict]:
@@ -121,7 +137,7 @@ class Store:
                 "days": [x.isoformat() for x in days],
                 "first_ts": int(first.ts[0]) if len(first) else None,
                 "last_ts": int(last.ts[-1]) if len(last) else None,
-                **SPECS.get(d.name.upper(), DEFAULT_SPEC),
+                **spec_for(d.name),
             })
         return out
 
@@ -138,8 +154,8 @@ class Store:
         return sorted(out)
 
     def _sym_dir(self, symbol: str) -> Path:
-        if not symbol or "/" in symbol or "\\" in symbol or symbol.startswith("."):
-            raise ValueError(f"bad symbol {symbol!r}")
+        if not SYMBOL_RE.fullmatch(symbol or ""):
+            raise ValueError(f"bad symbol {symbol!r} (use letters, digits, - or _)")
         return self.data_dir / symbol
 
     # ---- raw ticks -----------------------------------------------------------

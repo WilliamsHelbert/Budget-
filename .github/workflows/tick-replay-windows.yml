@@ -1,0 +1,74 @@
+name: Tick Replay – Windows program
+
+on:
+  push:
+    paths:
+      - "tick-replay/**"
+      - ".github/workflows/tick-replay-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write   # to publish the download on the Releases page
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: tick-replay
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: python -m pip install -r requirements.txt pyinstaller
+
+      - name: Test
+        run: python -m pytest -q tests
+
+      - name: Build TickReplay.exe
+        run: pyinstaller --noconfirm TickReplay.spec
+
+      - name: Smoke test the program
+        shell: pwsh
+        run: |
+          $env:TICK_DATA_DIR = "$env:RUNNER_TEMP\smoke-data"
+          $p = Start-Process dist\TickReplay\TickReplay.exe -ArgumentList "--no-window" -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            Start-Sleep -Seconds 2
+            try {
+              $s = Invoke-RestMethod http://127.0.0.1:47291/api/symbols
+              if ($s.Count -ge 2) { $ok = $true; break }
+            } catch {}
+          }
+          $page = Invoke-WebRequest http://127.0.0.1:47291/chart.html -UseBasicParsing
+          Stop-Process -Id $p.Id -Force
+          if (-not $ok -or $page.StatusCode -ne 200) {
+            Get-Content dist\TickReplay\data\tick-replay.log -ErrorAction SilentlyContinue
+            throw "program did not start correctly"
+          }
+          Remove-Item -Recurse -Force dist\TickReplay\data -ErrorAction SilentlyContinue
+
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path dist\TickReplay -DestinationPath TickReplay-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TickReplay-windows
+          path: tick-replay/TickReplay-windows.zip
+
+      - name: Publish download (Releases → tick-replay-latest)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete tick-replay-latest --yes --cleanup-tag || true
+          gh release create tick-replay-latest TickReplay-windows.zip \
+            --prerelease --target "$GITHUB_SHA" \
+            --title "Tick Replay (latest build)" \
+            --notes "Download TickReplay-windows.zip, unzip it, and double-click TickReplay.exe. Built from ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}."
