@@ -107,33 +107,148 @@
     return { gen: (S.buf ? S.buf.gen : 0) + 1, ts: [], price: [], size: [], side: [], bid: [], ask: [], i: 0, covered: t, nextTs: null, eof: false, pending: null };
   }
 
+  // ---- settings -------------------------------------------------------------
+
+  const DEFAULTS = {
+    upColor: "#26a69a", downColor: "#ef5350", wickUp: "#26a69a", wickDown: "#ef5350",
+    border: false, borderUp: "#26a69a", borderDown: "#ef5350", volume: true,
+    bg: "#0b0e14", grid: "both", gridColor: "#1a1f2b", crosshair: "normal", crossColor: "#758696",
+    watermark: "hidden", text: "#b2b5be", fontSize: "12", scaleLine: "#242b39", rightOffset: 8,
+    sidePanel: true, markers: true, drawColor: "#2962ff", rr: 2,
+    chartType: "candles", indicators: [],
+  };
+  const SETTINGS_KEY = "tickreplay.chartSettings";
+  let cfg = { ...DEFAULTS };
+  try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") }; } catch { /* defaults */ }
+  const saveCfg = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(cfg)); } catch { /* ignore */ } };
+
+  const CHART_TYPES = {
+    candles: { label: "Candles", icon: '<path d="M7 4v16M17 4v16"/><rect x="5" y="7" width="4" height="9" fill="currentColor"/><rect x="15" y="9" width="4" height="6"/>' },
+    hollow: { label: "Hollow candles", icon: '<path d="M7 4v16M17 4v16"/><rect x="5" y="7" width="4" height="9"/><rect x="15" y="9" width="4" height="6"/>' },
+    bars: { label: "Bars", icon: '<path d="M7 4v16M4 8h3M7 16h3M17 4v16M14 7h3M17 14h3"/>' },
+    line: { label: "Line", icon: '<path d="M3 17l5-6 4 3 5-8 4 5"/>' },
+    area: { label: "Area", icon: '<path d="M3 17l5-6 4 3 5-8 4 5v7H3z" fill="currentColor" fill-opacity=".25"/>' },
+  };
+  const INDICATORS = {
+    ema9: { label: "EMA 9", color: "#f5a623", len: 9 },
+    ema21: { label: "EMA 21", color: "#4f7cff", len: 21 },
+    ema50: { label: "EMA 50", color: "#e040fb", len: 50 },
+    vwap: { label: "VWAP (session)", color: "#00bcd4" },
+  };
+
   // ---- chart ----------------------------------------------------------------
 
   const chart = LightweightCharts.createChart($("chart"), {
     autoSize: true,
     localization: { locale: "en-US" },
-    layout: { background: { color: "#131722" }, textColor: "#d1d4dc" },
-    grid: { vertLines: { color: "#1e222d" }, horzLines: { color: "#1e222d" } },
-    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    rightPriceScale: { borderColor: "#2a2e39" },
-    timeScale: { borderColor: "#2a2e39", timeVisible: true, secondsVisible: true, rightOffset: 8 },
+    timeScale: { timeVisible: true, secondsVisible: true },
   });
-  const candles = chart.addCandlestickSeries({
-    upColor: "#26a69a", downColor: "#ef5350", borderVisible: false,
-    wickUpColor: "#26a69a", wickDownColor: "#ef5350",
-  });
+  let main = null;                  // price series (type depends on cfg.chartType)
   const volume = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "" });
   volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
   let avgLine = null;
+  const indSeries = {};             // id -> line series
+  const indVals = {};               // id -> values per bar index (EMA) / {pv, v} (VWAP)
+
+  // every displayed bar, for indicators, drawings and switching chart type
+  const bars = [];                  // {time, open, high, low, close, volume}
+  const barTimes = [];
 
   const bucketOf = (ms) => Math.floor(ms / 1000 / S.tf) * S.tf;
   const dispTime = (bucket) => bucket + S.dispOffset;
-  const volBar = (b) => ({ time: dispTime(b.bucket), value: b.volume, color: b.close >= b.open ? "rgba(38,166,154,.45)" : "rgba(239,83,80,.45)" });
+  const volColor = (b) => (b.close >= b.open ? cfg.upColor : cfg.downColor) + "73";
+  const mainPoint = (b) => (cfg.chartType === "line" || cfg.chartType === "area")
+    ? { time: b.time, value: b.close }
+    : { time: b.time, open: b.open, high: b.high, low: b.low, close: b.close };
+
+  function makeMainSeries() {
+    if (main) chart.removeSeries(main);
+    avgLine = null;
+    const t = cfg.chartType;
+    if (t === "bars") main = chart.addBarSeries({ upColor: cfg.upColor, downColor: cfg.downColor, thinBars: false });
+    else if (t === "line") main = chart.addLineSeries({ color: cfg.drawColor, lineWidth: 2 });
+    else if (t === "area") main = chart.addAreaSeries({ lineColor: cfg.drawColor, topColor: cfg.drawColor + "55", bottomColor: cfg.drawColor + "05", lineWidth: 2 });
+    else {
+      main = chart.addCandlestickSeries({
+        upColor: t === "hollow" ? "rgba(0,0,0,0)" : cfg.upColor, downColor: cfg.downColor,
+        wickUpColor: cfg.wickUp, wickDownColor: cfg.wickDown,
+        borderVisible: cfg.border || t === "hollow", borderUpColor: t === "hollow" ? cfg.upColor : cfg.borderUp, borderDownColor: cfg.borderDown,
+      });
+    }
+    main.setData(bars.map(mainPoint));
+    refreshMarkers();
+  }
+
+  function applySettings() {
+    const g = cfg.grid;
+    chart.applyOptions({
+      layout: { background: { color: cfg.bg }, textColor: cfg.text, fontSize: +cfg.fontSize },
+      grid: { vertLines: { visible: g === "both" || g === "vert", color: cfg.gridColor }, horzLines: { visible: g === "both" || g === "horz", color: cfg.gridColor } },
+      crosshair: {
+        mode: cfg.crosshair === "magnet" ? LightweightCharts.CrosshairMode.Magnet : LightweightCharts.CrosshairMode.Normal,
+        vertLine: { color: cfg.crossColor, labelBackgroundColor: "#2a2e39" }, horzLine: { color: cfg.crossColor, labelBackgroundColor: "#2a2e39" },
+      },
+      rightPriceScale: { borderColor: cfg.scaleLine },
+      timeScale: { borderColor: cfg.scaleLine, rightOffset: +cfg.rightOffset },
+      watermark: {
+        visible: cfg.watermark === "symbol", color: "rgba(255,255,255,.06)", fontSize: 64,
+        text: S.sym ? `${S.sym.symbol} · ${tfLabel(S.tf)}` : "",
+      },
+    });
+    volume.applyOptions({ visible: cfg.volume });
+    volume.setData(bars.map((b) => ({ time: b.time, value: b.volume, color: volColor(b) })));
+    $("side").hidden = !cfg.sidePanel;
+    $("legend").style.color = cfg.text;
+    makeMainSeries();
+    syncIndicators();
+  }
+
+  // ---- indicators (recomputed on load, updated incrementally per tick) --------
+
+  function syncIndicators() {
+    for (const id of Object.keys(indSeries)) {
+      if (!cfg.indicators.includes(id)) { chart.removeSeries(indSeries[id]); delete indSeries[id]; delete indVals[id]; }
+    }
+    for (const id of cfg.indicators) {
+      if (!INDICATORS[id]) continue;
+      if (!indSeries[id]) {
+        indSeries[id] = chart.addLineSeries({ color: INDICATORS[id].color, lineWidth: id === "vwap" ? 2 : 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      }
+      recomputeIndicator(id);
+    }
+  }
+
+  /** VWAP resets at the 18:00 New York Globex open. */
+  const vwapSession = (dispSec) => Math.floor((dispSec - 18 * 3600) / 86400);
+
+  function indicatorAt(id, i) {
+    const b = bars[i], def = INDICATORS[id];
+    if (id === "vwap") {
+      const tp = (b.high + b.low + b.close) / 3, prev = i > 0 ? indVals[id][i - 1] : null;
+      const same = prev && vwapSession(bars[i - 1].time) === vwapSession(b.time);
+      const pv = (same ? prev.pv : 0) + tp * b.volume, v = (same ? prev.v : 0) + b.volume;
+      indVals[id][i] = { pv, v };
+      return v ? pv / v : b.close;
+    }
+    const k = 2 / (def.len + 1), prev = i > 0 ? indVals[id][i - 1] : b.close;
+    indVals[id][i] = i > 0 ? b.close * k + prev * (1 - k) : b.close;
+    return indVals[id][i];
+  }
+
+  function recomputeIndicator(id) {
+    indVals[id] = [];
+    indSeries[id].setData(bars.map((b, i) => ({ time: b.time, value: indicatorAt(id, i) })));
+  }
 
   function pushBar(b) {
-    const d = { time: dispTime(b.bucket), open: b.open, high: b.high, low: b.low, close: b.close };
-    candles.update(d);
-    volume.update(volBar(b));
+    const d = { time: dispTime(b.bucket), open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume };
+    const n = bars.length;
+    if (n && bars[n - 1].time === d.time) bars[n - 1] = d;
+    else { bars.push(d); barTimes.push(d.time); }
+    main.update(mainPoint(d));
+    volume.update({ time: d.time, value: d.volume, color: volColor(d) });
+    const i = bars.length - 1;
+    for (const id of Object.keys(indSeries)) indSeries[id].update({ time: d.time, value: indicatorAt(id, i) });
   }
 
   function applyTick(buf, k) {
@@ -246,8 +361,17 @@
     const buf = S.buf;
     const hist = await api(`/api/candles?symbol=${encodeURIComponent(S.sym.symbol)}&tf=${S.tf}&end=${t}&count=${HISTORY_CANDLES}`);
     if (buf !== S.buf) return;
-    candles.setData(hist.map((c) => ({ time: dispTime(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
-    volume.setData(hist.map((c) => volBar({ bucket: c.time, ...c })));
+    bars.length = 0;
+    barTimes.length = 0;
+    for (const c of hist) {
+      bars.push({ time: dispTime(c.time), open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume });
+      barTimes.push(dispTime(c.time));
+    }
+    main.setData(bars.map(mainPoint));
+    volume.setData(bars.map((b) => ({ time: b.time, value: b.volume, color: volColor(b) })));
+    for (const id of Object.keys(indSeries)) recomputeIndicator(id);
+    draw.load(`tickreplay.drawings.${S.bt ? S.bt.id : "free"}.${S.sym.symbol}`);
+    chart.applyOptions({ watermark: { text: `${S.sym.symbol} · ${tfLabel(S.tf)}` } });
     const lastC = hist[hist.length - 1];
     S.bar = lastC ? { bucket: lastC.time, open: lastC.open, high: lastC.high, low: lastC.low, close: lastC.close, volume: lastC.volume } : null;
     S.firstBucket = hist.length ? hist[0].time : null;
@@ -323,8 +447,9 @@
   }
 
   function refreshMarkers() {
+    if (!main) return;
     const cur = S.bar ? S.bar.bucket : Infinity;
-    const markers = S.pos.fills
+    const markers = !cfg.markers ? [] : S.pos.fills
       .map((f) => ({ f, b: bucketOf(f.t) }))
       .filter(({ b }) => b <= cur && (S.firstBucket === null || b >= S.firstBucket))
       .map(({ f, b }) => ({
@@ -335,11 +460,11 @@
         text: `${f.qty > 0 ? "B" : "S"} ${Math.abs(f.qty)} @ ${f.px}`,
       }))
       .sort((a, b) => a.time - b.time);
-    candles.setMarkers(markers);
+    main.setMarkers(markers);
 
-    if (avgLine) { candles.removePriceLine(avgLine); avgLine = null; }
+    if (avgLine) { main.removePriceLine(avgLine); avgLine = null; }
     if (S.pos.qty !== 0) {
-      avgLine = candles.createPriceLine({
+      avgLine = main.createPriceLine({
         price: S.pos.avg, color: S.pos.qty > 0 ? "#26a69a" : "#ef5350",
         lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true,
         title: `${S.pos.qty > 0 ? "LONG" : "SHORT"} ${Math.abs(S.pos.qty)}`,
@@ -349,20 +474,45 @@
 
   // ---- render ---------------------------------------------------------------
 
-  let lastPanelRender = 0;
+  let lastPanelRender = 0, playShown = null, hovering = false;
+
+  const tfLabel = (tf) => (TIMEFRAMES.find(([s]) => s === tf) || [0, tf + "s"])[1];
+
+  function renderLegend(i) {
+    const b = bars[i];
+    if (!b || !S.sym) { $("legend").innerHTML = ""; return; }
+    const up = b.close >= b.open, c = up ? cfg.upColor : cfg.downColor;
+    const chg = i > 0 ? b.close - bars[i - 1].close : 0;
+    const v = (x) => `<b style="color:${c}">${x.toFixed(2)}</b>`;
+    let html = `<div class="l1"><span class="name">${S.sym.symbol} · ${tfLabel(S.tf)}</span>
+      <span>O ${v(b.open)}</span><span>H ${v(b.high)}</span><span>L ${v(b.low)}</span><span>C ${v(b.close)}</span>
+      <span style="color:${c}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}</span><span>Vol <b>${b.volume.toLocaleString("en-US")}</b></span></div>`;
+    const ind = Object.keys(indSeries).map((id) => {
+      const val = id === "vwap" ? (indVals[id][i] && indVals[id][i].v ? indVals[id][i].pv / indVals[id][i].v : null) : indVals[id][i];
+      return val == null ? "" : `<span style="color:${INDICATORS[id].color}">${INDICATORS[id].label} <b>${val.toFixed(2)}</b></span>`;
+    }).join("");
+    if (ind) html += `<div class="ind">${ind}</div>`;
+    $("legend").innerHTML = html;
+  }
 
   function render(force = false) {
     if (S.dirty && S.bar) {
       pushBar(S.bar);
       S.dirty = false;
     }
+    draw.redraw();
     $("clock").textContent = S.sym ? fmtNY(S.t) : "--";
     $("countdown").textContent = S.sym ? openCountdown(S.t) : "";
-    $("play").textContent = S.playing ? "❚❚" : "▶";
+    if (playShown !== S.playing) {
+      playShown = S.playing;
+      $("play").innerHTML = S.playing ? '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>'
+        : '<svg viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg>';
+    }
 
     const now = performance.now();
     if (!force && now - lastPanelRender < 100) return; // DOM panels at ~10 fps
     lastPanelRender = now;
+    if (!hovering) renderLegend(bars.length - 1);
 
     const pos = S.pos, pv = S.sym ? S.sym.point_value : 1;
     const open = pos.qty && S.last !== null ? (S.last - pos.avg) * pos.qty * pv : 0;
@@ -385,7 +535,17 @@
     $("tape").innerHTML = rows.map(([ts, px, sz, dir, aggr]) =>
       `<tr class="${dir > 0 ? "up" : dir < 0 ? "down" : ""}${aggr && sz >= BIG_PRINT ? " big" : ""}"><td>${fmtNY(ts, false)}</td><td>${px.toFixed(2)}</td><td>${sz}</td></tr>`
     ).join("");
-    $("quote").textContent = S.bid !== null ? `${S.bid.toFixed(2)} × ${S.ask.toFixed(2)}` : "";
+    $("quote").textContent = S.bid !== null ? `${S.bid.toFixed(2)} × ${S.ask.toFixed(2)}` : "--";
+    $("askLbl").textContent = S.ask !== null ? S.ask.toFixed(2) : S.last !== null ? S.last.toFixed(2) : "";
+    $("bidLbl").textContent = S.bid !== null ? S.bid.toFixed(2) : S.last !== null ? S.last.toFixed(2) : "";
+    $("bbPos").innerHTML = pos.qty
+      ? `<span class="${pos.qty > 0 ? "pos" : "neg"}">${pos.qty > 0 ? "LONG" : "SHORT"} ${Math.abs(pos.qty)} @ ${pos.avg.toFixed(2)}</span> · <span class="${open > 0 ? "pos" : open < 0 ? "neg" : ""}">${money(open)}</span>`
+      : "";
+    if (S.bt) {
+      const bal = S.bt.balance + pos.realized + open;
+      $("bbBalance").hidden = false;
+      $("bbBalance").textContent = money(bal);
+    }
     $("fillNote").textContent = S.bid !== null
       ? "Market orders fill at the ask (buy) / bid (sell)."
       : "No bid/ask in this data: market orders fill at the last trade.";
@@ -461,6 +621,7 @@
   function setTf(tf, reload = true) {
     S.tf = tf;
     for (const b of $("tfs").children) b.classList.toggle("active", +b.dataset.tf === tf);
+    chart.applyOptions({ timeScale: { secondsVisible: tf < 60 } });
     if (S.sym && reload) return load(S.t);
   }
 
@@ -528,7 +689,10 @@
       load(t);
     });
 
+    setupChrome();
+
     document.addEventListener("keydown", (e) => {
+      if (draw.onKey(e)) { e.preventDefault(); return; }
       if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
       if (e.code === "Space") { e.preventDefault(); togglePlay(); }
       else if (e.code === "ArrowRight") { e.preventDefault(); e.shiftKey ? stepBar() : stepTick(); }
@@ -564,6 +728,7 @@
     $("symbol").value = S.sym.symbol;
     if (TIMEFRAMES.some(([s]) => s === +q.get("tf"))) S.tf = +q.get("tf");
     setTf(S.tf, false);
+    applySettings();
     requestAnimationFrame(frame);
 
     if (q.get("open") && q.get("date")) return marketOpen(q.get("date"));
@@ -573,6 +738,133 @@
     start = clampToRange(start);
     $("start").value = toInputNY(start);
     await load(start);
+  }
+
+  // ---- drawings ---------------------------------------------------------------
+
+  const draw = Drawings.create({
+    chart, canvas: $("draw"), wrap: document.querySelector(".chart-wrap"),
+    series: () => main, times: () => barTimes, barAt: (i) => bars[i], tf: () => S.tf,
+    tickSize: () => (S.sym ? S.sym.tick_size : 0.25), pointValue: () => (S.sym ? S.sym.point_value : 1),
+    color: () => cfg.drawColor, rr: () => +cfg.rr || 2, status,
+  });
+
+  // ---- top bar, menus, settings, replay bar -------------------------------------
+
+  function openDrop(btn, drop) {
+    const open = !drop.classList.contains("open");
+    document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open"));
+    if (!open) return;
+    const r = btn.getBoundingClientRect();
+    drop.style.left = r.left + "px";
+    drop.style.top = r.bottom + 4 + "px";
+    drop.classList.add("open");
+  }
+
+  function renderTypeMenu() {
+    $("typeBtn").innerHTML = `<svg viewBox="0 0 24 24">${CHART_TYPES[cfg.chartType].icon}</svg>`;
+    $("typeDrop").innerHTML = Object.entries(CHART_TYPES).map(([k, v]) =>
+      `<button data-type="${k}" class="${k === cfg.chartType ? "on" : ""}"><svg viewBox="0 0 24 24">${v.icon}</svg>${v.label}</button>`).join("");
+  }
+  function renderIndMenu() {
+    $("indDrop").innerHTML = Object.entries(INDICATORS).map(([k, v]) =>
+      `<button data-ind="${k}"><span class="chk">${cfg.indicators.includes(k) ? "✓" : ""}</span><span style="color:${v.color}">━</span> ${v.label}</button>`).join("");
+  }
+
+  function setupChrome() {
+    renderTypeMenu();
+    renderIndMenu();
+    $("typeBtn").addEventListener("click", (e) => { e.stopPropagation(); openDrop($("typeBtn"), $("typeDrop")); });
+    $("indBtn").addEventListener("click", (e) => { e.stopPropagation(); openDrop($("indBtn"), $("indDrop")); });
+    document.addEventListener("click", (e) => { if (!e.target.closest(".dropdown")) document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open")); });
+    $("typeDrop").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-type]");
+      if (!b) return;
+      cfg.chartType = b.dataset.type; saveCfg();
+      makeMainSeries(); renderTypeMenu();
+      $("typeDrop").classList.remove("open");
+    });
+    $("indDrop").addEventListener("click", (e) => {
+      e.stopPropagation(); // the menu re-renders; keep it open for toggling several
+      const b = e.target.closest("[data-ind]");
+      if (!b) return;
+      const id = b.dataset.ind;
+      cfg.indicators = cfg.indicators.includes(id) ? cfg.indicators.filter((x) => x !== id) : [...cfg.indicators, id];
+      saveCfg(); syncIndicators(); renderIndMenu(); renderLegend(bars.length - 1);
+    });
+
+    draw.mountToolbar($("tools"));
+
+    chart.subscribeCrosshairMove((p) => {
+      if (!p || p.time === undefined) { hovering = false; return; }
+      const i = barTimes.indexOf(p.time);
+      if (i >= 0) { hovering = true; renderLegend(i); }
+    });
+
+    $("shotBtn").addEventListener("click", () => {
+      const src = chart.takeScreenshot();
+      const out = document.createElement("canvas");
+      out.width = src.width; out.height = src.height;
+      const g = out.getContext("2d");
+      g.drawImage(src, 0, 0);
+      g.drawImage($("draw"), 0, 0, src.width, src.height);
+      const a = document.createElement("a");
+      a.href = out.toDataURL("image/png");
+      a.download = `${S.sym ? S.sym.symbol : "chart"}-${fmtNY(S.t).replace(/[: ]/g, "-")}.png`;
+      a.click();
+    });
+    $("panelBtn").addEventListener("click", () => { cfg.sidePanel = !cfg.sidePanel; saveCfg(); $("side").hidden = !cfg.sidePanel; });
+    $("fullBtn").addEventListener("click", () => {
+      if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {});
+    });
+    $("qtyUp").addEventListener("click", () => { $("qty").value = Math.min(100, (+$("qty").value || 1) + 1); });
+    $("qtyDown").addEventListener("click", () => { $("qty").value = Math.max(1, (+$("qty").value || 1) - 1); });
+
+    // draggable replay bar
+    const rb = $("replayBar");
+    $("grip").addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const wrap = rb.parentElement.getBoundingClientRect(), r = rb.getBoundingClientRect();
+      const dx = e.clientX - r.left, dy = e.clientY - r.top;
+      const move = (ev) => {
+        rb.style.transform = "none";
+        rb.style.left = Math.max(0, Math.min(wrap.width - r.width, ev.clientX - wrap.left - dx)) + "px";
+        rb.style.top = Math.max(0, Math.min(wrap.height - r.height, ev.clientY - wrap.top - dy)) + "px";
+      };
+      const up = () => { removeEventListener("mousemove", move); removeEventListener("mouseup", up); };
+      addEventListener("mousemove", move);
+      addEventListener("mouseup", up);
+    });
+
+    // settings dialog
+    const dlg = $("settings");
+    const fields = () => dlg.querySelectorAll("[data-set]");
+    const fill = (src) => fields().forEach((el) => {
+      const v = src[el.dataset.set];
+      if (el.type === "checkbox") el.checked = !!v; else el.value = v;
+    });
+    let before = null;
+    const preview = () => {
+      fields().forEach((el) => { cfg[el.dataset.set] = el.type === "checkbox" ? el.checked : el.value; });
+      applySettings();
+    };
+    $("settingsBtn").addEventListener("click", () => { before = { ...cfg }; fill(cfg); dlg.showModal(); });
+    dlg.addEventListener("input", preview);
+    dlg.addEventListener("change", preview);
+    $("setReset").addEventListener("click", () => {
+      fill({ ...DEFAULTS, chartType: cfg.chartType, indicators: cfg.indicators });
+      preview();
+    });
+    $("setTabs").addEventListener("click", (e) => {
+      const t = e.target.dataset.tab;
+      if (!t) return;
+      for (const b of $("setTabs").children) b.classList.toggle("on", b.dataset.tab === t);
+      dlg.querySelectorAll(".set-pane").forEach((p) => { p.hidden = p.dataset.pane !== t; });
+    });
+    dlg.addEventListener("close", () => {
+      if (dlg.returnValue === "ok") saveCfg();
+      else if (before) { cfg = before; applySettings(); renderTypeMenu(); }
+    });
   }
 
   // tells the desktop program a window is still open

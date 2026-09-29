@@ -96,6 +96,28 @@ A countdown shows the time left to 09:30. The same button is on the chart page a
 | 1s … 4h | Candle timeframe. The current candle stays partial, as it was at the replay time. |
 | **B** / **S** / **F** | Buy, sell, or flatten at the last traded price (NQ $20/pt, ES $50/pt) |
 
+## The chart
+
+* **Top bar:** symbol, timeframes (1s–4h), chart type (candles, hollow candles, bars, line, area), indicators
+  (EMA 9/21/50, session VWAP that resets at 18:00 New York), jump to a time, Market Open, screenshot (PNG incl. drawings),
+  settings, side panel toggle, full screen.
+* **Drawing tools (left):** trend line, ray, horizontal line and ray, vertical line, rectangle, Fibonacci retracement,
+  long / short position (target, stop, R:R, ticks and $), text, measure (price, %, ticks, $, bars, duration), magnet (snap to OHLC),
+  hide all, remove all. Drag a drawing or its handles to change it, right-click for colour / clone / delete, Del removes the selected
+  one, Esc cancels. Drawings are saved per symbol (and per session).
+* **Replay bar:** play/pause, next tick, next candle, speed, skip closed. Drag it by the grip.
+* **Settings (gear):** candle colours, volume, background, grid, crosshair, watermark, scale text and lines, right margin,
+  side panel, fill markers, default drawing colour and default R:R for the position tool. Saved on this PC.
+* **Bottom bar:** Buy at the ask / Sell at the bid, quantity, Flat, open position and P&L, session balance.
+
+## Licenses
+
+Tick Replay's own code is yours. It builds on open-source parts that allow commercial use:
+TradingView Lightweight Charts (Apache-2.0; keep the "Charts by TradingView" attribution and link),
+FastAPI, Starlette, Pydantic, uvicorn, NumPy, pandas, zstandard (MIT/BSD), PyArrow (Apache-2.0) and
+PyInstaller (GPL with an exception that allows distributing the built program under your own terms).
+Market data is licensed separately by its vendor (e.g. Databento/CME) and is not redistributable with the program.
+
 ## How it works
 
 * `server/store.py` loads day files, cuts tick windows (`after < ts <= until`), and builds candles
