@@ -111,7 +111,15 @@ A countdown shows the time left to 09:30. The same button is on the chart page a
   sessions · Remove (drawings, indicators). Drag drawings or handles, right-click for colour, line width, clone, bring to front,
   remove. Shortcuts: Alt+T trend, Alt+H horizontal line, Alt+J horizontal ray, Alt+V vertical, Alt+C cross line, Alt+F fib,
   Alt+Shift+R rectangle, Del removes the selected drawing, Esc cancels.
-* **Replay bar:** play/pause, next tick, next candle, speed, skip closed. Drag it by the grip.
+* **Replay controls (chart toolbar):** play/pause, next tick, next candle, speed, 📅 jump to a date (with "skip closed
+  market"), 🔔 Open and the replay clock.
+* **Drawing settings (double-click a drawing, or right-click → Settings):** Style (colour, width, solid/dotted/dashed, extend
+  left/right, fill and opacity for boxes and channels, price label on/off), Text (text along the line or inside the box, colour,
+  size, bold, position and alignment), Coordinates (exact price and time of each point), Visibility (seconds / minutes / hours
+  timeframes). Fib retracement and extension: every level can be switched on/off, re-valued and re-coloured, levels can be added,
+  plus extend left/right, reverse, prices, levels as values or percents, labels left/right, background and trend line.
+* **Drawing templates:** Template ▾ → "Save drawing template as…" stores the look (incl. text and Fib levels) under a name per tool;
+  "Save as default" makes every new drawing of that tool use it; saved templates are one click away; "Reset to factory default".
 * **Settings (gear):** candle colours, volume, background, grid, crosshair, watermark, scale text and lines, right margin,
   side panel, fill markers, default drawing colour and default R:R for the position tool. Saved on this PC.
 * **Layout (Tradesea style):** account strip (session, Bal, RP&L, UP&L, version), app menu on the left, chart card with

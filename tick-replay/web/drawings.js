@@ -14,8 +14,29 @@
   const HIT = 6;          // px tolerance for picking lines
   const HANDLE = 5;       // handle radius
   const SWATCHES = ["#2962ff", "#f5a623", "#26a69a", "#ef5350", "#e040fb", "#ffffff", "#9598a1", "#000000"];
-  const FIB = [[0, "#787b86"], [0.236, "#f23645"], [0.382, "#ff9800"], [0.5, "#4caf50"], [0.618, "#089981"], [0.786, "#00bcd4"], [1, "#787b86"]];
-  const FIB_EXT = [[0, "#787b86"], [0.618, "#f23645"], [1, "#ff9800"], [1.272, "#4caf50"], [1.618, "#089981"], [2, "#00bcd4"], [2.618, "#2962ff"]];
+  // Fibonacci levels as TradingView lists them: value, colour, shown by default
+  const lv = (list) => list.map(([v, c, on]) => ({ v, c, on }));
+  const FIB_LEVELS = lv([
+    [-0.618, "#9c27b0", false], [-0.272, "#673ab7", false], [0, "#787b86", true], [0.236, "#f23645", true],
+    [0.382, "#ff9800", true], [0.5, "#4caf50", true], [0.618, "#089981", true], [0.705, "#00bcd4", false],
+    [0.786, "#00bcd4", true], [1, "#787b86", true], [1.272, "#2962ff", false], [1.414, "#f23645", false],
+    [1.618, "#2962ff", true], [2, "#9c27b0", false], [2.618, "#f23645", false], [3.618, "#9c27b0", false], [4.236, "#e91e63", false],
+  ]);
+  const FIBEXT_LEVELS = lv([
+    [0, "#787b86", true], [0.382, "#f23645", false], [0.5, "#ff9800", false], [0.618, "#f23645", true], [1, "#ff9800", true],
+    [1.272, "#4caf50", true], [1.414, "#089981", false], [1.618, "#089981", true], [2, "#00bcd4", true], [2.618, "#2962ff", true],
+    [3.618, "#9c27b0", false], [4.236, "#e91e63", false],
+  ]);
+  const FIB_OPTS = { fibExtLeft: false, fibExtRight: false, fibReverse: false, fibPrices: true, fibLevelsFmt: "values", fibLabels: "left", fibFill: true, fibFillOpacity: 0.08, fibTrend: true };
+  const DASH = { 0: [], 1: [2, 3], 2: [7, 5] };
+  const LINE_TYPES = new Set(["trend", "ray", "info", "extended", "angle", "arrowline", "hline", "hray", "vline", "crossline"]);
+  const TEXT_ON = new Set(["trend", "ray", "info", "extended", "arrowline", "hline", "hray", "vline", "rect", "channel"]);
+  const TPL_KEY = "tickreplay.drawTemplates", DEF_KEY = "tickreplay.drawDefaults";
+  const readJSON = (k) => { try { return JSON.parse(localStorage.getItem(k) || "{}"); } catch { return {}; } };
+  const writeJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } };
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  /** Everything about a drawing's look (what templates store): not its id, type or position. */
+  const styleOf = (d) => { const s = clone(d); delete s.id; delete s.type; delete s.pts; delete s.target; delete s.emoji; return s; };
   const EMOJIS = ["🚀", "🔥", "✅", "❌", "⚠️", "💰", "📈", "📉", "🎯", "⭐", "👍", "👎", "😀", "😬", "🤔", "💡", "🔔", "🛑", "⏰", "📰"];
 
   // ---- icons (28×28, stroked) ----------------------------------------------------
@@ -389,26 +410,74 @@
       label(`${long ? "Long" : "Short"} ${fmtP(d.pts[0].p)} · R:R ${risk ? (reward / risk).toFixed(2) : "–"}`, cx, A.y, "#2a2e39", "#fff", "center");
     }
 
-    function paintFib(d, P, levels, base) {
+    function paintFib(d, P, base) {
       // retracement: level 1 at the first point, 0 at the second (TradingView convention)
       // extension: levels projected from the third point by the first→second move
-      const xsAll = P.map((q) => q.x);
-      const x1 = Math.min(...xsAll), x2 = Math.max(...xsAll) + (d.type === "fibext" ? 60 : 0);
+      const opt = { ...FIB_OPTS, ...d };
+      const levels = (d.levels || (d.type === "fibext" ? FIBEXT_LEVELS : FIB_LEVELS)).filter((l) => l.on).slice().sort((a, b) => a.v - b.v);
+      const xsAll = P.map((q) => q.x), { w } = pane();
+      let x1 = Math.min(...xsAll), x2 = Math.max(...xsAll) + (d.type === "fibext" ? 60 : 0);
+      if (opt.fibExtLeft) x1 = 0;
+      if (opt.fibExtRight) x2 = w;
       let prevY = null;
-      for (const [lv, col] of levels) {
-        const p = base(lv), y = priceToY(p);
+      for (const l of levels) {
+        const p = base(opt.fibReverse ? 1 - l.v : l.v), y = priceToY(p);
         if (y === null) continue;
-        if (prevY !== null) { ctx.fillStyle = alpha(col, 0.08); ctx.fillRect(x1, Math.min(y, prevY), x2 - x1, Math.abs(y - prevY)); }
-        ctx.strokeStyle = col; ctx.lineWidth = 1;
+        if (opt.fibFill && prevY !== null) { ctx.fillStyle = alpha(l.c, +opt.fibFillOpacity); ctx.fillRect(x1, Math.min(y, prevY), x2 - x1, Math.abs(y - prevY)); }
+        ctx.strokeStyle = l.c; ctx.lineWidth = d.width ? Math.max(1, d.width - 1) : 1; ctx.setLineDash(DASH[d.lineStyle || 0]);
         line({ x: x1, y }, { x: x2, y });
-        ctx.font = "11px ui-monospace, Menlo, monospace"; ctx.fillStyle = col; ctx.textBaseline = "bottom";
-        ctx.fillText(`${lv} (${fmtP(p)})`, x1 + 4, y - 2);
+        ctx.setLineDash([]);
+        const lvText = opt.fibLevelsFmt === "percents" ? `${+(l.v * 100).toFixed(1)}%` : opt.fibLevelsFmt === "values" ? String(l.v) : "";
+        const txt = [lvText, opt.fibPrices ? `(${fmtP(p)})` : ""].filter(Boolean).join(" ");
+        if (txt) {
+          ctx.font = "11px ui-monospace, Menlo, monospace"; ctx.fillStyle = l.c; ctx.textBaseline = "bottom";
+          ctx.textAlign = opt.fibLabels === "right" ? "right" : "left";
+          ctx.fillText(txt, opt.fibLabels === "right" ? x2 - 4 : x1 + 4, y - 2);
+          ctx.textAlign = "left";
+        }
         prevY = y;
       }
-      ctx.strokeStyle = alpha(d.color, 0.6); ctx.setLineDash([4, 4]);
-      for (let i = 1; i < P.length; i++) line(P[i - 1], P[i]);
-      ctx.setLineDash([]);
+      if (opt.fibTrend) {
+        ctx.strokeStyle = alpha(d.color, 0.7); ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+        for (let i = 1; i < P.length; i++) line(P[i - 1], P[i]);
+        ctx.setLineDash([]);
+      }
     }
+
+    /** Text written along a line (or inside a box), like TradingView's Text tab. */
+    function lineText(d, A, B) {
+      if (!d.text) return;
+      const size = +d.textSize || 13, pos = d.textPos || "top", align = d.textAlign || "center";
+      let ang = Math.atan2(B.y - A.y, B.x - A.x), a = A, b = B;
+      if (ang > Math.PI / 2 || ang < -Math.PI / 2) { a = B; b = A; ang = Math.atan2(b.y - a.y, b.x - a.x); }   // keep text upright
+      const k = align === "left" ? 0 : align === "right" ? 1 : 0.5;
+      const px = a.x + (b.x - a.x) * k, py = a.y + (b.y - a.y) * k;
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(ang);
+      ctx.font = `${d.textBold ? "700" : "500"} ${size}px -apple-system, Segoe UI, sans-serif`;
+      ctx.fillStyle = d.textColor || d.color;
+      ctx.textAlign = align === "left" ? "left" : align === "right" ? "right" : "center";
+      ctx.textBaseline = pos === "top" ? "bottom" : pos === "bottom" ? "top" : "middle";
+      const dx = align === "left" ? 6 : align === "right" ? -6 : 0;
+      ctx.fillText(d.text, dx, pos === "top" ? -4 : pos === "bottom" ? 4 : 0);
+      ctx.restore();
+    }
+
+    function boxText(d, x1, y1, x2, y2) {
+      if (!d.text) return;
+      const size = +d.textSize || 13, pos = d.textPos || "top", align = d.textAlign || "center";
+      ctx.font = `${d.textBold ? "700" : "500"} ${size}px -apple-system, Segoe UI, sans-serif`;
+      ctx.fillStyle = d.textColor || d.color;
+      ctx.textAlign = align;
+      ctx.textBaseline = pos === "top" ? "top" : pos === "bottom" ? "bottom" : "middle";
+      const x = align === "left" ? x1 + 6 : align === "right" ? x2 - 6 : (x1 + x2) / 2;
+      const y = pos === "top" ? y1 + 5 : pos === "bottom" ? y2 - 5 : (y1 + y2) / 2;
+      ctx.fillText(d.text, x, y);
+      ctx.textAlign = "left";
+    }
+
+    const tfClass = () => (o.tf() < 60 ? "sec" : o.tf() < 3600 ? "min" : "hour");
 
     function paintPattern(d, P) {
       const names = d.type === "xabcd" ? ["X", "A", "B", "C", "D"] : d.type === "abcd" ? ["A", "B", "C", "D"] : ["A", "B", "C"];
@@ -439,27 +508,35 @@
     }
 
     function paint(d, sel) {
+      if (d.vis && d.vis[tfClass()] === false) return;          // hidden on this timeframe (Visibility tab)
       const { w, h } = pane();
       ctx.strokeStyle = d.color;
       ctx.fillStyle = d.color;
       ctx.lineWidth = d.width || 2;
-      ctx.setLineDash([]);
+      ctx.setLineDash(DASH[d.lineStyle || 0]);
       if (d.type === "hline") {
         const y = priceToY(d.pts[0].p);
         if (y === null) return;
         line({ x: 0, y }, { x: w, y });
-        label(fmtP(d.pts[0].p), w - 4, y, d.color, "#fff", "right");
+        ctx.setLineDash([]);
+        if (d.priceLabel !== false) label(fmtP(d.pts[0].p), w - 4, y, d.color, "#fff", "right");
+        lineText(d, { x: 0, y }, { x: w - 70, y });
         return drawHandles(d, sel);
       }
       const P = XYs(d), A = P[0];
       if (!A) return;
       switch (d.type) {
-        case "vline": line({ x: A.x, y: 0 }, { x: A.x, y: h }); break;
+        case "vline": line({ x: A.x, y: 0 }, { x: A.x, y: h }); ctx.setLineDash([]); lineText(d, { x: A.x, y: h }, { x: A.x, y: 0 }); break;
         case "crossline":
           line({ x: A.x, y: 0 }, { x: A.x, y: h }); line({ x: 0, y: A.y }, { x: w, y: A.y });
+          ctx.setLineDash([]);
           label(fmtP(d.pts[0].p), w - 4, A.y, d.color, "#fff", "right");
           break;
-        case "hray": line(A, { x: w, y: A.y }); label(fmtP(d.pts[0].p), w - 4, A.y, d.color, "#fff", "right"); break;
+        case "hray":
+          line(A, { x: w, y: A.y }); ctx.setLineDash([]);
+          if (d.priceLabel !== false) label(fmtP(d.pts[0].p), w - 4, A.y, d.color, "#fff", "right");
+          lineText(d, A, { x: w - 70, y: A.y });
+          break;
         case "text":
           ctx.font = "600 13px -apple-system, Segoe UI, sans-serif"; ctx.textBaseline = "alphabetic";
           ctx.fillText(d.text || "", A.x, A.y);
@@ -497,13 +574,14 @@
       if (["vline", "crossline", "hray", "text", "emoji", "pricelabel", "arrowup", "arrowdown", "brush", "highlighter"].includes(d.type)) return drawHandles(d, sel);
       if (P.some((q) => !q) || P.length < 2) return drawHandles(d, sel);
       const B = P[1];
+      // lines can be extended past either point (Style tab), ray/extended do it by default
+      const extL = d.extendLeft ?? d.type === "extended", extR = d.extendRight ?? (d.type === "ray" || d.type === "extended");
+      const S0 = extL ? extend(B, A, w, false)[1] : A, E0 = extR ? extend(A, B, w, false)[1] : B;
       switch (d.type) {
-        case "trend": line(A, B); break;
-        case "arrowline": line(A, B); arrowHead(A, B); break;
-        case "ray": { const [, e] = extend(A, B, w, false); line(A, e); break; }
-        case "extended": { const [s, e] = extend(A, B, w, true); line(s, e); break; }
+        case "trend": case "ray": case "extended": line(S0, E0); ctx.setLineDash([]); lineText(d, A, B); break;
+        case "arrowline": line(S0, B); ctx.setLineDash([]); arrowHead(A, B); lineText(d, A, B); break;
         case "info": {
-          line(A, B);
+          line(S0, E0); ctx.setLineDash([]); lineText(d, A, B);
           const sp = span(d), ang = (Math.atan2(A.y - B.y, B.x - A.x) * 180) / Math.PI;
           label(`${sp.price}`, B.x + 8, B.y - 10, alpha("#2a2e39", 0.95));
           label(`${sp.bars} bars · ${sp.dur} · ${ang.toFixed(1)}°`, B.x + 8, B.y + 10, alpha("#2a2e39", 0.95));
@@ -528,35 +606,44 @@
           ctx.fillText(d.text || "", B.x, B.y);
           break;
         }
-        case "rect":
-          ctx.fillStyle = alpha(d.color, 0.15);
-          ctx.fillRect(Math.min(A.x, B.x), Math.min(A.y, B.y), Math.abs(B.x - A.x), Math.abs(B.y - A.y));
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(Math.min(A.x, B.x), Math.min(A.y, B.y), Math.abs(B.x - A.x), Math.abs(B.y - A.y));
+        case "rect": {
+          let x1 = Math.min(A.x, B.x), x2 = Math.max(A.x, B.x);
+          if (d.extendLeft) x1 = 0;
+          if (d.extendRight) x2 = w;
+          const y1 = Math.min(A.y, B.y), y2 = Math.max(A.y, B.y);
+          if (d.fill !== false) { ctx.fillStyle = alpha(d.fillColor || d.color, d.fillOpacity ?? 0.15); ctx.fillRect(x1, y1, x2 - x1, y2 - y1); }
+          ctx.lineWidth = d.width ?? 1.5;
+          if (ctx.lineWidth > 0) ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+          ctx.setLineDash([]);
+          boxText(d, x1, y1, x2, y2);
           break;
+        }
         case "channel": {
           const c = channelPts(d);
           if (!c) {
             line(A, B);
             break;
           }
-          ctx.fillStyle = alpha(d.color, 0.1);
-          ctx.beginPath(); ctx.moveTo(c.a.x, c.a.y); ctx.lineTo(c.b.x, c.b.y); ctx.lineTo(c.b2.x, c.b2.y); ctx.lineTo(c.a2.x, c.a2.y); ctx.closePath(); ctx.fill();
+          if (d.fill !== false) {
+            ctx.fillStyle = alpha(d.fillColor || d.color, d.fillOpacity ?? 0.1);
+            ctx.beginPath(); ctx.moveTo(c.a.x, c.a.y); ctx.lineTo(c.b.x, c.b.y); ctx.lineTo(c.b2.x, c.b2.y); ctx.lineTo(c.a2.x, c.a2.y); ctx.closePath(); ctx.fill();
+          }
           line(c.a, c.b); line(c.a2, c.b2);
           ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
           line({ x: c.a.x, y: (c.a.y + c.a2.y) / 2 }, { x: c.b.x, y: (c.b.y + c.b2.y) / 2 });
           ctx.setLineDash([]);
+          lineText(d, c.a, c.b);
           break;
         }
         case "fib": {
           const p0 = d.pts[1].p, p1 = d.pts[0].p;
-          paintFib(d, P, FIB, (lv) => p0 + (p1 - p0) * lv);
+          paintFib(d, P, (v) => p0 + (p1 - p0) * v);
           break;
         }
         case "fibext": {
           if (P.length < 3) { ctx.setLineDash([4, 4]); line(A, B); ctx.setLineDash([]); break; }
           const move = d.pts[1].p - d.pts[0].p, c = d.pts[2].p;
-          paintFib(d, P, FIB_EXT, (lv) => c + move * lv);
+          paintFib(d, P, (v) => c + move * v);
           break;
         }
         case "xabcd": case "abcd": case "triangle": paintPattern(d, P); break;
@@ -621,9 +708,13 @@
 
     function newDrawing(t, pt) {
       const type = realType(t), n = T[type].n;
-      const d = { id: ++uid, type, color: o.color(), width: 2, pts: [pt] };
+      const d = { id: ++uid, type, color: o.color(), width: type === "rect" ? 1 : 2, lineStyle: 0, pts: [pt] };
       if (type === "long" || type === "short") { d.color = "#9598a1"; d.target = pt.p; }
       if (type === "emoji") d.emoji = pref.emoji;
+      if (type === "fib" || type === "fibext") Object.assign(d, clone(FIB_OPTS), { levels: clone(type === "fib" ? FIB_LEVELS : FIBEXT_LEVELS) });
+      // the user's default template for this tool (Template → Save as default)
+      const def = readJSON(DEF_KEY)[type];
+      if (def) Object.assign(d, clone(def));
       if (n > 1) d.pts.push({ ...pt });   // live point following the mouse
       return d;
     }
@@ -771,11 +862,200 @@
 
     function onDbl(e) {
       const m = local(e), hit = pick(m.x, m.y);
-      if (hit && (hit.d.type === "text" || hit.d.type === "callout")) {
-        e.stopPropagation();
+      if (!hit) return;
+      e.stopPropagation();
+      if (hit.d.type === "text" || hit.d.type === "callout") {
         const at = hit.d.type === "callout" ? xy(hit.d.pts[1]) : m;
         editText(hit.d, at || m, true);
+      } else openSettings(hit.d);
+    }
+
+    // ---- per-drawing settings dialog (TradingView style) + templates ----------------------
+
+    let dlg = null;
+    const TYPE_NAME = (t) => (T[t] ? T[t].name : t);
+    const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    /** display seconds (New York wall clock) <-> datetime-local text */
+    const tToInput = (t) => new Date(Math.round(t) * 1000).toISOString().slice(0, 19);
+    const inputToT = (v) => Date.parse(v + "Z") / 1000;
+
+    function styleRow(label, html) { return `<div class="set-row"><label>${label}</label><span>${html}</span></div>`; }
+    const colorIn = (key, val) => `<input type="color" data-k="${key}" value="${esc(val)}">`;
+    const selectIn = (key, val, opts) => `<select data-k="${key}">${opts.map(([v, l]) => `<option value="${v}" ${String(val) === String(v) ? "selected" : ""}>${l}</option>`).join("")}</select>`;
+    const checkIn = (key, val) => `<input type="checkbox" data-k="${key}" ${val ? "checked" : ""}>`;
+    const widthSel = (d) => selectIn("width", d.width ?? 2, [[1, "1 px"], [2, "2 px"], [3, "3 px"], [4, "4 px"]]);
+    const styleSel = (d) => selectIn("lineStyle", d.lineStyle || 0, [[0, "━━ Solid"], [1, "┈┈ Dotted"], [2, "╌╌ Dashed"]]);
+
+    function styleTab(d) {
+      const t = d.type;
+      if (t === "fib" || t === "fibext") {
+        const levels = d.levels || [];
+        return styleRow("Trend line", `${checkIn("fibTrend", d.fibTrend)} ${colorIn("color", d.color)}`) +
+          styleRow("Levels line", `${widthSel(d)} ${styleSel(d)}`) +
+          `<h4>Levels</h4><div class="lv-grid">${levels.map((l, i) => `<label class="lv"><input type="checkbox" data-lv="${i}" data-f="on" ${l.on ? "checked" : ""}>
+            <input type="number" step="0.001" data-lv="${i}" data-f="v" value="${l.v}"><input type="color" data-lv="${i}" data-f="c" value="${l.c}"></label>`).join("")}</div>
+          <div class="lv-actions"><button type="button" data-act="addLevel">+ Add level</button></div>
+          <h4>Options</h4>` +
+          styleRow("Extend lines", `<label class="inl">${checkIn("fibExtLeft", d.fibExtLeft)} Left</label><label class="inl">${checkIn("fibExtRight", d.fibExtRight)} Right</label>`) +
+          styleRow("Reverse", checkIn("fibReverse", d.fibReverse)) +
+          styleRow("Prices", checkIn("fibPrices", d.fibPrices)) +
+          styleRow("Levels", selectIn("fibLevelsFmt", d.fibLevelsFmt, [["values", "Values"], ["percents", "Percents"], ["none", "Hidden"]])) +
+          styleRow("Labels", selectIn("fibLabels", d.fibLabels, [["left", "Left"], ["right", "Right"]])) +
+          styleRow("Background", `${checkIn("fibFill", d.fibFill)} <input type="range" min="0" max="0.5" step="0.01" data-k="fibFillOpacity" value="${d.fibFillOpacity ?? 0.08}">`);
       }
+      let html = styleRow(t === "rect" || t === "channel" ? "Border" : "Line", `${colorIn("color", d.color)} ${widthSel(d)} ${styleSel(d)}`);
+      if (t === "rect" || t === "channel") {
+        html += styleRow("Background", `${checkIn("fill", d.fill !== false)} ${colorIn("fillColor", d.fillColor || d.color)}
+          <input type="range" min="0" max="1" step="0.05" data-k="fillOpacity" value="${d.fillOpacity ?? (t === "rect" ? 0.15 : 0.1)}">`);
+      }
+      if (["trend", "ray", "info", "extended", "arrowline", "rect"].includes(t)) {
+        html += styleRow("Extend", `<label class="inl">${checkIn("extendLeft", d.extendLeft ?? t === "extended")} Left</label><label class="inl">${checkIn("extendRight", d.extendRight ?? (t === "ray" || t === "extended"))} Right</label>`);
+      }
+      if (t === "hline" || t === "hray") html += styleRow("Price label", checkIn("priceLabel", d.priceLabel !== false));
+      return html;
+    }
+
+    function textTab(d) {
+      return `<textarea data-k="text" rows="3" placeholder="Text on the drawing…">${esc(d.text)}</textarea>` +
+        styleRow("Colour and size", `${colorIn("textColor", d.textColor || d.color)} ${selectIn("textSize", d.textSize || 13, [[10, 10], [11, 11], [12, 12], [13, 13], [14, 14], [16, 16], [20, 20], [24, 24], [28, 28]])}
+          <label class="inl">${checkIn("textBold", d.textBold)} Bold</label>`) +
+        (d.type === "text" || d.type === "callout" ? "" :
+          styleRow("Position", selectIn("textPos", d.textPos || "top", [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]])) +
+          styleRow("Alignment", selectIn("textAlign", d.textAlign || "center", [["left", "Left"], ["center", "Center"], ["right", "Right"]])));
+    }
+
+    function coordsTab(d) {
+      const names = d.type === "xabcd" ? ["X", "A", "B", "C", "D"] : d.type === "abcd" ? ["A", "B", "C", "D"] : ["#1", "#2", "#3", "#4", "#5"];
+      return d.pts.map((q, i) => {
+        const priceIn = d.type === "vline" ? "" : `<input type="number" step="${o.tickSize()}" data-pt="${i}" data-f="p" value="${q.p.toFixed(2)}">`;
+        const timeIn = d.type === "hline" ? "" : `<input type="datetime-local" step="1" data-pt="${i}" data-f="t" value="${tToInput(q.t)}">`;
+        return styleRow(`Point ${names[i] || i + 1}`, `${priceIn} ${timeIn}`);
+      }).join("") + (d.type === "long" || d.type === "short" ? styleRow("Target price", `<input type="number" step="${o.tickSize()}" data-k="target" value="${(+d.target).toFixed(2)}">`) : "");
+    }
+
+    function visTab(d) {
+      const v = d.vis || {};
+      return `<p class="muted small">Show this drawing on these timeframes:</p>` +
+        styleRow("Seconds (1s – 30s)", `<input type="checkbox" data-vis="sec" ${v.sec !== false ? "checked" : ""}>`) +
+        styleRow("Minutes (1m – 30m)", `<input type="checkbox" data-vis="min" ${v.min !== false ? "checked" : ""}>`) +
+        styleRow("Hours (1h – 4h)", `<input type="checkbox" data-vis="hour" ${v.hour !== false ? "checked" : ""}>`);
+    }
+
+    function ensureDialog() {
+      if (dlg) return dlg;
+      dlg = document.createElement("dialog");
+      dlg.className = "dd";
+      document.body.appendChild(dlg);
+      return dlg;
+    }
+
+    function openSettings(d) {
+      const box = ensureDialog();
+      const before = clone(d);
+      const hasText = TEXT_ON.has(d.type) || d.type === "text" || d.type === "callout";
+      const tabs = [["style", "Style"], ...(hasText ? [["text", "Text"]] : []), ["coords", "Coordinates"], ["vis", "Visibility"]];
+      const render = (tab) => {
+        box.innerHTML = `<form method="dialog" class="set-form">
+          <div class="set-head"><h2>${esc(TYPE_NAME(d.type))}</h2><button class="x" value="cancel" formnovalidate aria-label="Close">✕</button></div>
+          <div class="set-body">
+            <nav class="set-tabs">${tabs.map(([k, l]) => `<button type="button" data-dtab="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</nav>
+            <div class="set-pane">${tab === "style" ? styleTab(d) : tab === "text" ? textTab(d) : tab === "coords" ? coordsTab(d) : visTab(d)}</div>
+          </div>
+          <div class="set-foot">
+            <div class="tpl">
+              <button type="button" class="btn ghost" data-act="tpl">Template ▾</button>
+              <div class="tpl-menu" hidden></div>
+            </div>
+            <span class="spacer"></span>
+            <button class="btn ghost" value="cancel" formnovalidate>Cancel</button>
+            <button class="btn primary" value="ok">Ok</button>
+          </div></form>`;
+        box.dataset.tab = tab;
+      };
+      render("style");
+
+      const apply = (el) => {
+        if (el.dataset.k) {
+          const k = el.dataset.k;
+          let v = el.type === "checkbox" ? el.checked : el.type === "number" || el.type === "range" ? +el.value : el.value;
+          if (["width", "lineStyle", "textSize"].includes(k)) v = +v;
+          if (k === "target") v = Math.round(v / o.tickSize()) * o.tickSize();
+          d[k] = v;
+        } else if (el.dataset.lv !== undefined) {
+          const l = d.levels[+el.dataset.lv], f = el.dataset.f;
+          l[f] = f === "on" ? el.checked : f === "v" ? +el.value : el.value;
+        } else if (el.dataset.pt !== undefined) {
+          const q = d.pts[+el.dataset.pt];
+          if (el.dataset.f === "p" && el.value !== "") q.p = Math.round(+el.value / o.tickSize()) * o.tickSize();
+          if (el.dataset.f === "t" && el.value) { const t = inputToT(el.value); if (isFinite(t)) q.t = t; }
+        } else if (el.dataset.vis) {
+          d.vis = { ...(d.vis || {}), [el.dataset.vis]: el.checked };
+        }
+      };
+      box.oninput = (e) => apply(e.target);
+      box.onchange = (e) => apply(e.target);
+
+      box.onclick = (e) => {
+        const tabBtn = e.target.closest("[data-dtab]");
+        if (tabBtn) return render(tabBtn.dataset.dtab);
+        const act = e.target.closest("[data-act]");
+        if (act && act.dataset.act === "addLevel") {
+          d.levels.push({ v: 1.5, c: "#9598a1", on: true });
+          return render("style");
+        }
+        if (act && act.dataset.act === "tpl") return toggleTemplateMenu(box, d, render);
+        const tpl = e.target.closest("[data-tpl]");
+        if (tpl) return templateAction(tpl.dataset.tpl, tpl.dataset.name, d, box, render);
+      };
+      box.onclose = () => {
+        if (box.returnValue === "ok") save();
+        else { for (const k of Object.keys(d)) delete d[k]; Object.assign(d, before); }
+      };
+      box.returnValue = "";
+      box.showModal();
+    }
+
+    function toggleTemplateMenu(box, d) {
+      const menu = box.querySelector(".tpl-menu");
+      if (!menu.hidden) { menu.hidden = true; return; }
+      const saved = readJSON(TPL_KEY)[d.type] || {};
+      const names = Object.keys(saved).sort();
+      menu.innerHTML = `<button type="button" data-tpl="saveas">💾 Save drawing template as…</button>
+        <button type="button" data-tpl="default">★ Save as default for ${esc(TYPE_NAME(d.type))}</button>
+        <button type="button" data-tpl="factory">↺ Reset to factory default</button>
+        ${names.length ? '<div class="tpl-sep"></div>' + names.map((n) => `<div class="tpl-item"><button type="button" data-tpl="apply" data-name="${esc(n)}">${esc(n)}</button><button type="button" class="tpl-del" data-tpl="delete" data-name="${esc(n)}" title="Delete template">✕</button></div>`).join("") : '<div class="tpl-empty">No saved templates for this tool yet</div>'}`;
+      menu.hidden = false;
+    }
+
+    function templateAction(action, name, d, box, render) {
+      const all = readJSON(TPL_KEY);
+      all[d.type] = all[d.type] || {};
+      if (action === "saveas") {
+        const n = prompt(`Template name for ${TYPE_NAME(d.type)}:`, d.text || "");
+        if (!n) return;
+        all[d.type][n.trim()] = styleOf(d);
+        writeJSON(TPL_KEY, all);
+        o.status(`Template "${n.trim()}" saved`);
+      } else if (action === "default") {
+        const defs = readJSON(DEF_KEY);
+        defs[d.type] = styleOf(d);
+        writeJSON(DEF_KEY, defs);
+        o.status(`New ${TYPE_NAME(d.type)} drawings will use this style`);
+      } else if (action === "factory") {
+        const defs = readJSON(DEF_KEY);
+        delete defs[d.type];
+        writeJSON(DEF_KEY, defs);
+        const fresh = newDrawing(d.type, d.pts[0]);
+        for (const k of Object.keys(styleOf(d))) delete d[k];
+        Object.assign(d, styleOf(fresh));
+      } else if (action === "apply" && all[d.type][name]) {
+        for (const k of Object.keys(styleOf(d))) delete d[k];
+        Object.assign(d, clone(all[d.type][name]));
+      } else if (action === "delete") {
+        delete all[d.type][name];
+        writeJSON(TPL_KEY, all);
+      }
+      render(box.dataset.tab || "style");
     }
 
     function onContext(e) {
@@ -789,6 +1069,7 @@
         <div class="widths">${[1, 2, 3, 4].map((wd) => `<button data-w="${wd}" class="${(d.width || 2) === wd ? "on" : ""}"><span style="height:${wd}px"></span></button>`).join("")}</div>
         ${d.type === "text" || d.type === "callout" ? '<button data-a="edit">✎ Edit text</button>' : ""}
         ${d.type === "long" || d.type === "short" ? '<button data-a="flip">⇅ Flip long / short</button>' : ""}
+        <button data-a="settings">⚙ Settings…</button>
         <button data-a="clone">⧉ Clone</button>
         <button data-a="front">⤒ Bring to front</button>
         <button data-a="del">🗑 Remove</button>`;
@@ -808,6 +1089,7 @@
         if (a === "edit") editText(d, d.type === "callout" ? xy(d.pts[1]) || m : m, true);
         menu.hidden = true;
         save();
+        if (a === "settings") openSettings(d);
       };
     }
 
@@ -831,7 +1113,7 @@
 
     const SHORTCUTS = { t: "trend", h: "hline", j: "hray", v: "vline", c: "crossline", f: "fib" };
     function onKey(e) {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return false;
+      if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || (dlg && dlg.open)) return false;
       if (e.key === "Escape") { creating = null; zoomBox = null; selected = null; closeFlyout(); setTool(pref.cursor); return true; }
       if ((e.key === "Delete" || e.key === "Backspace") && selected) { remove(selected); return true; }
       if (e.altKey && !e.ctrlKey) {

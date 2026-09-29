@@ -1040,7 +1040,7 @@
 
     document.addEventListener("keydown", (e) => {
       if (draw.onKey(e)) { e.preventDefault(); return; }
-      if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+      if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || document.querySelector("dialog[open]")) return;
       if (e.code === "Space") { e.preventDefault(); togglePlay(); }
       else if (e.code === "ArrowRight") { e.preventDefault(); e.shiftKey ? stepBar() : stepTick(); }
       else if (e.key === "b" || e.key === "B") $("buy").click();
@@ -1185,21 +1185,11 @@
       if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {});
     });
 
-    // draggable replay bar
-    const rb = $("replayBar");
-    $("grip").addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      const wrap = rb.parentElement.getBoundingClientRect(), r = rb.getBoundingClientRect();
-      const dx = e.clientX - r.left, dy = e.clientY - r.top;
-      const move = (ev) => {
-        rb.style.transform = "none";
-        rb.style.left = Math.max(0, Math.min(wrap.width - r.width, ev.clientX - wrap.left - dx)) + "px";
-        rb.style.top = Math.max(0, Math.min(wrap.height - r.height, ev.clientY - wrap.top - dy)) + "px";
-      };
-      const up = () => { removeEventListener("mousemove", move); removeEventListener("mouseup", up); };
-      addEventListener("mousemove", move);
-      addEventListener("mouseup", up);
-    });
+    // date picker lives in a small dropdown next to the replay buttons
+    $("dateBtn").addEventListener("click", (e) => { e.stopPropagation(); openDrop($("dateBtn"), $("dateDrop")); });
+    $("dateDrop").addEventListener("click", (e) => e.stopPropagation());
+    $("go").addEventListener("click", () => $("dateDrop").classList.remove("open"));
+    $("start").addEventListener("keydown", (e) => { if (e.key === "Enter") $("go").click(); });
 
     // settings dialog
     const dlg = $("settings");
@@ -1374,7 +1364,7 @@
       const r = wrap.getBoundingClientRect(), y = e.clientY - r.top, x = e.clientX - r.left;
       const w = chart.timeScale().width();
       const p = y < $("chart").clientHeight - 28 ? main.coordinateToPrice(y) : null;
-      if (p === null || x > w + 2 || e.target.closest(".ord, .replay-bar, .axis-plus")) {
+      if (p === null || x > w + 2 || e.target.closest(".ord, .axis-plus")) {
         if (!e.target.closest(".axis-plus")) plus.hidden = true;
         return;
       }

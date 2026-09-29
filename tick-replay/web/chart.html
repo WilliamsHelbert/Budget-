@@ -64,6 +64,36 @@
           </button>
           <div class="dropdown" id="indDrop"></div>
         </div>
+        <span class="c-sep"></span>
+        <!-- replay controls live in the toolbar (no floating bar over the chart) -->
+        <div class="rp">
+          <button class="rp-btn" id="play" title="Play / pause (Space)"></button>
+          <button class="rp-btn" id="stepTick" title="Next tick (→)">
+            <svg viewBox="0 0 24 24"><path d="M6 5v14l9-7zM18 5v14"/></svg>
+          </button>
+          <button class="rp-btn" id="stepBar" title="Next candle (Shift+→)">
+            <svg viewBox="0 0 24 24"><path d="M4 5v14l7-7zM12 5v14l7-7z"/></svg>
+          </button>
+          <select id="speed" class="rp-speed" title="Replay speed"></select>
+          <div class="tb-menu">
+            <button class="tb-btn" id="dateBtn" title="Jump to a date and time">
+              <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+            </button>
+            <div class="dropdown date-drop" id="dateDrop">
+              <div class="ttl">Jump to (New York time)</div>
+              <div class="date-row">
+                <input type="datetime-local" id="start" step="1">
+                <button class="go" id="go">Go</button>
+              </div>
+              <label class="date-check" title="Jump over closed-market periods (no trades for 5+ minutes)">
+                <input type="checkbox" id="skipGaps" checked> Skip closed market
+              </label>
+            </div>
+          </div>
+          <button class="tb-btn text gold" id="marketOpen" title="Start at 09:25 New York on this day and play live at 1x">🔔 Open</button>
+          <span id="countdown" class="countdown"></span>
+          <span id="clock" class="clock" title="Replay time, New York">--</span>
+        </div>
         <span class="spacer"></span>
         <button class="tb-btn" id="shotBtn" title="Save a screenshot (PNG)">
           <svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
@@ -88,27 +118,6 @@
           </button>
           <div class="order-menu" id="orderMenu" hidden></div>
 
-          <div class="replay-bar" id="replayBar">
-            <span class="grip" id="grip" title="Drag to move">⋮⋮</span>
-            <input type="datetime-local" id="start" step="1" title="Replay start (New York time)">
-            <button class="rb-btn txt" id="go" title="Jump to this time">Go</button>
-            <span class="rb-sep"></span>
-            <button class="rb-btn" id="play" title="Play / pause (Space)"></button>
-            <button class="rb-btn" id="stepTick" title="Next tick (→)">
-              <svg viewBox="0 0 24 24"><path d="M6 5v14l9-7zM18 5v14"/></svg>
-            </button>
-            <button class="rb-btn" id="stepBar" title="Next candle (Shift+→)">
-              <svg viewBox="0 0 24 24"><path d="M4 5v14l7-7zM12 5v14l7-7z"/></svg>
-            </button>
-            <select id="speed" class="rb-speed" title="Replay speed"></select>
-            <label class="rb-check" title="Jump over closed-market periods (no trades for 5+ minutes)">
-              <input type="checkbox" id="skipGaps" checked><span>skip closed</span>
-            </label>
-            <span class="rb-sep"></span>
-            <button class="rb-btn txt gold" id="marketOpen" title="Start at 09:25 New York on this day and play live at 1x">🔔 Open</button>
-            <span id="countdown" class="countdown"></span>
-            <span id="clock" class="clock" title="Replay time, New York">--</span>
-          </div>
           <div class="text-edit" id="textEdit" hidden>
             <input id="textInput" maxlength="120" placeholder="Text…">
           </div>
