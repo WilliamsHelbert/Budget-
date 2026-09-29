@@ -12,6 +12,8 @@ Recognised inputs:
         or separate "date" and "time" columns (e.g. Sierra Chart exports)
       - a price column: price, last, close, trade_price
       - optional size column: size, volume, qty, quantity, vol, last_size
+      - optional best bid / ask before the trade: bid_px_00 / ask_px_00 (Databento TBBO), bid / ask
+      - optional aggressor side: side (B = buyer lifted the offer, A/S = seller hit the bid)
   Numeric timestamps are treated as epoch UTC (s / ms / us / ns detected from magnitude).
   Text timestamps without an offset are read in --tz (default UTC).
   Databento CSVs with fixed-point prices (1e-9 units) are rescaled automatically.
@@ -36,41 +38,72 @@ DEFAULT_OUT = Path(__file__).resolve().parent.parent / "data" / "ticks"
 TS_COLS = ["ts", "ts_event", "ts_recv", "timestamp", "time", "datetime", "date_time"]
 PRICE_COLS = ["price", "last", "close", "trade_price"]
 SIZE_COLS = ["size", "volume", "qty", "quantity", "vol", "last_size"]
+BID_COLS = ["bid_px_00", "bid", "bid_price"]
+ASK_COLS = ["ask_px_00", "ask", "ask_price"]
 NINJA_RE = re.compile(r"^\d{8} \d{6}( \d{7})?;")
 
 
 # ---- writing -----------------------------------------------------------------
 
-def write_days(out_dir: Path, symbol: str, ts, price, size, replace: bool = True) -> int:
-    """Split ticks by UTC day and write one Parquet file per day. Returns number of files written."""
-    ts = np.asarray(ts, np.int64)
-    price = np.asarray(price, np.float64)
-    size = np.asarray(size, np.int32)
-    order = np.argsort(ts, kind="stable")
-    ts, price, size = ts[order], price[order], size[order]
+def write_days(out_dir: Path, symbol: str, ts, price, size, replace: bool = True,
+               bid=None, ask=None, side=None) -> int:
+    """Split ticks by UTC day and write one Parquet file per day. Returns number of files written.
+
+    bid / ask are the best quotes just before each trade (NaN when unknown); side is the
+    aggressor (+1 buyer, -1 seller, 0 unknown).
+    """
+    n = len(ts)
+    cols = {
+        "ts": np.asarray(ts, np.int64),
+        "price": np.asarray(price, np.float64),
+        "size": np.asarray(size, np.int32),
+        "bid": np.full(n, np.nan) if bid is None else np.asarray(bid, np.float64),
+        "ask": np.full(n, np.nan) if ask is None else np.asarray(ask, np.float64),
+        "side": np.zeros(n, np.int8) if side is None else np.asarray(side, np.int8),
+    }
+    order = np.argsort(cols["ts"], kind="stable")
+    cols = {k: v[order] for k, v in cols.items()}
 
     sym_dir = Path(out_dir) / symbol
     sym_dir.mkdir(parents=True, exist_ok=True)
-    day_idx = ts // DAY_MS
+    day_idx = cols["ts"] // DAY_MS
     bounds = np.flatnonzero(np.r_[True, day_idx[1:] != day_idx[:-1], True])
     written = 0
     for a, b in zip(bounds[:-1], bounds[1:]):
-        d_ts, d_px, d_sz = ts[a:b], price[a:b], size[a:b]
+        day_cols = {k: v[a:b] for k, v in cols.items()}
         day = np.datetime64(int(day_idx[a]), "D").astype(str)
         path = sym_dir / f"{day}.parquet"
         if path.exists() and not replace:
-            old = pq.read_table(path)
-            d_ts = np.concatenate([old.column("ts").to_numpy(), d_ts])
-            d_px = np.concatenate([old.column("price").to_numpy(), d_px])
-            d_sz = np.concatenate([old.column("size").to_numpy(), d_sz])
-            o = np.argsort(d_ts, kind="stable")
-            d_ts, d_px, d_sz = d_ts[o], d_px[o], d_sz[o]
-        table = pa.table({"ts": pa.array(d_ts, pa.int64()),
-                          "price": pa.array(d_px, pa.float64()),
-                          "size": pa.array(d_sz, pa.int32())})
+            old = read_day_file(path)
+            day_cols = {k: np.concatenate([old[k], day_cols[k]]) for k in day_cols}
+            o = np.argsort(day_cols["ts"], kind="stable")
+            day_cols = {k: v[o] for k, v in day_cols.items()}
+        table = pa.table({
+            "ts": pa.array(day_cols["ts"], pa.int64()),
+            "price": pa.array(day_cols["price"], pa.float64()),
+            "size": pa.array(day_cols["size"], pa.int32()),
+            "bid": pa.array(day_cols["bid"], pa.float64()),
+            "ask": pa.array(day_cols["ask"], pa.float64()),
+            "side": pa.array(day_cols["side"], pa.int8()),
+        })
         pq.write_table(table, path, compression="zstd")
         written += 1
     return written
+
+
+def read_day_file(path: Path) -> dict:
+    """Load one stored day; files written before bid/ask support get empty quote columns."""
+    t = pq.read_table(path)
+    n = t.num_rows
+    names = set(t.column_names)
+    return {
+        "ts": t.column("ts").to_numpy().astype(np.int64, copy=False),
+        "price": t.column("price").to_numpy().astype(np.float64, copy=False),
+        "size": t.column("size").to_numpy().astype(np.int32, copy=False),
+        "bid": t.column("bid").to_numpy().astype(np.float64, copy=False) if "bid" in names else np.full(n, np.nan),
+        "ask": t.column("ask").to_numpy().astype(np.float64, copy=False) if "ask" in names else np.full(n, np.nan),
+        "side": t.column("side").to_numpy().astype(np.int8, copy=False) if "side" in names else np.zeros(n, np.int8),
+    }
 
 
 # ---- reading -----------------------------------------------------------------
@@ -104,7 +137,9 @@ def read_ninjatrader(path: Path, tz: str):
     frac = parts[2].fillna("0000000") if parts.shape[1] > 2 else "0000000"
     text = parts[0] + " " + parts[1] + "." + frac
     ts = _text_to_ms(pd.Series(pd.to_datetime(text, format="%Y%m%d %H%M%S.%f")), tz)
-    return ts, df["last"].to_numpy(np.float64), df["vol"].to_numpy(np.int64)
+    return {"ts": ts, "price": df["last"].to_numpy(np.float64), "size": df["vol"].to_numpy(np.int64),
+            "bid": df["bid"].to_numpy(np.float64), "ask": df["ask"].to_numpy(np.float64),
+            "side": np.zeros(len(df), np.int8)}
 
 
 def read_csv(path: Path, tz: str):
@@ -130,15 +165,33 @@ def read_csv(path: Path, tz: str):
     if px_col is None:
         raise SystemExit(f"{path}: no price column found (have {sorted(cols)})")
     price = df[px_col].to_numpy(np.float64, copy=True)
-    if np.nanmedian(np.abs(price)) > 1e8:  # Databento fixed-point prices
-        price = price / 1e9
-    price[np.abs(price) >= 1e8] = np.nan  # Databento's "undefined price" sentinel
+    fixed_point = np.nanmedian(np.abs(price)) > 1e8  # Databento prices without "pretty_px"
+
+    def prices(col: str | None) -> np.ndarray:
+        if col is None:
+            return np.full(len(df), np.nan)
+        v = pd.to_numeric(df[col], errors="coerce").to_numpy(np.float64, copy=True)
+        if fixed_point:
+            v = v / 1e9
+        v[np.abs(v) >= 1e8] = np.nan  # Databento's "undefined price" sentinel
+        return v
+
+    price = prices(px_col)
+    bid = prices(next((c for c in BID_COLS if c in cols), None))
+    ask = prices(next((c for c in ASK_COLS if c in cols), None))
 
     sz_col = next((c for c in SIZE_COLS if c in cols), None)
     size = df[sz_col].to_numpy(np.int64) if sz_col else np.ones(len(df), np.int64)
 
+    side = np.zeros(len(df), np.int8)
+    if "side" in cols:
+        sv = df["side"].astype(str).str.strip().str.upper()
+        side[sv.isin(["B", "BUY", "1"]).to_numpy()] = 1
+        side[sv.isin(["A", "S", "SELL", "-1"]).to_numpy()] = -1
+
     keep = front_contract_mask(df, ts, size)
-    return ts[keep], price[keep], size[keep]
+    return {"ts": ts[keep], "price": price[keep], "size": size[keep],
+            "bid": bid[keep], "ask": ask[keep], "side": side[keep]}
 
 
 def front_contract_mask(df, ts: np.ndarray, size: np.ndarray) -> np.ndarray:
@@ -164,6 +217,23 @@ def front_contract_mask(df, ts: np.ndarray, size: np.ndarray) -> np.ndarray:
 
 
 def read_any(path: Path, tz: str):
+    """(ts, price, size) arrays of a tick file."""
+    t = read_ticks(path, tz)
+    return t["ts"], t["price"], t["size"]
+
+
+def clean(t: dict) -> dict:
+    """Drop rows without a usable trade price."""
+    ok = ~np.isnan(t["price"]) & (t["price"] > 0)
+    return {k: v[ok] for k, v in t.items()}
+
+
+def concat(parts: list[dict]) -> dict:
+    return {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
+
+
+def read_ticks(path: Path, tz: str) -> dict:
+    """All columns of a tick file: ts, price, size, bid, ask, side."""
     path = Path(path)
     name = path.name.lower()
     if ".dbn" in name:
@@ -188,7 +258,7 @@ def _read_zst(path: Path, tz: str):
     with open(path, "rb") as src, open(plain, "wb") as dst:
         zstandard.ZstdDecompressor().copy_stream(src, dst)
     try:
-        return read_any(plain, tz)
+        return read_ticks(plain, tz)
     finally:
         plain.unlink(missing_ok=True)
 
@@ -202,17 +272,17 @@ def main() -> None:
     ap.add_argument("--replace", action="store_true", help="overwrite existing day files instead of merging")
     args = ap.parse_args()
 
-    ts_l, px_l, sz_l = [], [], []
+    parts = []
     for p in args.files:
-        ts, px, sz = read_any(p, args.tz)
-        ok = ~(np.isnan(px)) & (px > 0)
-        ts_l.append(ts[ok]); px_l.append(px[ok]); sz_l.append(sz[ok])
-        print(f"{p}: {ok.sum():,} ticks")
-    ts, px, sz = np.concatenate(ts_l), np.concatenate(px_l), np.concatenate(sz_l)
+        parts.append(clean(read_ticks(p, args.tz)))
+        print(f"{p}: {len(parts[-1]['ts']):,} ticks")
+    t = concat(parts)
+    ts = t["ts"]
     if not len(ts):
         raise SystemExit("nothing to import")
 
-    n = write_days(args.out, args.symbol.upper(), ts, px, sz, replace=args.replace)
+    n = write_days(args.out, args.symbol.upper(), ts, t["price"], t["size"], replace=args.replace,
+                   bid=t["bid"], ask=t["ask"], side=t["side"])
     fmt = lambda ms: np.datetime64(int(ms), "ms").astype(str) + "Z"  # noqa: E731
     print(f"{args.symbol.upper()}: {len(ts):,} ticks, {fmt(ts.min())} -> {fmt(ts.max())}, {n} day files")
     print("Check the first/last times above against your source (UTC). If they are off by hours, re-run with --tz.")

@@ -13,11 +13,13 @@ import tempfile
 import time
 from pathlib import Path
 
+import numpy as np
+
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from tools.import_ticks import read_any, write_days
+from tools.import_ticks import clean, concat, read_ticks, write_days
 
 from .store import Store
 
@@ -55,6 +57,13 @@ def symbols():
     return store.symbols()
 
 
+@app.get("/api/sessions")
+def sessions(symbol: str):
+    """Regular-hours summary per trading day, newest first."""
+    _check_symbol(symbol)
+    return store.sessions(symbol)[::-1]
+
+
 @app.get("/api/candles")
 def candles(
     symbol: str,
@@ -88,8 +97,6 @@ def import_ticks(
     tz: str = Form("UTC"),
 ):
     """Import uploaded tick files. Days they cover replace what is stored for those days."""
-    import numpy as np
-
     symbol = symbol.strip().upper()
     try:
         store.days(symbol)  # validates the name
@@ -103,24 +110,24 @@ def import_ticks(
             with open(path, "wb") as out:
                 shutil.copyfileobj(f.file, out, 4 * 1024 * 1024)
             try:
-                ts, px, sz = read_any(path, tz)
+                t = clean(read_ticks(path, tz))
             except SystemExit as e:  # the CLI reader reports bad files this way
                 raise HTTPException(400, str(e))
             except Exception as e:
                 raise HTTPException(400, f"{f.filename}: could not read file ({e})")
-            ok = ~np.isnan(px) & (px > 0)
-            parts.append((ts[ok], px[ok], sz[ok]))
-            report.append({"file": f.filename, "ticks": int(ok.sum())})
+            parts.append(t)
+            report.append({"file": f.filename, "ticks": int(len(t["ts"]))})
 
-    ts = np.concatenate([p[0] for p in parts])
+    t = concat(parts)
+    ts = t["ts"]
     if not len(ts):
         raise HTTPException(400, "no ticks found in the uploaded files")
-    px = np.concatenate([p[1] for p in parts])
-    sz = np.concatenate([p[2] for p in parts])
-    days = write_days(DATA_DIR, symbol, ts, px, sz, replace=True)
+    days = write_days(DATA_DIR, symbol, ts, t["price"], t["size"], replace=True,
+                      bid=t["bid"], ask=t["ask"], side=t["side"])
     store.invalidate()
+    has_quotes = bool((~np.isnan(t["bid"])).any())
     return {"symbol": symbol, "files": report, "ticks": int(len(ts)), "days": days,
-            "first_ts": int(ts.min()), "last_ts": int(ts.max())}
+            "first_ts": int(ts.min()), "last_ts": int(ts.max()), "has_quotes": has_quotes}
 
 
 @app.delete("/api/symbols/{symbol}")

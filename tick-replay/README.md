@@ -50,6 +50,10 @@ Formats the importer recognises:
 | Sierra Chart export | `Date, Time, ..., Last, Volume` |
 | Any CSV with a header | a `timestamp`/`time`/`ts` column, a `price`/`last` column, and optionally `size`/`volume` |
 
+* **Databento:** choose Encoding **CSV** (plain or zstd-compressed). The **TBBO** schema is best: the best bid/ask
+  before every trade is stored, so market orders fill at the ask (buy) or bid (sell) and Time & Sales shows the aggressor.
+  Parent downloads like `NQ.FUT` hold every expiry and spread; only the most-traded contract of each day is kept
+  (the same selection as `NQ.v.0`).
 * Numeric timestamps are read as epoch UTC. The importer works out whether they're in seconds, ms, µs or ns.
 * Text timestamps without a timezone are read in `--tz`, which defaults to **UTC**. NinjaTrader exports use your PC's timezone.
 * After importing, check the printed first and last times (UTC). If they're off by a few hours, the `--tz` was wrong. Re-import with `--replace`.
@@ -93,6 +97,7 @@ python -m pytest tests
 
 ## Known limits / next steps
 
-* Market orders fill at the last trade, without bid/ask or slippage. Limit and stop orders, commissions, and a trade log with stats come next.
+* Market orders fill at the ask/bid when the data has quotes (TBBO, NinjaTrader), otherwise at the last trade.
+  Market orders bigger than the quoted size don't slip yet. Limit and stop orders, commissions, and a trade log with stats come next.
 * The chart shows New York time using one UTC offset per load, so history across a DST change is off by one hour.
 * Contract rolls aren't handled. Import one continuous series per symbol.

@@ -122,3 +122,8 @@ button.buy:hover, button.sell:hover { filter: brightness(1.1); }
   aside { width: 100%; border-left: 0; border-top: 1px solid var(--border); }
   .toolbar .sep { display: none; }
 }
+
+.quote-row { margin-top: -4px; }
+.quote { font-variant-numeric: tabular-nums; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.muted { color: var(--muted); }
+.tape tr.big td { font-weight: 700; background: rgba(245, 166, 35, .10); }

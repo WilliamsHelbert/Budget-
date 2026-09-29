@@ -18,6 +18,7 @@
   const TICK_LIMIT = 200000;
   const CLOSED_GAP_MS = 5 * 60 * 1000; // "skip gaps" only jumps over silences at least this long
   const TAPE_ROWS = 40;
+  const BIG_PRINT = 20;             // highlight aggressive prints of at least this many contracts
   const TZ = "America/New_York";
   const RTH_OPEN = "09:30:00";      // CME equity index regular session open, New York
   const PRE_OPEN = "09:25:00";      // Market Open mode starts here, so the open is lived through at 1x
@@ -90,6 +91,8 @@
     bar: null,          // forming candle {bucket, open, high, low, close, volume}
     firstBucket: null,
     last: null,         // last traded price
+    bid: null,          // best bid / ask (only with quote data)
+    ask: null,
     lastDir: 0,
     tape: [],
     dirty: false,
@@ -98,7 +101,7 @@
   };
 
   function newBuffer(t) {
-    return { gen: (S.buf ? S.buf.gen : 0) + 1, ts: [], price: [], size: [], i: 0, covered: t, nextTs: null, eof: false, pending: null };
+    return { gen: (S.buf ? S.buf.gen : 0) + 1, ts: [], price: [], size: [], side: [], bid: [], ask: [], i: 0, covered: t, nextTs: null, eof: false, pending: null };
   }
 
   // ---- chart ----------------------------------------------------------------
@@ -130,7 +133,14 @@
     volume.update(volBar(b));
   }
 
-  function applyTick(ts, px, sz) {
+  function applyTick(buf, k) {
+    const ts = buf.ts[k], px = buf.price[k], sz = buf.size[k], side = buf.side[k];
+    if (buf.bid[k] > 0 && buf.ask[k] > 0) {
+      // quote before the trade, moved by the trade itself: a buyer lifting the offer
+      // leaves the ask at least at the trade price, a seller hitting the bid likewise
+      S.bid = side < 0 ? Math.min(buf.bid[k], px) : buf.bid[k];
+      S.ask = side > 0 ? Math.max(buf.ask[k], px) : buf.ask[k];
+    }
     const b = bucketOf(ts);
     if (!S.bar || b > S.bar.bucket) {
       if (S.bar && S.dirty) pushBar(S.bar);
@@ -144,7 +154,8 @@
     }
     if (S.last !== null && px !== S.last) S.lastDir = px > S.last ? 1 : -1;
     S.last = px;
-    S.tape.push([ts, px, sz, S.lastDir]);
+    // colour by aggressor when the data has it, else by uptick/downtick
+    S.tape.push([ts, px, sz, side || S.lastDir, side !== 0]);
     if (S.tape.length > TAPE_ROWS * 2) S.tape.splice(0, S.tape.length - TAPE_ROWS);
     S.dirty = true;
   }
@@ -162,6 +173,10 @@
       buf.ts = buf.ts.slice(buf.i).concat(r.ts);
       buf.price = buf.price.slice(buf.i).concat(r.price);
       buf.size = buf.size.slice(buf.i).concat(r.size);
+      buf.side = buf.side.slice(buf.i).concat(r.side);
+      // bid/ask only exist for quote data (e.g. Databento TBBO); 0 = unknown
+      buf.bid = buf.bid.slice(buf.i).concat(r.bid || r.ts.map(() => 0));
+      buf.ask = buf.ask.slice(buf.i).concat(r.ask || r.ts.map(() => 0));
       buf.i = 0;
       buf.covered = r.covered_until;
       if (r.ts.length === 0) {
@@ -181,7 +196,7 @@
     const buf = S.buf;
     const lim = buf.eof ? target : Math.min(target, buf.covered);
     while (buf.i < buf.ts.length && buf.ts[buf.i] <= lim) {
-      applyTick(buf.ts[buf.i], buf.price[buf.i], buf.size[buf.i]);
+      applyTick(buf, buf.i);
       buf.i++;
     }
     if (lim > S.t) S.t = lim;
@@ -234,6 +249,7 @@
     S.bar = lastC ? { bucket: lastC.time, open: lastC.open, high: lastC.high, low: lastC.low, close: lastC.close, volume: lastC.volume } : null;
     S.firstBucket = hist.length ? hist[0].time : null;
     S.last = lastC ? lastC.close : null;
+    S.bid = S.ask = null;
     S.dirty = false;
     S.tape = [];
     refreshMarkers();
@@ -246,7 +262,9 @@
 
   function order(signedQty) {
     if (S.last === null) return status("No price yet");
-    const pos = S.pos, px = S.last, pv = S.sym.point_value;
+    // with quotes, market orders pay the spread: buys fill at the ask, sells at the bid
+    const quoted = S.bid !== null && S.ask !== null;
+    const pos = S.pos, px = quoted ? (signedQty > 0 ? S.ask : S.bid) : S.last, pv = S.sym.point_value;
     const p = pos.qty, q = signedQty;
     if (p === 0 || Math.sign(p) === Math.sign(q)) {
       pos.avg = (pos.avg * Math.abs(p) + px * Math.abs(q)) / Math.abs(p + q);
@@ -317,9 +335,13 @@
     $("fills").textContent = pos.fills.length;
 
     const rows = S.tape.slice(-TAPE_ROWS).reverse();
-    $("tape").innerHTML = rows.map(([ts, px, sz, dir]) =>
-      `<tr class="${dir > 0 ? "up" : dir < 0 ? "down" : ""}"><td>${fmtNY(ts, false)}</td><td>${px.toFixed(2)}</td><td>${sz}</td></tr>`
+    $("tape").innerHTML = rows.map(([ts, px, sz, dir, aggr]) =>
+      `<tr class="${dir > 0 ? "up" : dir < 0 ? "down" : ""}${aggr && sz >= BIG_PRINT ? " big" : ""}"><td>${fmtNY(ts, false)}</td><td>${px.toFixed(2)}</td><td>${sz}</td></tr>`
     ).join("");
+    $("quote").textContent = S.bid !== null ? `${S.bid.toFixed(2)} × ${S.ask.toFixed(2)}` : "";
+    $("fillNote").textContent = S.bid !== null
+      ? "Market orders fill at the ask (buy) / bid (sell)."
+      : "No bid/ask in this data: market orders fill at the last trade.";
   }
 
   /** "Open in 04:12" during the 30 minutes before the 09:30 New York open. */
@@ -367,7 +389,7 @@
     const nt = await ensureNextTick();
     if (nt === null) return status("End of data");
     const buf = S.buf;
-    applyTick(buf.ts[buf.i], buf.price[buf.i], buf.size[buf.i]);
+    applyTick(buf, buf.i);
     buf.i++;
     S.t = Math.max(S.t, nt);
     render(true);

@@ -14,8 +14,13 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
+from zoneinfo import ZoneInfo
+
 import numpy as np
-import pyarrow.parquet as pq
+
+from tools.import_ticks import read_day_file
+
+NY = ZoneInfo("America/New_York")
 
 DAY_MS = 86_400_000
 SYMBOL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}")
@@ -51,13 +56,27 @@ def day_start_ms(day: dt.date) -> int:
 
 
 class Ticks:
-    __slots__ = ("ts", "price", "size")
+    """Trades of one day. bid/ask are the best quotes just before each trade (NaN if unknown),
+    side is the aggressor (+1 buyer, -1 seller, 0 unknown)."""
 
-    def __init__(self, ts: np.ndarray, price: np.ndarray, size: np.ndarray):
+    __slots__ = ("ts", "price", "size", "bid", "ask", "side")
+
+    def __init__(self, ts, price, size, bid=None, ask=None, side=None):
+        n = len(ts)
         self.ts, self.price, self.size = ts, price, size
+        self.bid = np.full(n, np.nan) if bid is None else bid
+        self.ask = np.full(n, np.nan) if ask is None else ask
+        self.side = np.zeros(n, np.int8) if side is None else side
 
     def __len__(self) -> int:
         return len(self.ts)
+
+    def slice(self, i: int, j: int) -> "Ticks":
+        return Ticks(*(getattr(self, f)[i:j] for f in self.__slots__))
+
+    @property
+    def has_quotes(self) -> bool:
+        return bool(len(self) and not np.isnan(self.bid).all())
 
 
 EMPTY_TICKS = Ticks(np.empty(0, np.int64), np.empty(0, np.float64), np.empty(0, np.int32))
@@ -114,11 +133,13 @@ class Store:
         # Bound the per-instance caches (a tick day can be tens of MB, a 1s-bar day ~2 MB).
         self._day_ticks = lru_cache(maxsize=6)(self._load_day)
         self._day_bars = lru_cache(maxsize=256)(self._bars_1s_for_day)
+        self._session = lru_cache(maxsize=1024)(self._session_for_day)
 
     def invalidate(self) -> None:
         """Forget cached day data after files on disk changed."""
         self._day_ticks.cache_clear()
         self._day_bars.cache_clear()
+        self._session.cache_clear()
 
     # ---- catalog -------------------------------------------------------------
 
@@ -137,6 +158,7 @@ class Store:
                 "days": [x.isoformat() for x in days],
                 "first_ts": int(first.ts[0]) if len(first) else None,
                 "last_ts": int(last.ts[-1]) if len(last) else None,
+                "quotes": last.has_quotes,
                 **spec_for(d.name),
             })
         return out
@@ -164,12 +186,8 @@ class Store:
         path = self._sym_dir(symbol) / f"{day.isoformat()}.parquet"
         if not path.exists():
             return EMPTY_TICKS
-        t = pq.read_table(path, columns=["ts", "price", "size"])
-        return Ticks(
-            t.column("ts").to_numpy().astype(np.int64, copy=False),
-            t.column("price").to_numpy().astype(np.float64, copy=False),
-            t.column("size").to_numpy().astype(np.int32, copy=False),
-        )
+        c = read_day_file(path)
+        return Ticks(c["ts"], c["price"], c["size"], c["bid"], c["ask"], c["side"])
 
     def day_ticks(self, symbol: str, day: dt.date) -> Ticks:
         return self._day_ticks(symbol, day)
@@ -182,7 +200,7 @@ class Store:
         never skips ticks sharing that millisecond.
         """
         days = self.days(symbol)
-        ts_parts, px_parts, sz_parts = [], [], []
+        parts: list[Ticks] = []
         n = 0
         covered = until
         for day in days:
@@ -205,18 +223,24 @@ class Store:
                 else:
                     j = np.searchsorted(tk.ts, cut_ms, side="right")
                     covered = int(cut_ms)
-                ts_parts.append(tk.ts[i:j]); px_parts.append(tk.price[i:j]); sz_parts.append(tk.size[i:j])
+                parts.append(tk.slice(i, j))
                 n += j - i
                 break
-            ts_parts.append(tk.ts[i:j]); px_parts.append(tk.price[i:j]); sz_parts.append(tk.size[i:j])
+            parts.append(tk.slice(i, j))
             n += j - i
 
-        ts = np.concatenate(ts_parts) if ts_parts else EMPTY_TICKS.ts
+        cat = lambda f: np.concatenate([getattr(p, f) for p in parts]) if parts else getattr(EMPTY_TICKS, f)  # noqa: E731
+        bid, ask = cat("bid"), cat("ask")
+        quotes = bool(len(bid) and not np.isnan(bid).all())
         return {
             "covered_until": int(covered),
-            "ts": ts.tolist(),
-            "price": (np.concatenate(px_parts) if px_parts else EMPTY_TICKS.price).tolist(),
-            "size": (np.concatenate(sz_parts) if sz_parts else EMPTY_TICKS.size).tolist(),
+            "ts": cat("ts").tolist(),
+            "price": cat("price").tolist(),
+            "size": cat("size").tolist(),
+            "side": cat("side").tolist(),
+            # best bid/ask before each trade; 0 where unknown (JSON has no NaN)
+            "bid": np.nan_to_num(bid, nan=0.0).tolist() if quotes else None,
+            "ask": np.nan_to_num(ask, nan=0.0).tolist() if quotes else None,
             # first tick after the covered window (lets the client jump over closed hours)
             "next_ts": self.next_tick_after(symbol, int(covered)) if n == 0 else None,
         }
@@ -251,7 +275,7 @@ class Store:
         i = np.searchsorted(tk.ts, end_sec * 1000, side="left")
         j = np.searchsorted(tk.ts, end, side="right")
         if j > i:
-            parts.append(ticks_to_bars(Ticks(tk.ts[i:j], tk.price[i:j], tk.size[i:j]), 1))
+            parts.append(ticks_to_bars(tk.slice(i, j), 1))
 
         # whole seconds before that, walking back day by day until we have enough buckets
         have = 0
@@ -275,3 +299,34 @@ class Store:
              "low": float(bars.l[x]), "close": float(bars.c[x]), "volume": float(bars.v[x])}
             for x in range(s, n)
         ]
+
+    # ---- sessions ------------------------------------------------------------
+
+    def _session_for_day(self, symbol: str, day: dt.date) -> dict | None:
+        """Regular-hours (09:30-16:00 New York) summary of one weekday."""
+        if day.weekday() >= 5:
+            return None
+        o = int(dt.datetime(day.year, day.month, day.day, 9, 30, tzinfo=NY).timestamp())
+        c = int(dt.datetime(day.year, day.month, day.day, 16, 0, tzinfo=NY).timestamp())
+        b = self._day_bars(symbol, day)
+        i, j = np.searchsorted(b.t, o), np.searchsorted(b.t, c)
+        if i >= j:
+            return None
+        t, hi, lo, cl, v = b.t[i:j], b.h[i:j], b.l[i:j], b.c[i:j], b.v[i:j]
+        k5 = np.searchsorted(t, o + 300)
+        spark = rebucket(Bars(t, b.o[i:j], hi, lo, cl, v), 300)
+        # previous close for the day's change: last trade before the open
+        prev = float(b.c[i - 1]) if i > 0 else float(b.o[i])
+        return {
+            "date": day.isoformat(),
+            "open_ts": o * 1000,
+            "open": float(b.o[i]), "high": float(hi.max()), "low": float(lo.min()), "close": float(cl[-1]),
+            "volume": int(v.sum()),
+            "pre_open": prev,
+            "range_5m": float(hi[:k5].max() - lo[:k5].min()) if k5 else 0.0,
+            "spark": [round(float(x), 2) for x in spark.c],
+        }
+
+    def sessions(self, symbol: str) -> list[dict]:
+        out = [self._session(symbol, d) for d in self.days(symbol)]
+        return [x for x in out if x]

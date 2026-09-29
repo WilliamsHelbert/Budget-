@@ -8,101 +8,141 @@
   <link rel="stylesheet" href="landing.css">
 </head>
 <body>
+  <div class="glow" aria-hidden="true"></div>
+
   <nav class="nav">
-    <a href="./" class="brand"><span class="logo">▮▮</span> Tick Replay</a>
-    <a href="chart.html" class="nav-link">Open chart →</a>
+    <div class="wrap nav-inner">
+      <a href="./" class="brand"><img src="favicon.png" alt="" width="24" height="24"> Tick Replay</a>
+      <div class="nav-links">
+        <a href="#sessions">Sessions</a>
+        <a href="#how">How it works</a>
+        <a href="#library">Data</a>
+      </div>
+      <a href="chart.html" class="btn btn-ghost btn-sm" id="navChart">Open chart</a>
+    </div>
   </nav>
 
-  <header class="hero">
-    <p class="eyebrow">NQ · ES futures · millisecond tick replay</p>
-    <h1>Trade the open like it's live.</h1>
-    <p class="lead">
-      Other replay tools step one candle per second. Tick Replay plays back every real trade at the
-      exact millisecond it printed, so a fast open is fast, a quiet tape is quiet and your entries are
-      tested against the market you'll actually face.
-    </p>
+  <header class="hero wrap">
+    <div class="hero-copy">
+      <span class="pill"><span class="dot"></span> Real ticks · real timing · 1x</span>
+      <h1>Trade the open.<br><span class="grad">Again and again.</span></h1>
+      <p class="lead">
+        Every NQ and ES trade, replayed at the exact millisecond it printed.
+        No 1-second candle hops. The bell rings, the tape explodes and you're in it, just like live.
+      </p>
 
-    <form id="openForm" class="launch">
-      <label>
-        <span>Symbol</span>
-        <select id="sym"></select>
-      </label>
-      <label>
-        <span>Session</span>
-        <select id="day"></select>
-      </label>
-      <button type="submit" class="cta">🔔 Market Open</button>
-      <a id="free" href="chart.html" class="ghost">Free replay</a>
-    </form>
-    <p class="hint" id="formHint">Market Open starts at 09:25 New York and plays in real time (1x), tick by tick.</p>
+      <div class="sym-switch" id="symSwitch" role="tablist" aria-label="Symbol"></div>
+
+      <div class="cta-row">
+        <button class="btn btn-gold btn-lg" id="heroOpen" disabled>
+          <span class="bell">🔔</span> <span id="heroOpenLabel">Market Open</span>
+        </button>
+        <a class="btn btn-ghost btn-lg" id="heroFree" href="chart.html">Free replay</a>
+      </div>
+
+      <dl class="hero-stats">
+        <div><dt>Sessions</dt><dd id="statSessions">–</dd></div>
+        <div><dt>Precision</dt><dd>1 ms</dd></div>
+        <div><dt>Quotes</dt><dd id="statQuotes">–</dd></div>
+      </dl>
+    </div>
+
+    <div class="live-card" id="liveCard">
+      <div class="live-head">
+        <div>
+          <div class="live-sym" id="liveSym">–</div>
+          <div class="live-date" id="liveDate">Loading replay…</div>
+        </div>
+        <div class="live-badge" id="liveBadge"><span class="dot"></span> REPLAY 1x</div>
+      </div>
+      <div class="live-price-row">
+        <div class="live-price" id="livePrice">–</div>
+        <div class="live-chg" id="liveChg"></div>
+        <div class="live-clock" id="liveClock"></div>
+      </div>
+      <div class="live-chart" id="liveChart"></div>
+      <div class="live-tape" id="liveTape"></div>
+    </div>
   </header>
 
-  <section class="features">
-    <article>
-      <h3>Real tick timing</h3>
-      <p>Every price change arrives exactly when it happened, down to the millisecond.
-        The price holds until the next trade, just like a live DOM.</p>
-    </article>
-    <article>
-      <h3>Any timeframe, same tape</h3>
-      <p>1s to 4h candles are only a view. Underneath, playback is always tick by tick,
-        and the current candle builds in front of you.</p>
-    </article>
-    <article>
-      <h3>Practice execution</h3>
-      <p>Buy, sell and flatten with hotkeys (B / S / F) and see open and closed P&amp;L in
-        dollars for NQ ($20/pt) and ES ($50/pt).</p>
-    </article>
-    <article>
-      <h3>Your own data</h3>
-      <p>Import NinjaTrader, Databento, Sierra Chart or plain CSV tick exports.
-        Everything stays on your machine.</p>
-    </article>
+  <section class="wrap section" id="sessions">
+    <div class="section-head">
+      <div>
+        <h2>Pick a session</h2>
+        <p class="muted">Each card is one regular session (09:30–16:00 New York). Market Open starts at 09:25 and plays live.</p>
+      </div>
+      <div class="sym-switch small" id="symSwitch2"></div>
+    </div>
+    <div class="cards" id="cards">
+      <div class="card skeleton"></div><div class="card skeleton"></div><div class="card skeleton"></div>
+    </div>
   </section>
 
-  <section class="data">
-    <h2>Available data</h2>
-    <table>
-      <thead><tr><th>Symbol</th><th>From</th><th>To</th><th>Days</th><th></th></tr></thead>
-      <tbody id="dataRows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
-    </table>
+  <section class="wrap section" id="how">
+    <h2>How it works</h2>
+    <div class="steps">
+      <div class="step">
+        <span class="num">1</span>
+        <h3>Load real ticks</h3>
+        <p>Drop in Databento TBBO/trades, NinjaTrader or any CSV. With several contracts in a file, the most-traded one is kept for each day.</p>
+      </div>
+      <div class="step">
+        <span class="num">2</span>
+        <h3>Sit through the bell</h3>
+        <p>Market Open puts you at 09:25 New York with the whole overnight session on the chart. The clock runs at real speed. Nothing skips ahead.</p>
+      </div>
+      <div class="step">
+        <span class="num">3</span>
+        <h3>Execute like it's live</h3>
+        <p>Buy on the ask, sell on the bid, see your P&amp;L in dollars. Space pauses, → steps one tick. Hotkeys: <kbd>B</kbd> <kbd>S</kbd> <kbd>F</kbd>.</p>
+      </div>
+    </div>
   </section>
 
-  <section class="data" id="import">
-    <h2>Import tick data</h2>
-    <p class="muted small">
-      NinjaTrader tick exports (.txt), Databento CSV (also .csv.zst), Sierra Chart or any CSV with time, price and volume columns. Databento downloads with every NQ/ES contract are cut down to the most-traded contract each day.
-      Importing the same days again replaces them.
-    </p>
-    <form id="importForm" class="launch import">
-      <label>
-        <span>Symbol</span>
-        <input id="impSym" list="symList" value="NQ" required maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_\-]*">
-        <datalist id="symList"><option>NQ</option><option>ES</option><option>MNQ</option><option>MES</option></datalist>
-      </label>
-      <label>
-        <span>Time zone in the file</span>
-        <select id="impTz">
-          <option value="Europe/Copenhagen">Denmark (my PC's time)</option>
-          <option value="America/New_York">New York</option>
-          <option value="America/Chicago">Chicago (CME)</option>
-          <option value="UTC">UTC</option>
-        </select>
-      </label>
-      <label class="file">
-        <span>Files</span>
-        <input id="impFiles" type="file" multiple required accept=".csv,.txt,.zst">
-      </label>
-      <button type="submit" class="cta" id="impBtn">Import</button>
-    </form>
-    <p class="hint" id="impMsg">NinjaTrader saves exports in your PC's time zone. Databento files already include the time zone, so this setting doesn't matter for them.</p>
+  <section class="wrap section two-col" id="library">
+    <div>
+      <h2>Your data</h2>
+      <div class="lib" id="lib"><p class="muted">Loading…</p></div>
+    </div>
+
+    <div id="import">
+      <h2>Import ticks</h2>
+      <form id="importForm" class="import-card">
+        <label class="drop" id="drop">
+          <input id="impFiles" type="file" multiple accept=".csv,.txt,.zst" hidden>
+          <span class="drop-icon">⇪</span>
+          <span class="drop-title" id="dropTitle">Drop tick files here</span>
+          <span class="muted small" id="dropSub">or click to choose · .csv · .csv.zst · .txt</span>
+        </label>
+        <div class="import-row">
+          <label>
+            <span>Symbol</span>
+            <input id="impSym" list="symList" value="NQ" required maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_\-]*">
+            <datalist id="symList"><option>NQ</option><option>ES</option><option>MNQ</option><option>MES</option></datalist>
+          </label>
+          <label>
+            <span>Time zone in file</span>
+            <select id="impTz">
+              <option value="Europe/Copenhagen">Denmark (my PC)</option>
+              <option value="America/New_York">New York</option>
+              <option value="America/Chicago">Chicago (CME)</option>
+              <option value="UTC">UTC</option>
+            </select>
+          </label>
+          <button type="submit" class="btn btn-gold" id="impBtn" disabled>Import</button>
+        </div>
+        <div class="bar" id="impBar" hidden><span></span></div>
+        <p class="hint" id="impMsg">Databento files carry their own time zone, so the setting only matters for NinjaTrader and plain CSV.</p>
+      </form>
+    </div>
   </section>
 
-  <footer class="foot">
-    <span>Keys on the chart: Space play/pause · → next tick · Shift+→ next candle · B / S / F trade</span>
+  <footer class="wrap foot">
+    <span><kbd>Space</kbd> play/pause · <kbd>→</kbd> next tick · <kbd>Shift</kbd>+<kbd>→</kbd> next candle · <kbd>B</kbd>/<kbd>S</kbd>/<kbd>F</kbd> trade</span>
     <span>Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a> Lightweight Charts</span>
   </footer>
 
+  <script src="vendor/lightweight-charts.standalone.production.js"></script>
   <script src="landing.js"></script>
 </body>
 </html>

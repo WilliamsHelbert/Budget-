@@ -41,7 +41,7 @@ def sessions(days: int) -> list[tuple[dt.datetime, dt.datetime]]:
 
 
 def gen_symbol(sym: str, sess: list, rng: np.random.Generator, rth_rate: float, eth_rate: float):
-    ts_all, px_all, sz_all = [], [], []
+    ts_all, px_all, sz_all, side_all = [], [], [], []
     price = START_PRICE[sym]
     for s, e in sess:
         rth0 = dt.datetime(e.year, e.month, e.day, 9, 30, tzinfo=NY)
@@ -51,11 +51,18 @@ def gen_symbol(sym: str, sess: list, rng: np.random.Generator, rth_rate: float, 
             n = rng.poisson(rate * (b_ms - a_ms) / 1000)
             ts = np.sort(rng.integers(a_ms, b_ms, n))
             steps = rng.choice([-1, 0, 1], size=n, p=[0.3, 0.4, 0.3])
-            px = price + np.cumsum(steps) * TICK
+            mid = price + np.cumsum(steps) * TICK
+            # aggressor: buyers lift the offer (trade at ask), sellers hit the bid
+            side = np.where(steps > 0, 1, np.where(steps < 0, -1, rng.choice([-1, 1], size=n))).astype(np.int8)
+            px = mid
             price = float(px[-1]) if n else price
-            ts_all.append(ts); px_all.append(px)
+            ts_all.append(ts); px_all.append(px); side_all.append(side)
             sz_all.append(np.minimum(rng.geometric(0.45, n), 50).astype(np.int32))
-    return np.concatenate(ts_all), np.concatenate(px_all), np.concatenate(sz_all)
+    px, side = np.concatenate(px_all), np.concatenate(side_all)
+    # quote just before the trade: one tick wide, the trade printed on the aggressed side
+    bid = np.where(side > 0, px - TICK, px)
+    ask = bid + TICK
+    return np.concatenate(ts_all), px, np.concatenate(sz_all), bid, ask, side
 
 
 def generate(out: Path, days: int = 5, seed: int = 7, suffix: str = "-DEMO") -> None:
@@ -63,8 +70,8 @@ def generate(out: Path, days: int = 5, seed: int = 7, suffix: str = "-DEMO") -> 
     rng = np.random.default_rng(seed)
     sess = sessions(days)
     for root, rth, eth in (("NQ", 6.0, 0.8), ("ES", 4.0, 0.5)):
-        ts, px, sz = gen_symbol(root, sess, rng, rth, eth)
-        n = write_days(out, root + suffix, ts, px, sz)
+        ts, px, sz, bid, ask, side = gen_symbol(root, sess, rng, rth, eth)
+        n = write_days(out, root + suffix, ts, px, sz, bid=bid, ask=ask, side=side)
         print(f"{root + suffix}: {len(ts):,} ticks in {n} day files")
 
 
