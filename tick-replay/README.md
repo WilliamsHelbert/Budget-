@@ -101,10 +101,16 @@ A countdown shows the time left to 09:30. The same button is on the chart page a
 * **Top bar:** symbol, timeframes (1s–4h), chart type (candles, hollow candles, bars, line, area), indicators
   (EMA 9/21/50, session VWAP that resets at 18:00 New York), jump to a time, Market Open, screenshot (PNG incl. drawings),
   settings, side panel toggle, full screen.
-* **Drawing tools (left):** trend line, ray, horizontal line and ray, vertical line, rectangle, Fibonacci retracement,
-  long / short position (target, stop, R:R, ticks and $), text, measure (price, %, ticks, $, bars, duration), magnet (snap to OHLC),
-  hide all, remove all. Drag a drawing or its handles to change it, right-click for colour / clone / delete, Del removes the selected
-  one, Esc cancels. Drawings are saved per symbol (and per session).
+* **Drawing tools (left), grouped like TradingView:** each button remembers the last tool used; hover and click › (or long-press)
+  for the group menu.
+  Cursors (cross, dot, arrow, eraser) · Lines (trend, ray, info line, extended, trend angle, horizontal line/ray, vertical line,
+  cross line, parallel channel, rectangle) · Fibonacci (retracement, trend-based extension) · Patterns (XABCD, ABCD, triangle, with ratios) ·
+  Projection & measurers (long/short position with target, stop, R:R, ticks and $; date range, price range, date & price range) ·
+  Brushes (brush, highlighter) · Text (text, callout, price label, arrow, arrow marks) · Icons (emoji stickers) · Measure · Zoom in/out ·
+  Magnet (off/weak/strong) · Stay in drawing mode · Lock all · Hide (drawings, indicators, trade markers) · Share drawings across
+  sessions · Remove (drawings, indicators). Drag drawings or handles, right-click for colour, line width, clone, bring to front,
+  remove. Shortcuts: Alt+T trend, Alt+H horizontal line, Alt+J horizontal ray, Alt+V vertical, Alt+C cross line, Alt+F fib,
+  Alt+Shift+R rectangle, Del removes the selected drawing, Esc cancels.
 * **Replay bar:** play/pause, next tick, next candle, speed, skip closed. Drag it by the grip.
 * **Settings (gear):** candle colours, volume, background, grid, crosshair, watermark, scale text and lines, right margin,
   side panel, fill markers, default drawing colour and default R:R for the position tool. Saved on this PC.

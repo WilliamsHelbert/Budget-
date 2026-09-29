@@ -195,6 +195,7 @@
         text: S.sym ? `${S.sym.symbol} · ${tfLabel(S.tf)}` : "",
       },
     });
+    if (typeof applyCrosshair === "function" && cursorMode !== "cross") applyCrosshair();
     volume.applyOptions({ visible: cfg.volume });
     volume.setData(bars.map((b) => ({ time: b.time, value: b.volume, color: volColor(b) })));
     $("side").hidden = !cfg.sidePanel;
@@ -212,7 +213,7 @@
     for (const id of cfg.indicators) {
       if (!INDICATORS[id]) continue;
       if (!indSeries[id]) {
-        indSeries[id] = chart.addLineSeries({ color: INDICATORS[id].color, lineWidth: id === "vwap" ? 2 : 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+        indSeries[id] = chart.addLineSeries({ color: INDICATORS[id].color, lineWidth: id === "vwap" ? 2 : 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, visible: !indHidden });
       }
       recomputeIndicator(id);
     }
@@ -370,7 +371,7 @@
     main.setData(bars.map(mainPoint));
     volume.setData(bars.map((b) => ({ time: b.time, value: b.volume, color: volColor(b) })));
     for (const id of Object.keys(indSeries)) recomputeIndicator(id);
-    draw.load(`tickreplay.drawings.${S.bt ? S.bt.id : "free"}.${S.sym.symbol}`);
+    draw.load(`tickreplay.drawings.${S.bt ? S.bt.id : "free"}.${S.sym.symbol}`, `tickreplay.drawings.shared.${S.sym.symbol}`);
     chart.applyOptions({ watermark: { text: `${S.sym.symbol} · ${tfLabel(S.tf)}` } });
     const lastC = hist[hist.length - 1];
     S.bar = lastC ? { bucket: lastC.time, open: lastC.open, high: lastC.high, low: lastC.low, close: lastC.close, volume: lastC.volume } : null;
@@ -546,7 +547,7 @@
       $("bbBalance").hidden = false;
       $("bbBalance").textContent = money(bal);
     }
-    $("fillNote").textContent = S.bid !== null
+    $("fillNote").textContent = S.bid !== null || (S.sym && S.sym.quotes)
       ? "Market orders fill at the ask (buy) / bid (sell)."
       : "No bid/ask in this data: market orders fill at the last trade.";
   }
@@ -742,11 +743,30 @@
 
   // ---- drawings ---------------------------------------------------------------
 
+  let cursorMode = "cross", indHidden = false;
+  function applyCrosshair() {
+    const lines = cursorMode === "cross";
+    chart.applyOptions({ crosshair: { vertLine: { visible: lines, labelVisible: true }, horzLine: { visible: lines, labelVisible: true } } });
+  }
+
   const draw = Drawings.create({
     chart, canvas: $("draw"), wrap: document.querySelector(".chart-wrap"),
     series: () => main, times: () => barTimes, barAt: (i) => bars[i], tf: () => S.tf,
     tickSize: () => (S.sym ? S.sym.tick_size : 0.25), pointValue: () => (S.sym ? S.sym.point_value : 1),
     color: () => cfg.drawColor, rr: () => +cfg.rr || 2, status,
+    setCursor: (mode) => {
+      cursorMode = mode;
+      applyCrosshair();
+      const wrap = document.querySelector(".chart-wrap");
+      wrap.classList.toggle("cur-dot", mode === "dot");
+      wrap.classList.toggle("cur-arrow", mode === "arrow");
+    },
+    onIndicators: (action) => {
+      if (action === "remove") { cfg.indicators = []; saveCfg(); syncIndicators(); renderIndMenu(); }
+      else { indHidden = !indHidden; for (const sr of Object.values(indSeries)) sr.applyOptions({ visible: !indHidden }); }
+      renderLegend(bars.length - 1);
+    },
+    onMarkers: () => { cfg.markers = !cfg.markers; saveCfg(); refreshMarkers(); status(cfg.markers ? "Trade markers shown" : "Trade markers hidden"); },
   });
 
   // ---- top bar, menus, settings, replay bar -------------------------------------

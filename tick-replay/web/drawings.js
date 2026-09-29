@@ -4,58 +4,128 @@
  * price. They are painted on a canvas over the chart every frame, so they follow
  * panning, zooming and live candles. Time <-> x goes through the candles' logical
  * index, which also works to the right of the last candle and across timeframes.
+ *
+ * The toolbar works like TradingView's: each button is a group that remembers the last
+ * tool used from it, and a › flyout lists every tool in the group.
  */
 (() => {
   "use strict";
 
-  const FIB_LEVELS = [
-    [0, "#787b86"], [0.236, "#f23645"], [0.382, "#ff9800"], [0.5, "#4caf50"],
-    [0.618, "#089981"], [0.786, "#00bcd4"], [1, "#787b86"],
-  ];
   const HIT = 6;          // px tolerance for picking lines
   const HANDLE = 5;       // handle radius
-  const SWATCHES = ["#2962ff", "#f5a623", "#26a69a", "#ef5350", "#e040fb", "#ffffff", "#9598a1"];
+  const SWATCHES = ["#2962ff", "#f5a623", "#26a69a", "#ef5350", "#e040fb", "#ffffff", "#9598a1", "#000000"];
+  const FIB = [[0, "#787b86"], [0.236, "#f23645"], [0.382, "#ff9800"], [0.5, "#4caf50"], [0.618, "#089981"], [0.786, "#00bcd4"], [1, "#787b86"]];
+  const FIB_EXT = [[0, "#787b86"], [0.618, "#f23645"], [1, "#ff9800"], [1.272, "#4caf50"], [1.618, "#089981"], [2, "#00bcd4"], [2.618, "#2962ff"]];
+  const EMOJIS = ["🚀", "🔥", "✅", "❌", "⚠️", "💰", "📈", "📉", "🎯", "⭐", "👍", "👎", "😀", "😬", "🤔", "💡", "🔔", "🛑", "⏰", "📰"];
 
-  const ICONS = {
-    cursor: '<path d="M5 3l14 8-6 1.5L10 19z"/>',
-    trend: '<path d="M4 19 20 5"/><circle cx="4" cy="19" r="1.8"/><circle cx="20" cy="5" r="1.8"/>',
-    ray: '<path d="M4 18 21 6"/><circle cx="4" cy="18" r="1.8"/><circle cx="12" cy="12.4" r="1.8"/>',
-    hline: '<path d="M2 12h20"/><circle cx="12" cy="12" r="1.8"/>',
-    hray: '<path d="M6 12h16"/><circle cx="6" cy="12" r="1.8"/>',
-    vline: '<path d="M12 2v20"/><circle cx="12" cy="12" r="1.8"/>',
-    rect: '<rect x="4" y="6" width="16" height="12" rx="1"/>',
-    fib: '<path d="M3 5h18M3 9.5h18M3 14h18M3 19h18"/><path d="M5 19 19 5" stroke-dasharray="2 2"/>',
-    long: '<rect x="4" y="4" width="16" height="8" fill="rgba(38,166,154,.35)" stroke="#26a69a"/><rect x="4" y="12" width="16" height="7" fill="rgba(239,83,80,.3)" stroke="#ef5350"/>',
-    short: '<rect x="4" y="5" width="16" height="7" fill="rgba(239,83,80,.3)" stroke="#ef5350"/><rect x="4" y="12" width="16" height="8" fill="rgba(38,166,154,.35)" stroke="#26a69a"/>',
-    text: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>',
-    measure: '<path d="M4 20 20 4M7 20l-3-3M11 16l-2-2M15 12l-2-2M19 8l-2-2"/>',
-    magnet: '<path d="M6 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4z"/><path d="M6 8h4M14 8h4"/>',
-    eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
-    trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  // ---- icons (28×28, stroked) ----------------------------------------------------
+  const I = {
+    cross: '<path d="M14 4v20M4 14h20"/>',
+    dot: '<circle cx="14" cy="14" r="2.5" fill="currentColor"/>',
+    arrow: '<path d="M8 5l13 8-6 1.8L12 21z"/>',
+    eraser: '<path d="M6 19l9-10 7 6-7 8H9z"/><path d="M11 13l6 5M5 23h18"/>',
+    trend: '<path d="M6 22 22 6"/><circle cx="6" cy="22" r="2"/><circle cx="22" cy="6" r="2"/>',
+    ray: '<path d="M6 21 25 7"/><circle cx="6" cy="21" r="2"/><circle cx="14" cy="15" r="2"/>',
+    info: '<path d="M5 21 20 8"/><circle cx="5" cy="21" r="2"/><circle cx="20" cy="8" r="2"/><rect x="15" y="16" width="9" height="6" rx="1"/>',
+    extended: '<path d="M3 24 25 4"/><circle cx="10" cy="18" r="2"/><circle cx="18" cy="11" r="2"/>',
+    angle: '<path d="M5 21 21 9M5 21h17"/><path d="M13 21a8 8 0 0 0-1.4-4.5"/>',
+    hline: '<path d="M3 14h22"/><circle cx="14" cy="14" r="2"/>',
+    hray: '<path d="M8 14h17"/><circle cx="8" cy="14" r="2"/>',
+    vline: '<path d="M14 3v22"/><circle cx="14" cy="14" r="2"/>',
+    crossline: '<path d="M14 3v22M3 14h22"/><circle cx="14" cy="14" r="2"/>',
+    channel: '<path d="M4 17 18 7M10 23 24 13"/><circle cx="4" cy="17" r="1.8"/><circle cx="18" cy="7" r="1.8"/><circle cx="24" cy="13" r="1.8"/>',
+    rect: '<rect x="5" y="8" width="18" height="12" rx="1"/><circle cx="5" cy="8" r="1.8"/><circle cx="23" cy="20" r="1.8"/>',
+    fib: '<path d="M4 6h20M4 11h20M4 16h20M4 21h20"/><path d="M6 21 22 6" stroke-dasharray="2 2"/>',
+    fibext: '<path d="M4 8h20M4 13h20M4 18h20"/><path d="M5 22l6-12 6 8" stroke-dasharray="2 2"/>',
+    xabcd: '<path d="M3 20l5-12 5 8 5-10 7 12"/><circle cx="3" cy="20" r="1.6"/><circle cx="25" cy="18" r="1.6"/>',
+    abcd: '<path d="M4 20l7-12 6 7 7-10"/><circle cx="4" cy="20" r="1.6"/><circle cx="24" cy="5" r="1.6"/>',
+    triangle: '<path d="M4 21 12 6l12 13z"/>',
+    long: '<rect x="5" y="5" width="18" height="9" fill="rgba(38,166,154,.35)" stroke="#26a69a"/><rect x="5" y="14" width="18" height="8" fill="rgba(239,83,80,.3)" stroke="#ef5350"/>',
+    short: '<rect x="5" y="6" width="18" height="8" fill="rgba(239,83,80,.3)" stroke="#ef5350"/><rect x="5" y="14" width="18" height="9" fill="rgba(38,166,154,.35)" stroke="#26a69a"/>',
+    daterange: '<path d="M6 5v18M22 5v18M9 14h10M16 11l3 3-3 3"/>',
+    pricerange: '<path d="M5 6h18M5 22h18M14 9v10M11 16l3 3 3-3"/>',
+    measure: '<path d="M5 23 23 5M8 23l-3-3M12 19l-2-2M16 15l-2-2M20 11l-2-2"/>',
+    brush: '<path d="M5 22c3 0 4-2 4-4 0-1.6 1-3 3-3 1.5 0 2.5 1 2.5 2.5C14.5 20 12 22 9 22"/><path d="M13 15 23 5"/>',
+    highlighter: '<path d="M9 19l-3 4h6l1-2M9 19l9-11 4 3-9 11z"/>',
+    text: '<path d="M7 8V6h14v2M14 6v16M11 22h6"/>',
+    callout: '<path d="M5 6h18v11H13l-5 5v-5H5z"/>',
+    pricelabel: '<path d="M4 9h14l6 5-6 5H4z"/>',
+    arrowline: '<path d="M5 22 22 6M14 6h8v8"/>',
+    arrowup: '<path d="M14 5l7 9h-4v9h-6v-9H7z"/>',
+    arrowdown: '<path d="M14 23l7-9h-4V5h-6v9H7z"/>',
+    icons: '<circle cx="14" cy="14" r="9"/><path d="M10 16.5c1 1.5 2.3 2.2 4 2.2s3-.7 4-2.2"/><circle cx="11" cy="12" r="1" fill="currentColor"/><circle cx="17" cy="12" r="1" fill="currentColor"/>',
+    ruler: '<path d="M4 19 19 4l5 5L9 24z"/><path d="M9 14l2 2M12 11l3 3M15 8l2 2"/>',
+    zoomin: '<circle cx="12" cy="12" r="7"/><path d="M17 17l6 6M9 12h6M12 9v6"/>',
+    zoomout: '<circle cx="12" cy="12" r="7"/><path d="M17 17l6 6M9 12h6"/>',
+    magnet: '<path d="M7 5v9a7 7 0 0 0 14 0V5h-5v9a2 2 0 0 1-4 0V5z"/><path d="M7 9h5M16 9h5"/>',
+    magnetStrong: '<path d="M7 5v9a7 7 0 0 0 14 0V5h-5v9a2 2 0 0 1-4 0V5z" fill="currentColor" fill-opacity=".3"/><path d="M7 9h5M16 9h5"/>',
+    stay: '<path d="M6 22l2-6 11-11 4 4-11 11z"/><path d="M16 8l4 4"/><rect x="17" y="18" width="7" height="6" rx="1"/><path d="M18.5 18v-1.5a2 2 0 0 1 4 0V18"/>',
+    lock: '<rect x="7" y="13" width="14" height="10" rx="2"/><path d="M10 13V9a4 4 0 0 1 8 0v4"/>',
+    unlock: '<rect x="7" y="13" width="14" height="10" rx="2"/><path d="M10 13V9a4 4 0 0 1 7.5-2"/>',
+    eye: '<path d="M3 14s4-7 11-7 11 7 11 7-4 7-11 7S3 14 3 14z"/><circle cx="14" cy="14" r="3"/>',
+    eyeOff: '<path d="M3 14s4-7 11-7c2 0 3.7.6 5.2 1.4M25 14s-4 7-11 7c-2 0-3.7-.6-5.2-1.4"/><path d="M5 23 23 5"/>',
+    link: '<path d="M12 16a4 4 0 0 0 6 .5l3.5-3.5a4 4 0 0 0-5.6-5.6L14 9.3"/><path d="M16 12a4 4 0 0 0-6-.5L6.5 15a4 4 0 0 0 5.6 5.6l1.9-1.9"/>',
+    trash: '<path d="M6 8h16M11 8V5h6v3M8 8l1 15h10l1-15"/>',
   };
-  const TOOLS = [
-    ["cursor", "Cursor (Esc)"],
+
+  // ---- tool registry ---------------------------------------------------------------
+  // n: points to click (0 = freehand drag), kind decides paint/hit behaviour
+  const T = {
+    cross: { name: "Cross", cursor: true }, dot: { name: "Dot", cursor: true }, arrow: { name: "Arrow", cursor: true },
+    eraser: { name: "Eraser", cursor: true },
+    trend: { name: "Trend line", n: 2, key: "Alt + T" }, ray: { name: "Ray", n: 2 }, info: { name: "Info line", n: 2 },
+    extended: { name: "Extended line", n: 2 }, angle: { name: "Trend angle", n: 2 },
+    hline: { name: "Horizontal line", n: 1, key: "Alt + H" }, hray: { name: "Horizontal ray", n: 1, key: "Alt + J" },
+    vline: { name: "Vertical line", n: 1, key: "Alt + V" }, crossline: { name: "Cross line", n: 1, key: "Alt + C" },
+    channel: { name: "Parallel channel", n: 3 }, rect: { name: "Rectangle", n: 2, key: "Alt + Shift + R" },
+    fib: { name: "Fib retracement", n: 2, key: "Alt + F" }, fibext: { name: "Trend-based fib extension", n: 3 },
+    xabcd: { name: "XABCD pattern", n: 5 }, abcd: { name: "ABCD pattern", n: 4 }, triangle: { name: "Triangle pattern", n: 3 },
+    long: { name: "Long position", n: 2 }, short: { name: "Short position", n: 2 },
+    daterange: { name: "Date range", n: 2 }, pricerange: { name: "Price range", n: 2 }, measure: { name: "Date and price range", n: 2 },
+    brush: { name: "Brush", n: 0 }, highlighter: { name: "Highlighter", n: 0 },
+    text: { name: "Text", n: 1 }, callout: { name: "Callout", n: 2 }, pricelabel: { name: "Price label", n: 1 },
+    arrowline: { name: "Arrow", n: 2 }, arrowup: { name: "Arrow mark up", n: 1 }, arrowdown: { name: "Arrow mark down", n: 1 },
+    emoji: { name: "Icon", n: 1 },
+    ruler: { name: "Measure", n: 2, alias: "measure" },
+    zoomin: { name: "Zoom in", n: 2 }, zoomout: { name: "Zoom out", action: true },
+  };
+
+  const GROUPS = [
+    { id: "cursor", items: [["Cursors", ["cross", "dot", "arrow"]], ["", ["eraser"]]] },
+    { id: "lines", items: [["Lines", ["trend", "ray", "info", "extended", "angle", "hline", "hray", "vline", "crossline"]], ["Channels", ["channel"]], ["Shapes", ["rect"]]] },
+    { id: "fibs", items: [["Fibonacci", ["fib", "fibext"]]] },
+    { id: "patterns", items: [["Patterns", ["xabcd", "abcd", "triangle"]]] },
+    { id: "projection", items: [["Projection", ["long", "short"]], ["Measurers", ["daterange", "pricerange", "measure"]]] },
+    { id: "brushes", items: [["Brushes", ["brush", "highlighter"]]] },
+    { id: "texts", items: [["Text & notes", ["text", "callout", "pricelabel"]], ["Arrows", ["arrowline", "arrowup", "arrowdown"]]] },
+    { id: "icons", emoji: true },
     "-",
-    ["trend", "Trend line"], ["ray", "Ray"], ["hline", "Horizontal line"], ["hray", "Horizontal ray"], ["vline", "Vertical line"],
+    { id: "ruler", single: "ruler" },
+    { id: "zoom", items: [["", ["zoomin", "zoomout"]]] },
     "-",
-    ["rect", "Rectangle"], ["fib", "Fib retracement"],
+    { id: "magnet", toggle: "magnet" },
+    { id: "stay", toggle: "stay", title: "Stay in drawing mode" },
+    { id: "lock", toggle: "lock", title: "Lock all drawings" },
+    { id: "hide", menu: "hide" },
+    { id: "sync", toggle: "sync", title: "Share drawings across all sessions" },
     "-",
-    ["long", "Long position"], ["short", "Short position"],
-    "-",
-    ["text", "Text"], ["measure", "Measure (price & time range)"],
-    "-",
-    ["magnet", "Magnet: snap to candle OHLC", "toggle"], ["eye", "Hide / show drawings", "toggle"], ["trash", "Remove all drawings", "action"],
+    { id: "trash", menu: "trash" },
   ];
-  const TWO_POINT = new Set(["trend", "ray", "rect", "fib", "long", "short", "measure"]);
 
   function create(o) {
-    // o: { chart, series(), canvas, wrap, times(), barAt(i), tf(), tickSize(), pointValue(), color(), rr(), status(msg) }
+    // o: { chart, series(), canvas, wrap, times(), barAt(i), tf(), tickSize(), pointValue(), color(), rr(), status(msg),
+    //      setCursor(mode), onIndicators(action), onMarkers(visible) }
     const cv = o.canvas, ctx = cv.getContext("2d");
-    let drawings = [], key = null, tool = "cursor", selected = null, creating = null, drag = null;
-    let magnet = false, visible = true, mouse = null, toolbarEl = null;
+    const PREF = "tickreplay.tools";
+    let pref = { groups: {}, magnet: "off", stay: false, lock: false, sync: false, cursor: "cross", emoji: "🚀" };
+    try { pref = { ...pref, ...JSON.parse(localStorage.getItem(PREF) || "{}") }; } catch { /* defaults */ }
+    const savePref = () => { try { localStorage.setItem(PREF, JSON.stringify(pref)); } catch { /* ignore */ } };
+
+    let drawings = [], keys = null, tool = pref.cursor, selected = null, creating = null, drag = null, zoomBox = null;
+    let visible = true, hoverD = null, bar = null, flyout = null;
     let uid = Date.now();
 
-    // ---- coordinate conversion ------------------------------------------------
+    // ---- coordinate conversion ------------------------------------------------------
 
     const ts = () => o.chart.timeScale();
     function timeToX(t) {
@@ -69,8 +139,7 @@
         while (hi - lo > 1) { const m = (lo + hi) >> 1; if (times[m] <= t) lo = m; else hi = m; }
         l = lo + (t - times[lo]) / (times[hi] - times[lo]);
       }
-      const x = ts().logicalToCoordinate(l);
-      return x === null ? null : x;
+      return ts().logicalToCoordinate(l);
     }
     function xToTime(x) {
       const times = o.times(), n = times.length, tf = o.tf();
@@ -84,50 +153,70 @@
     const priceToY = (p) => o.series().priceToCoordinate(p);
     const yToPrice = (y) => o.series().coordinateToPrice(y);
     const roundTick = (p) => { const s = o.tickSize(); return Math.round(p / s) * s; };
-
-    function snap(x, y) {
-      let t = xToTime(x), p = yToPrice(y);
-      if (t === null || p === null) return null;
-      if (magnet) {
-        const l = Math.round(ts().coordinateToLogical(x)), bar = o.barAt(l);
-        if (bar) {
-          t = bar.time;
-          p = [bar.open, bar.high, bar.low, bar.close].reduce((a, v) => (Math.abs(priceToY(v) - y) < Math.abs(priceToY(a) - y) ? v : a));
-        }
-      }
-      return { t, p: roundTick(p) };
-    }
-
     const pane = () => ({ w: ts().width(), h: o.wrap.clientHeight - ts().height() });
 
-    // ---- persistence ------------------------------------------------------------
+    function snap(x, y, free = false) {
+      let t = xToTime(x), p = yToPrice(y);
+      if (t === null || p === null) return null;
+      if (pref.magnet !== "off" && !free) {
+        const l = Math.round(ts().coordinateToLogical(x)), b = o.barAt(l);
+        if (b) {
+          const best = [b.open, b.high, b.low, b.close].reduce((a, v) => (Math.abs(priceToY(v) - y) < Math.abs(priceToY(a) - y) ? v : a));
+          if (pref.magnet === "strong" || Math.abs(priceToY(best) - y) < 16) { t = b.time; p = best; }
+        }
+      }
+      return { t, p: free ? p : roundTick(p) };
+    }
 
+    // ---- persistence ------------------------------------------------------------------
+
+    const storeKey = () => (keys ? (pref.sync ? keys.shared : keys.own) : null);
     function save() {
-      if (!key) return;
-      try { localStorage.setItem(key, JSON.stringify(drawings)); } catch { /* storage full or blocked */ }
+      const k = storeKey();
+      if (k) try { localStorage.setItem(k, JSON.stringify(drawings)); } catch { /* storage full */ }
     }
-    function load(k) {
-      key = k;
+    function reload() {
       selected = creating = drag = null;
-      try { drawings = JSON.parse(localStorage.getItem(k) || "[]"); } catch { drawings = []; }
+      try { drawings = JSON.parse(localStorage.getItem(storeKey()) || "[]"); } catch { drawings = []; }
     }
+    function load(own, shared) { keys = { own, shared }; reload(); }
 
-    // ---- geometry helpers ---------------------------------------------------------
+    // ---- geometry ---------------------------------------------------------------------
 
     function xy(pt) {
+      if (!pt || pt.t === null || pt.p === null) return null;
       const x = timeToX(pt.t), y = priceToY(pt.p);
       return x === null || y === null ? null : { x, y };
     }
-    function distSeg(px, py, ax, ay, bx, by) {
-      const dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
-      let k = len ? ((px - ax) * dx + (py - ay) * dy) / len : 0;
+    function distSeg(px, py, a, b) {
+      const dx = b.x - a.x, dy = b.y - a.y, len = dx * dx + dy * dy;
+      let k = len ? ((px - a.x) * dx + (py - a.y) * dy) / len : 0;
       k = Math.max(0, Math.min(1, k));
-      return Math.hypot(px - (ax + k * dx), py - (ay + k * dy));
+      return Math.hypot(px - (a.x + k * dx), py - (a.y + k * dy));
     }
-    function rayEnd(a, b, w) {
-      if (b.x === a.x) return { x: b.x, y: b.y > a.y ? 1e5 : -1e5 };
-      const k = (b.y - a.y) / (b.x - a.x), x = b.x > a.x ? w : 0;
-      return { x, y: a.y + k * (x - a.x) };
+    function extend(a, b, w, both) {
+      // points where the line a→b leaves the pane (to the right, and to the left when `both`)
+      if (b.x === a.x) return [{ x: a.x, y: -1e5 }, { x: a.x, y: 1e5 }];
+      const k = (b.y - a.y) / (b.x - a.x);
+      const at = (x) => ({ x, y: a.y + k * (x - a.x) });
+      const fwd = at(b.x > a.x ? w : 0);
+      return both ? [at(b.x > a.x ? 0 : w), fwd] : [a, fwd];
+    }
+    const XYs = (d) => d.pts.map(xy);
+    function inPoly(x, y, poly) {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i], b = poly[j];
+        if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+      }
+      return inside;
+    }
+    function channelPts(d) {
+      const [a, b, c] = XYs(d);
+      if (!a || !b || !c) return null;
+      const k = b.x === a.x ? 0 : (b.y - a.y) / (b.x - a.x);
+      const off = c.y - (a.y + k * (c.x - a.x));
+      return { a, b, a2: { x: a.x, y: a.y + off }, b2: { x: b.x, y: b.y + off } };
     }
 
     /** Draggable points of a drawing, in chart space. */
@@ -136,10 +225,10 @@
       switch (d.type) {
         case "hline": return [{ t: xToTime(pane().w / 2), p: a.p }];
         case "vline": return [{ t: a.t, p: yToPrice(pane().h / 2) }];
-        case "hray": case "text": return [a];
         case "long": case "short": return [a, { t: a.t, p: b.p }, { t: a.t, p: d.target }, { t: b.t, p: a.p }];
         case "rect": return [a, b, { t: a.t, p: b.p }, { t: b.t, p: a.p }];
-        default: return [a, b];
+        case "brush": case "highlighter": return [];
+        default: return d.pts;
       }
     }
     function setHandle(d, i, pt) {
@@ -163,35 +252,66 @@
     function hitHandle(d, x, y) {
       const hs = handles(d);
       for (let i = 0; i < hs.length; i++) {
-        const q = hs[i].t === null || hs[i].p === null ? null : xy(hs[i]);
+        const q = xy(hs[i]);
         if (q && Math.hypot(q.x - x, q.y - y) <= HANDLE + 4) return i;
       }
       return -1;
     }
 
+    function textBox(d, A) {
+      ctx.font = d.type === "emoji" ? "26px sans-serif" : "600 13px sans-serif";
+      const s = d.type === "emoji" ? d.emoji : d.type === "pricelabel" ? d.pts[0].p.toFixed(2) : d.text || "";
+      const w = ctx.measureText(s).width;
+      if (d.type === "emoji") return { x1: A.x - w / 2 - 2, x2: A.x + w / 2 + 2, y1: A.y - 16, y2: A.y + 16 };
+      if (d.type === "pricelabel") return { x1: A.x, x2: A.x + w + 22, y1: A.y - 26, y2: A.y };
+      return { x1: A.x - 4, x2: A.x + w + 4, y1: A.y - 16, y2: A.y + 4 };
+    }
+
     function hitBody(d, x, y) {
       const { w } = pane();
-      const A = xy(d.pts[0]);
-      if (d.type === "hline") { const yy = priceToY(d.pts[0].p); return yy !== null && Math.abs(yy - y) < HIT; }
-      if (!A) return false;
-      if (d.type === "vline") return Math.abs(A.x - x) < HIT;
-      if (d.type === "hray") return Math.abs(A.y - y) < HIT && x >= A.x - HIT;
-      if (d.type === "text") {
-        ctx.font = "600 13px sans-serif";
-        const tw = ctx.measureText(d.text || "").width;
-        return x >= A.x - 4 && x <= A.x + tw + 4 && y >= A.y - 16 && y <= A.y + 4;
+      const P = XYs(d), A = P[0];
+      switch (d.type) {
+        case "hline": { const yy = priceToY(d.pts[0].p); return yy !== null && Math.abs(yy - y) < HIT; }
+        case "vline": return A && Math.abs(A.x - x) < HIT;
+        case "crossline": return A && (Math.abs(A.x - x) < HIT || Math.abs(A.y - y) < HIT);
+        case "hray": return A && Math.abs(A.y - y) < HIT && x >= A.x - HIT;
+        case "text": case "emoji": case "pricelabel": {
+          if (!A) return false;
+          const b = textBox(d, A);
+          return x >= b.x1 && x <= b.x2 && y >= b.y1 && y <= b.y2;
+        }
+        case "arrowup": case "arrowdown": return A && Math.abs(A.x - x) < 10 && Math.abs(A.y - y) < 18;
+        case "brush": case "highlighter": {
+          const tol = d.type === "highlighter" ? 10 : HIT;
+          for (let i = 1; i < P.length; i++) if (P[i - 1] && P[i] && distSeg(x, y, P[i - 1], P[i]) < tol) return true;
+          return false;
+        }
       }
-      const B = xy(d.pts[1]);
-      if (!B) return false;
-      if (d.type === "trend") return distSeg(x, y, A.x, A.y, B.x, B.y) < HIT;
-      if (d.type === "ray") { const E = rayEnd(A, B, w); return distSeg(x, y, A.x, A.y, E.x, E.y) < HIT; }
-      let y1 = Math.min(A.y, B.y), y2 = Math.max(A.y, B.y);
-      if (d.type === "long" || d.type === "short") {
-        const T = priceToY(d.target);
-        y1 = Math.min(y1, T); y2 = Math.max(y2, T);
+      if (P.some((q) => !q)) return false;
+      const [a, b] = P;
+      switch (d.type) {
+        case "trend": case "info": case "angle": case "arrowline": return distSeg(x, y, a, b) < HIT;
+        case "ray": { const [, e] = extend(a, b, w, false); return distSeg(x, y, a, e) < HIT; }
+        case "extended": { const [s, e] = extend(a, b, w, true); return distSeg(x, y, s, e) < HIT; }
+        case "callout": {
+          const bx = textBox({ ...d, type: "text" }, b);
+          return distSeg(x, y, a, b) < HIT || (x >= bx.x1 - 6 && x <= bx.x2 + 6 && y >= bx.y1 - 6 && y <= bx.y2 + 6);
+        }
+        case "channel": {
+          const c = channelPts(d);
+          return c && (distSeg(x, y, c.a, c.b) < HIT || distSeg(x, y, c.a2, c.b2) < HIT || inPoly(x, y, [c.a, c.b, c.b2, c.a2]));
+        }
+        case "xabcd": case "abcd": case "triangle": {
+          for (let i = 1; i < P.length; i++) if (distSeg(x, y, P[i - 1], P[i]) < HIT) return true;
+          if (d.type === "triangle" && P.length === 3) return inPoly(x, y, P);
+          if (d.type === "xabcd" && P.length === 5) return inPoly(x, y, P.slice(0, 3)) || inPoly(x, y, P.slice(2, 5));
+          return false;
+        }
       }
-      const x1 = Math.min(A.x, B.x), x2 = Math.max(A.x, B.x);
-      return x >= x1 - HIT && x <= x2 + HIT && y >= y1 - HIT && y <= y2 + HIT;
+      let ys = P.map((q) => q.y);
+      if (d.type === "long" || d.type === "short") ys = ys.concat(priceToY(d.target));
+      const xs = P.map((q) => q.x);
+      return x >= Math.min(...xs) - HIT && x <= Math.max(...xs) + HIT && y >= Math.min(...ys) - HIT && y <= Math.max(...ys) + HIT;
     }
 
     function pick(x, y) {
@@ -209,9 +329,10 @@
       return null;
     }
 
-    // ---- painting -------------------------------------------------------------------
+    // ---- painting -----------------------------------------------------------------------
 
     function alpha(hex, a) {
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
       const n = parseInt(hex.slice(1), 16);
       return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
     }
@@ -221,66 +342,190 @@
       const lx = align === "center" ? x - w / 2 : align === "right" ? x - w : x;
       ctx.fillStyle = bg;
       ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(lx, y - h / 2, w, h, 4) : ctx.rect(lx, y - h / 2, w, h);
+      if (ctx.roundRect) ctx.roundRect(lx, y - h / 2, w, h, 4); else ctx.rect(lx, y - h / 2, w, h);
       ctx.fill();
       ctx.fillStyle = fg;
       ctx.textBaseline = "middle";
       ctx.fillText(text, lx + 5, y + 0.5);
     }
     const fmtP = (p) => p.toFixed(2);
+    const line = (a, b) => { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); };
+    function arrowHead(a, b, size = 10) {
+      const ang = Math.atan2(b.y - a.y, b.x - a.x);
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - size * Math.cos(ang - 0.45), b.y - size * Math.sin(ang - 0.45));
+      ctx.lineTo(b.x - size * Math.cos(ang + 0.45), b.y - size * Math.sin(ang + 0.45));
+      ctx.closePath();
+      ctx.fill();
+    }
+    function span(d) {
+      const dp = d.pts[1].p - d.pts[0].p, secs = Math.abs(d.pts[1].t - d.pts[0].t);
+      const dur = secs < 60 ? `${Math.round(secs)}s` : secs < 3600 ? `${Math.floor(secs / 60)}m ${Math.round(secs % 60)}s`
+        : secs < 86400 ? `${Math.floor(secs / 3600)}h ${Math.round((secs % 3600) / 60)}m` : `${Math.floor(secs / 86400)}d ${Math.round((secs % 86400) / 3600)}h`;
+      return {
+        dp, bars: Math.round(secs / o.tf()), dur,
+        price: `${dp >= 0 ? "+" : ""}${dp.toFixed(2)} (${((dp / d.pts[0].p) * 100).toFixed(2)}%) ${Math.round(dp / o.tickSize())}t · $${(Math.abs(dp) * o.pointValue()).toFixed(0)}`,
+      };
+    }
+    function ratio(a, b, c) {
+      const r = Math.abs(c.p - b.p) / (Math.abs(b.p - a.p) || 1);
+      return r.toFixed(3);
+    }
 
     function paintPosition(d, A, B) {
-      const T = priceToY(d.target), long = d.type === "long";
+      const T2 = priceToY(d.target), long = d.type === "long";
       const x1 = Math.min(A.x, B.x), x2 = Math.max(A.x, B.x), w = Math.max(x2 - x1, 1);
       ctx.fillStyle = "rgba(38,166,154,.18)";
-      ctx.fillRect(x1, Math.min(A.y, T), w, Math.abs(T - A.y));
+      ctx.fillRect(x1, Math.min(A.y, T2), w, Math.abs(T2 - A.y));
       ctx.fillStyle = "rgba(239,83,80,.18)";
       ctx.fillRect(x1, Math.min(A.y, B.y), w, Math.abs(B.y - A.y));
       ctx.strokeStyle = "#9598a1"; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(x1, A.y); ctx.lineTo(x2, A.y); ctx.stroke();
+      line({ x: x1, y: A.y }, { x: x2, y: A.y });
       const risk = Math.abs(d.pts[0].p - d.pts[1].p), reward = Math.abs(d.target - d.pts[0].p);
-      const tick = o.tickSize(), pv = o.pointValue();
-      const cx = x1 + w / 2;
-      label(`Target ${fmtP(d.target)} · ${reward.toFixed(2)} (${Math.round(reward / tick)}t) · $${(reward * pv).toFixed(0)}`, cx, T + (long ? -12 : 12), "#26a69a", "#fff", "center");
+      const tick = o.tickSize(), pv = o.pointValue(), cx = x1 + w / 2;
+      label(`Target ${fmtP(d.target)} · ${reward.toFixed(2)} (${Math.round(reward / tick)}t) · $${(reward * pv).toFixed(0)}`, cx, T2 + (long ? -12 : 12), "#26a69a", "#fff", "center");
       label(`Stop ${fmtP(d.pts[1].p)} · ${risk.toFixed(2)} (${Math.round(risk / tick)}t) · $${(risk * pv).toFixed(0)}`, cx, B.y + (long ? 12 : -12), "#ef5350", "#fff", "center");
       label(`${long ? "Long" : "Short"} ${fmtP(d.pts[0].p)} · R:R ${risk ? (reward / risk).toFixed(2) : "–"}`, cx, A.y, "#2a2e39", "#fff", "center");
+    }
+
+    function paintFib(d, P, levels, base) {
+      // retracement: level 1 at the first point, 0 at the second (TradingView convention)
+      // extension: levels projected from the third point by the first→second move
+      const xsAll = P.map((q) => q.x);
+      const x1 = Math.min(...xsAll), x2 = Math.max(...xsAll) + (d.type === "fibext" ? 60 : 0);
+      let prevY = null;
+      for (const [lv, col] of levels) {
+        const p = base(lv), y = priceToY(p);
+        if (y === null) continue;
+        if (prevY !== null) { ctx.fillStyle = alpha(col, 0.08); ctx.fillRect(x1, Math.min(y, prevY), x2 - x1, Math.abs(y - prevY)); }
+        ctx.strokeStyle = col; ctx.lineWidth = 1;
+        line({ x: x1, y }, { x: x2, y });
+        ctx.font = "11px ui-monospace, Menlo, monospace"; ctx.fillStyle = col; ctx.textBaseline = "bottom";
+        ctx.fillText(`${lv} (${fmtP(p)})`, x1 + 4, y - 2);
+        prevY = y;
+      }
+      ctx.strokeStyle = alpha(d.color, 0.6); ctx.setLineDash([4, 4]);
+      for (let i = 1; i < P.length; i++) line(P[i - 1], P[i]);
+      ctx.setLineDash([]);
+    }
+
+    function paintPattern(d, P) {
+      const names = d.type === "xabcd" ? ["X", "A", "B", "C", "D"] : d.type === "abcd" ? ["A", "B", "C", "D"] : ["A", "B", "C"];
+      ctx.fillStyle = alpha(d.color, 0.14);
+      if (d.type === "triangle" && P.length === 3) { ctx.beginPath(); P.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); ctx.fill(); }
+      if (d.type === "xabcd") {
+        for (const tri of [P.slice(0, 3), P.slice(2, 5)]) {
+          if (tri.length < 3) continue;
+          ctx.beginPath(); tri.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); ctx.fill();
+        }
+      }
+      ctx.strokeStyle = d.color; ctx.lineWidth = 2;
+      for (let i = 1; i < P.length; i++) line(P[i - 1], P[i]);
+      if (d.type === "triangle" && P.length === 3) line(P[2], P[0]);
+      // Fibonacci ratios of each leg to the previous one, on dashed connectors
+      ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
+      const pts = d.pts;
+      for (let i = 2; i < P.length && d.type !== "triangle"; i++) {
+        line(P[i - 2], P[i]);
+        const mx = (P[i - 2].x + P[i].x) / 2, my = (P[i - 2].y + P[i].y) / 2;
+        label(ratio(pts[i - 2], pts[i - 1], pts[i]), mx, my, alpha(d.color, 0.85), "#fff", "center");
+      }
+      ctx.setLineDash([]);
+      P.forEach((q, i) => {
+        const up = i > 0 ? q.y < P[i - 1].y : P[1] && q.y < P[1].y;
+        label(names[i], q.x, q.y + (up ? -14 : 14), d.color, "#fff", "center");
+      });
     }
 
     function paint(d, sel) {
       const { w, h } = pane();
       ctx.strokeStyle = d.color;
+      ctx.fillStyle = d.color;
       ctx.lineWidth = d.width || 2;
       ctx.setLineDash([]);
-      const A = d.type === "hline" ? null : xy(d.pts[0]);
       if (d.type === "hline") {
         const y = priceToY(d.pts[0].p);
         if (y === null) return;
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+        line({ x: 0, y }, { x: w, y });
         label(fmtP(d.pts[0].p), w - 4, y, d.color, "#fff", "right");
-        return;
+        return drawHandles(d, sel);
       }
+      const P = XYs(d), A = P[0];
       if (!A) return;
-      if (d.type === "vline") { ctx.beginPath(); ctx.moveTo(A.x, 0); ctx.lineTo(A.x, h); ctx.stroke(); return; }
-      if (d.type === "hray") {
-        ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(w, A.y); ctx.stroke();
-        label(fmtP(d.pts[0].p), w - 4, A.y, d.color, "#fff", "right");
-        return;
-      }
-      if (d.type === "text") {
-        ctx.font = "600 13px -apple-system, Segoe UI, sans-serif";
-        ctx.fillStyle = d.color; ctx.textBaseline = "alphabetic";
-        ctx.fillText(d.text || "", A.x, A.y);
-        return;
-      }
-      const B = xy(d.pts[1]);
-      if (!B) return;
       switch (d.type) {
-        case "trend":
-          ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+        case "vline": line({ x: A.x, y: 0 }, { x: A.x, y: h }); break;
+        case "crossline":
+          line({ x: A.x, y: 0 }, { x: A.x, y: h }); line({ x: 0, y: A.y }, { x: w, y: A.y });
+          label(fmtP(d.pts[0].p), w - 4, A.y, d.color, "#fff", "right");
           break;
-        case "ray": {
-          const E = rayEnd(A, B, w);
-          ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(E.x, E.y); ctx.stroke();
+        case "hray": line(A, { x: w, y: A.y }); label(fmtP(d.pts[0].p), w - 4, A.y, d.color, "#fff", "right"); break;
+        case "text":
+          ctx.font = "600 13px -apple-system, Segoe UI, sans-serif"; ctx.textBaseline = "alphabetic";
+          ctx.fillText(d.text || "", A.x, A.y);
+          break;
+        case "emoji":
+          ctx.font = "26px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          ctx.fillText(d.emoji, A.x, A.y); ctx.textAlign = "left";
+          break;
+        case "pricelabel": {
+          const b = textBox(d, A);
+          ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(A.x + 8, b.y1 + 16); ctx.lineTo(A.x + 8, b.y1);
+          ctx.lineTo(b.x2, b.y1); ctx.lineTo(b.x2, b.y1 + 18); ctx.lineTo(A.x + 14, b.y1 + 18); ctx.closePath(); ctx.fill();
+          ctx.fillStyle = "#fff"; ctx.font = "600 13px sans-serif"; ctx.textBaseline = "middle";
+          ctx.fillText(fmtP(d.pts[0].p), A.x + 12, b.y1 + 9.5);
+          break;
+        }
+        case "arrowup": case "arrowdown": {
+          const up = d.type === "arrowup", s = up ? 1 : -1;
+          ctx.fillStyle = up ? "#26a69a" : "#ef5350";
+          ctx.beginPath();
+          ctx.moveTo(A.x, A.y); ctx.lineTo(A.x + 9, A.y + 11 * s); ctx.lineTo(A.x + 4, A.y + 11 * s); ctx.lineTo(A.x + 4, A.y + 22 * s);
+          ctx.lineTo(A.x - 4, A.y + 22 * s); ctx.lineTo(A.x - 4, A.y + 11 * s); ctx.lineTo(A.x - 9, A.y + 11 * s); ctx.closePath(); ctx.fill();
+          break;
+        }
+        case "brush": case "highlighter": {
+          ctx.lineWidth = d.type === "highlighter" ? 14 : 2;
+          ctx.strokeStyle = d.type === "highlighter" ? alpha(d.color, 0.35) : d.color;
+          ctx.beginPath();
+          let started = false;
+          for (const q of P) { if (!q) continue; if (started) ctx.lineTo(q.x, q.y); else { ctx.moveTo(q.x, q.y); started = true; } }
+          ctx.stroke();
+          break;
+        }
+      }
+      if (["vline", "crossline", "hray", "text", "emoji", "pricelabel", "arrowup", "arrowdown", "brush", "highlighter"].includes(d.type)) return drawHandles(d, sel);
+      if (P.some((q) => !q) || P.length < 2) return drawHandles(d, sel);
+      const B = P[1];
+      switch (d.type) {
+        case "trend": line(A, B); break;
+        case "arrowline": line(A, B); arrowHead(A, B); break;
+        case "ray": { const [, e] = extend(A, B, w, false); line(A, e); break; }
+        case "extended": { const [s, e] = extend(A, B, w, true); line(s, e); break; }
+        case "info": {
+          line(A, B);
+          const sp = span(d), ang = (Math.atan2(A.y - B.y, B.x - A.x) * 180) / Math.PI;
+          label(`${sp.price}`, B.x + 8, B.y - 10, alpha("#2a2e39", 0.95));
+          label(`${sp.bars} bars · ${sp.dur} · ${ang.toFixed(1)}°`, B.x + 8, B.y + 10, alpha("#2a2e39", 0.95));
+          break;
+        }
+        case "angle": {
+          line(A, B);
+          ctx.setLineDash([3, 3]); ctx.lineWidth = 1; line(A, { x: A.x + Math.max(40, Math.abs(B.x - A.x)), y: A.y }); ctx.setLineDash([]);
+          const ang = Math.atan2(A.y - B.y, B.x - A.x);
+          ctx.beginPath(); ctx.arc(A.x, A.y, 30, -ang, 0, ang < 0); ctx.stroke();
+          label(`${((ang * 180) / Math.PI).toFixed(1)}°`, A.x + 36, A.y - 10, d.color);
+          break;
+        }
+        case "callout": {
+          ctx.lineWidth = 1.5; line(A, B);
+          const bx = textBox({ ...d, type: "text" }, B);
+          ctx.fillStyle = d.color;
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(bx.x1 - 4, bx.y1 - 4, bx.x2 - bx.x1 + 8, bx.y2 - bx.y1 + 8, 6); else ctx.rect(bx.x1 - 4, bx.y1 - 4, bx.x2 - bx.x1 + 8, bx.y2 - bx.y1 + 8);
+          ctx.fill();
+          ctx.fillStyle = "#fff"; ctx.font = "600 13px -apple-system, Segoe UI, sans-serif"; ctx.textBaseline = "alphabetic";
+          ctx.fillText(d.text || "", B.x, B.y);
           break;
         }
         case "rect":
@@ -289,55 +534,60 @@
           ctx.lineWidth = 1.5;
           ctx.strokeRect(Math.min(A.x, B.x), Math.min(A.y, B.y), Math.abs(B.x - A.x), Math.abs(B.y - A.y));
           break;
-        case "fib": {
-          // level 1 at the first click, 0 at the second (TradingView convention)
-          const x1 = Math.min(A.x, B.x), x2 = Math.max(A.x, B.x), p0 = d.pts[1].p, p1 = d.pts[0].p;
-          let prevY = null;
-          for (const [lv, col] of FIB_LEVELS) {
-            const p = p0 + (p1 - p0) * lv, y = priceToY(p);
-            if (y === null) continue;
-            if (prevY !== null) { ctx.fillStyle = alpha(col, 0.08); ctx.fillRect(x1, Math.min(y, prevY), x2 - x1, Math.abs(y - prevY)); }
-            ctx.strokeStyle = col; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
-            ctx.font = "11px ui-monospace, Menlo, monospace"; ctx.fillStyle = col; ctx.textBaseline = "bottom";
-            ctx.fillText(`${lv} (${fmtP(p)})`, x1 + 4, y - 2);
-            prevY = y;
+        case "channel": {
+          const c = channelPts(d);
+          if (!c) {
+            line(A, B);
+            break;
           }
-          ctx.strokeStyle = alpha(d.color, 0.6); ctx.setLineDash([4, 4]);
-          ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+          ctx.fillStyle = alpha(d.color, 0.1);
+          ctx.beginPath(); ctx.moveTo(c.a.x, c.a.y); ctx.lineTo(c.b.x, c.b.y); ctx.lineTo(c.b2.x, c.b2.y); ctx.lineTo(c.a2.x, c.a2.y); ctx.closePath(); ctx.fill();
+          line(c.a, c.b); line(c.a2, c.b2);
+          ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+          line({ x: c.a.x, y: (c.a.y + c.a2.y) / 2 }, { x: c.b.x, y: (c.b.y + c.b2.y) / 2 });
           ctx.setLineDash([]);
           break;
         }
-        case "long": case "short":
-          paintPosition(d, A, B);
+        case "fib": {
+          const p0 = d.pts[1].p, p1 = d.pts[0].p;
+          paintFib(d, P, FIB, (lv) => p0 + (p1 - p0) * lv);
           break;
-        case "measure": {
-          const dp = d.pts[1].p - d.pts[0].p, up = dp >= 0, col = up ? "#2962ff" : "#ef5350";
+        }
+        case "fibext": {
+          if (P.length < 3) { ctx.setLineDash([4, 4]); line(A, B); ctx.setLineDash([]); break; }
+          const move = d.pts[1].p - d.pts[0].p, c = d.pts[2].p;
+          paintFib(d, P, FIB_EXT, (lv) => c + move * lv);
+          break;
+        }
+        case "xabcd": case "abcd": case "triangle": paintPattern(d, P); break;
+        case "long": case "short": paintPosition(d, A, B); break;
+        case "daterange": case "pricerange": case "measure": {
+          const sp = span(d), col = d.type === "measure" ? (sp.dp >= 0 ? "#2962ff" : "#ef5350") : "#2962ff";
+          const x1 = Math.min(A.x, B.x), x2 = Math.max(A.x, B.x), y1 = Math.min(A.y, B.y), y2 = Math.max(A.y, B.y);
           ctx.fillStyle = alpha(col, 0.15);
-          ctx.fillRect(Math.min(A.x, B.x), Math.min(A.y, B.y), Math.abs(B.x - A.x), Math.abs(B.y - A.y));
-          ctx.strokeStyle = col; ctx.lineWidth = 1;
+          ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+          ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1;
           const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
-          ctx.beginPath(); ctx.moveTo(mx, A.y); ctx.lineTo(mx, B.y); ctx.moveTo(A.x, my); ctx.lineTo(B.x, my); ctx.stroke();
-          const secs = Math.abs(d.pts[1].t - d.pts[0].t), bars = Math.round(secs / o.tf());
-          const dur = secs < 60 ? `${Math.round(secs)}s` : secs < 3600 ? `${Math.floor(secs / 60)}m ${Math.round(secs % 60)}s` : `${Math.floor(secs / 3600)}h ${Math.round((secs % 3600) / 60)}m`;
-          const pct = (dp / d.pts[0].p) * 100;
-          label(`${up ? "+" : ""}${dp.toFixed(2)} (${pct.toFixed(2)}%) ${Math.round(dp / o.tickSize())}t · $${(Math.abs(dp) * o.pointValue()).toFixed(0)}`,
-            mx, Math.max(A.y, B.y) + 14, col, "#fff", "center");
-          label(`${bars} bars · ${dur}`, mx, Math.max(A.y, B.y) + 34, col, "#fff", "center");
+          if (d.type !== "daterange") { line({ x: mx, y: A.y }, { x: mx, y: B.y }); arrowHead({ x: mx, y: A.y }, { x: mx, y: B.y }, 7); }
+          if (d.type !== "pricerange") { line({ x: A.x, y: my }, { x: B.x, y: my }); arrowHead({ x: A.x, y: my }, { x: B.x, y: my }, 7); }
+          const lines = d.type === "daterange" ? [`${sp.bars} bars · ${sp.dur}`] : d.type === "pricerange" ? [sp.price] : [sp.price, `${sp.bars} bars · ${sp.dur}`];
+          lines.forEach((s, i) => label(s, mx, y2 + 14 + i * 20, col, "#fff", "center"));
           break;
         }
       }
-      if (sel || d === hoverD) {
-        for (const hp of handles(d)) {
-          const q = hp.t === null || hp.p === null ? null : xy(hp);
-          if (!q) continue;
-          ctx.fillStyle = "#0b0e14"; ctx.strokeStyle = sel ? "#4f7cff" : "#9598a1"; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.arc(q.x, q.y, HANDLE, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        }
+      drawHandles(d, sel);
+    }
+
+    function drawHandles(d, sel) {
+      if (!(sel || d === hoverD) || pref.lock) return;
+      for (const hp of handles(d)) {
+        const q = xy(hp);
+        if (!q) continue;
+        ctx.fillStyle = "#0b0e14"; ctx.strokeStyle = sel ? "#4f7cff" : "#9598a1"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(q.x, q.y, HANDLE, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
     }
 
-    let hoverD = null;
     function redraw() {
       const dpr = window.devicePixelRatio || 1;
       const W = o.wrap.clientWidth, H = o.wrap.clientHeight;
@@ -353,96 +603,144 @@
       ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
       if (visible) for (const d of drawings) paint(d, d === selected);
       if (creating) paint(creating, true);
+      if (zoomBox) {
+        ctx.fillStyle = "rgba(79,124,255,.12)"; ctx.strokeStyle = "#4f7cff"; ctx.lineWidth = 1;
+        const { a, b } = zoomBox;
+        ctx.fillRect(Math.min(a.x, b.x), 0, Math.abs(b.x - a.x), h);
+        ctx.strokeRect(Math.min(a.x, b.x), 0, Math.abs(b.x - a.x), h);
+      }
       ctx.restore();
     }
 
-    // ---- interaction --------------------------------------------------------------------
+    // ---- interaction ------------------------------------------------------------------------
 
     const local = (e) => { const r = o.wrap.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
     const inPane = ({ x, y }) => { const { w, h } = pane(); return x >= 0 && y >= 0 && x <= w && y <= h; };
+    const isDrawTool = (t) => T[t] && !T[t].cursor && !T[t].action;
+    const realType = (t) => T[t].alias || t;
 
-    function newDrawing(type, pt) {
-      const d = { id: ++uid, type, color: type === "long" || type === "short" ? "#9598a1" : o.color(), width: 2, pts: [pt, { ...pt }] };
-      if (type === "hline" || type === "vline" || type === "hray" || type === "text") d.pts = [pt];
-      if (type === "long" || type === "short") d.target = pt.p;  // set properly on the next mouse move
+    function newDrawing(t, pt) {
+      const type = realType(t), n = T[type].n;
+      const d = { id: ++uid, type, color: o.color(), width: 2, pts: [pt] };
+      if (type === "long" || type === "short") { d.color = "#9598a1"; d.target = pt.p; }
+      if (type === "emoji") d.emoji = pref.emoji;
+      if (n > 1) d.pts.push({ ...pt });   // live point following the mouse
       return d;
     }
 
     function finish(d) {
       if (d.type === "long" || d.type === "short") {
-        const risk = d.pts[0].p - d.pts[1].p;
-        if (!risk) d.pts[1].p = d.pts[0].p + (d.type === "long" ? -1 : 1) * o.tickSize() * 20;
-        const r = d.pts[0].p - d.pts[1].p;
-        d.target = roundTick(d.pts[0].p + r * o.rr());
+        if (!(d.pts[0].p - d.pts[1].p)) d.pts[1].p = d.pts[0].p + (d.type === "long" ? -1 : 1) * o.tickSize() * 20;
+        d.target = roundTick(d.pts[0].p + (d.pts[0].p - d.pts[1].p) * o.rr());
         if (d.pts[1].t === d.pts[0].t) d.pts[1].t = d.pts[0].t + o.tf() * 20;
       }
+      delete d.downAt;
       drawings.push(d);
       selected = d;
       creating = null;
       save();
-      setTool("cursor");
+      if (!pref.stay) setTool(pref.cursor);
     }
 
     function onDown(e) {
       if (e.button !== 0) return;
       const m = local(e);
       if (!inPane(m)) return;
-      if (tool !== "cursor") {
+      closeFlyout();
+      if (tool === "zoomin") { e.preventDefault(); e.stopPropagation(); zoomBox = { a: m, b: m }; return; }
+      if (isDrawTool(tool)) {
         e.preventDefault(); e.stopPropagation();
-        const pt = snap(m.x, m.y);
+        const free = tool === "brush" || tool === "highlighter";
+        const pt = snap(m.x, m.y, free);
         if (!pt) return;
-        if (creating) { finish(creating); return; }           // second click
+        if (free) { creating = newDrawing(tool, pt); creating.freehand = true; return; }
+        if (creating) {                                   // next click of a multi-point tool
+          creating.pts[creating.pts.length - 1] = pt;
+          if (creating.pts.length >= T[creating.type].n) return completeCreating(m);
+          creating.pts.push({ ...pt });
+          return;
+        }
         const d = newDrawing(tool, pt);
         if (d.type === "text") { editText(d, m); return; }
-        if (!TWO_POINT.has(d.type)) { finish(d); return; }
+        if (T[d.type].n === 1) { finish(d); return; }
         creating = d;
         creating.downAt = m;
         return;
       }
       const hit = pick(m.x, m.y);
-      if (!hit) { if (selected) { selected = null; } return; }
-      e.preventDefault(); e.stopPropagation();                 // keep the chart from panning
+      if (tool === "eraser") {
+        if (hit) { e.preventDefault(); e.stopPropagation(); remove(hit.d); }
+        return;
+      }
+      if (!hit) { selected = null; return; }
+      e.preventDefault(); e.stopPropagation();          // a drawing under the mouse: don't pan the chart
       selected = hit.d;
-      drag = { d: hit.d, handle: hit.handle, start: snap(m.x, m.y) || { t: 0, p: 0 }, orig: JSON.parse(JSON.stringify(hit.d)) };
+      if (pref.lock) return;
+      drag = { d: hit.d, handle: hit.handle, start: snap(m.x, m.y, true) || { t: 0, p: 0 }, orig: JSON.parse(JSON.stringify(hit.d)) };
+    }
+
+    function completeCreating(m) {
+      const d = creating;
+      if (d.type === "callout") { creating = null; editText(d, { x: timeToX(d.pts[1].t) ?? m.x, y: priceToY(d.pts[1].p) ?? m.y }); return; }
+      finish(d);
     }
 
     function onMove(e) {
       const m = local(e);
-      mouse = m;
+      if (zoomBox) { zoomBox.b = m; return; }
       if (creating) {
-        const pt = snap(m.x, m.y);
-        if (pt) {
-          creating.pts[1] = pt;
-          if (creating.type === "long" || creating.type === "short") {
-            creating.target = roundTick(creating.pts[0].p + (creating.pts[0].p - pt.p) * o.rr());
-          }
+        const free = creating.freehand;
+        const pt = snap(m.x, m.y, free);
+        if (!pt) return;
+        if (free) { creating.pts.push(pt); return; }
+        creating.pts[creating.pts.length - 1] = pt;
+        if (creating.type === "long" || creating.type === "short") {
+          creating.target = roundTick(creating.pts[0].p + (creating.pts[0].p - pt.p) * o.rr());
         }
         return;
       }
       if (drag) {
-        const pt = snap(m.x, m.y);
+        const pt = snap(m.x, m.y, drag.handle < 0);
         if (!pt) return;
         const d = drag.d;
-        if (drag.handle >= 0) setHandle(d, drag.handle, pt);
+        if (drag.handle >= 0) setHandle(d, drag.handle, snap(m.x, m.y) || pt);
         else {
           const dt = pt.t - drag.start.t, dp = pt.p - drag.start.p;
-          d.pts = drag.orig.pts.map((q) => ({ t: q.t + dt, p: roundTick(q.p + dp) }));
+          const free = d.type === "brush" || d.type === "highlighter";
+          d.pts = drag.orig.pts.map((q) => ({ t: q.t + dt, p: free ? q.p + dp : roundTick(q.p + dp) }));
           if (d.target !== undefined) d.target = roundTick(drag.orig.target + dp);
         }
         return;
       }
-      if (tool === "cursor" && inPane(m)) {
+      if (!isDrawTool(tool) && tool !== "zoomin" && inPane(m)) {
         const hit = pick(m.x, m.y);
         hoverD = hit ? hit.d : null;
-        o.wrap.style.cursor = hit ? (hit.handle >= 0 ? "grab" : "move") : "";
+        o.wrap.style.cursor = tool === "eraser" ? (hit ? "pointer" : "") : hit && !pref.lock ? (hit.handle >= 0 ? "grab" : "move") : "";
       }
     }
 
     function onUp(e) {
+      if (zoomBox) {
+        const { a, b } = zoomBox;
+        zoomBox = null;
+        if (Math.abs(b.x - a.x) > 8) {
+          const l1 = ts().coordinateToLogical(Math.min(a.x, b.x)), l2 = ts().coordinateToLogical(Math.max(a.x, b.x));
+          if (l1 !== null && l2 !== null) ts().setVisibleLogicalRange({ from: l1, to: l2 });
+        }
+        if (!pref.stay) setTool(pref.cursor);
+        return;
+      }
+      if (creating && creating.freehand) {
+        if (creating.pts.length > 1) finish(creating); else creating = null;
+        return;
+      }
       if (creating && creating.downAt) {
         const m = local(e);
-        if (Math.hypot(m.x - creating.downAt.x, m.y - creating.downAt.y) > 6) finish(creating);  // drag-to-draw
-        else delete creating.downAt;                                                           // click, click
+        if (Math.hypot(m.x - creating.downAt.x, m.y - creating.downAt.y) > 6) {
+          // drag-to-draw: the drag was the first segment
+          if (creating.pts.length >= T[creating.type].n) completeCreating(m);
+          else { delete creating.downAt; creating.pts.push({ ...creating.pts[creating.pts.length - 1] }); }
+        } else delete creating.downAt;
         return;
       }
       if (drag) { drag = null; save(); }
@@ -454,14 +752,18 @@
       box.style.left = m.x + "px";
       box.style.top = m.y - 16 + "px";
       input.value = d.text || "";
-      input.focus();
+      setTimeout(() => input.focus(), 0);
+      let closed = false;
       const done = (ok) => {
-        box.hidden = true;
+        if (closed) return;
+        closed = true;
         input.onkeydown = input.onblur = null;
+        input.blur();          // give the keyboard back to the chart (shortcuts, Space)
+        box.hidden = true;
         if (ok && input.value.trim()) {
           d.text = input.value.trim();
           if (!existing) finish(d); else save();
-        } else if (!existing) setTool("cursor");
+        } else if (!existing) setTool(pref.cursor);
       };
       input.onkeydown = (ev) => { if (ev.key === "Enter") done(true); if (ev.key === "Escape") done(false); ev.stopPropagation(); };
       input.onblur = () => done(true);
@@ -469,7 +771,11 @@
 
     function onDbl(e) {
       const m = local(e), hit = pick(m.x, m.y);
-      if (hit && hit.d.type === "text") { e.stopPropagation(); editText(hit.d, m, true); }
+      if (hit && (hit.d.type === "text" || hit.d.type === "callout")) {
+        e.stopPropagation();
+        const at = hit.d.type === "callout" ? xy(hit.d.pts[1]) : m;
+        editText(hit.d, at || m, true);
+      }
     }
 
     function onContext(e) {
@@ -480,28 +786,30 @@
       selected = hit.d;
       const d = hit.d;
       menu.innerHTML = `<div class="colors">${SWATCHES.map((c) => `<span class="sw" data-c="${c}" style="background:${c}"></span>`).join("")}</div>
-        ${d.type === "text" ? '<button data-a="edit">✎ Edit text</button>' : ""}
+        <div class="widths">${[1, 2, 3, 4].map((wd) => `<button data-w="${wd}" class="${(d.width || 2) === wd ? "on" : ""}"><span style="height:${wd}px"></span></button>`).join("")}</div>
+        ${d.type === "text" || d.type === "callout" ? '<button data-a="edit">✎ Edit text</button>' : ""}
         ${d.type === "long" || d.type === "short" ? '<button data-a="flip">⇅ Flip long / short</button>' : ""}
         <button data-a="clone">⧉ Clone</button>
-        <button data-a="del">🗑 Delete</button>`;
+        <button data-a="front">⤒ Bring to front</button>
+        <button data-a="del">🗑 Remove</button>`;
       menu.hidden = false;
-      menu.style.left = Math.min(e.clientX, innerWidth - 190) + "px";
-      menu.style.top = Math.min(e.clientY, innerHeight - 200) + "px";
+      menu.style.left = Math.min(e.clientX, innerWidth - 200) + "px";
+      menu.style.top = Math.min(e.clientY, innerHeight - 260) + "px";
       menu.onclick = (ev) => {
-        const c = ev.target.dataset.c, a = ev.target.dataset.a;
+        const t = ev.target.closest("[data-c],[data-a],[data-w]");
+        if (!t) return;
+        const { c, a, w: wd } = t.dataset;
         if (c) d.color = c;
+        if (wd) d.width = +wd;
         if (a === "del") remove(d);
         if (a === "clone") { const k = JSON.parse(JSON.stringify(d)); k.id = ++uid; k.pts.forEach((q) => { q.t += o.tf() * 5; }); drawings.push(k); selected = k; }
-        if (a === "flip") {
-          d.type = d.type === "long" ? "short" : "long";
-          const e0 = d.pts[0].p; d.pts[1].p = 2 * e0 - d.pts[1].p; d.target = 2 * e0 - d.target;
-        }
-        if (a === "edit") editText(d, m, true);
+        if (a === "front") { drawings = drawings.filter((x) => x !== d).concat(d); }
+        if (a === "flip") { d.type = d.type === "long" ? "short" : "long"; const e0 = d.pts[0].p; d.pts[1].p = 2 * e0 - d.pts[1].p; d.target = 2 * e0 - d.target; }
+        if (a === "edit") editText(d, d.type === "callout" ? xy(d.pts[1]) || m : m, true);
         menu.hidden = true;
         save();
       };
     }
-    document.addEventListener("mousedown", (e) => { const menu = document.getElementById("ctx"); if (!menu.contains(e.target)) menu.hidden = true; });
 
     function remove(d) {
       drawings = drawings.filter((x) => x !== d);
@@ -515,38 +823,148 @@
     o.wrap.addEventListener("contextmenu", onContext, true);
     addEventListener("mousemove", onMove);
     addEventListener("mouseup", onUp);
+    document.addEventListener("mousedown", (e) => {
+      const menu = document.getElementById("ctx");
+      if (!menu.contains(e.target)) menu.hidden = true;
+      if (flyout && !flyout.contains(e.target) && !e.target.closest(".tool-group")) closeFlyout();
+    });
 
+    const SHORTCUTS = { t: "trend", h: "hline", j: "hray", v: "vline", c: "crossline", f: "fib" };
     function onKey(e) {
       if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return false;
-      if (e.key === "Escape") { creating = null; selected = null; setTool("cursor"); return true; }
+      if (e.key === "Escape") { creating = null; zoomBox = null; selected = null; closeFlyout(); setTool(pref.cursor); return true; }
       if ((e.key === "Delete" || e.key === "Backspace") && selected) { remove(selected); return true; }
+      if (e.altKey && !e.ctrlKey) {
+        const k = e.key.toLowerCase();
+        if (e.shiftKey && k === "r") { setTool("rect"); return true; }
+        if (SHORTCUTS[k] && !e.shiftKey) { setTool(SHORTCUTS[k]); return true; }
+      }
       return false;
     }
 
-    // ---- toolbar ---------------------------------------------------------------------
+    // ---- toolbar ------------------------------------------------------------------------------
+
+    const svg = (id) => `<svg viewBox="0 0 28 28">${I[id] || ""}</svg>`;
+    const groupOf = (t) => GROUPS.find((g) => g !== "-" && g.items && g.items.some(([, list]) => list.includes(t)));
 
     function setTool(t) {
+      if (T[t] && T[t].action) { if (t === "zoomout") ts().resetTimeScale(); return; }
       tool = t;
       creating = null;
-      cv.classList.toggle("active", t !== "cursor");
-      if (toolbarEl) for (const b of toolbarEl.querySelectorAll("[data-tool]")) b.classList.toggle("on", b.dataset.tool === t);
+      if (T[t] && T[t].cursor && t !== "eraser") { pref.cursor = t; o.setCursor(t); }
+      const g = groupOf(t);
+      if (g) pref.groups[g.id] = t;
+      savePref();
+      cv.classList.toggle("active", isDrawTool(t) || t === "zoomin");
+      o.wrap.classList.toggle("eraser", t === "eraser");
+      renderToolbar();
+    }
+
+    function closeFlyout() { if (flyout) { flyout.remove(); flyout = null; } }
+
+    function openFlyout(g, btn) {
+      closeFlyout();
+      flyout = document.createElement("div");
+      flyout.className = "flyout";
+      if (g.emoji) {
+        flyout.innerHTML = `<div class="fly-title">Icons</div><div class="emoji-grid">${EMOJIS.map((x) => `<button data-emoji="${x}">${x}</button>`).join("")}</div>`;
+      } else if (g.menu === "hide") {
+        flyout.innerHTML = `<button data-act="hideDraw">${svg(visible ? "eyeOff" : "eye")}<span>${visible ? "Hide" : "Show"} drawings</span></button>
+          <button data-act="hideInd">${svg("eyeOff")}<span>Hide / show indicators</span></button>
+          <button data-act="hidePos">${svg("eyeOff")}<span>Hide / show trade markers</span></button>`;
+      } else if (g.menu === "trash") {
+        flyout.innerHTML = `<button data-act="rmDraw">${svg("trash")}<span>Remove ${drawings.length} drawing${drawings.length === 1 ? "" : "s"}</span></button>
+          <button data-act="rmInd">${svg("trash")}<span>Remove indicators</span></button>
+          <button data-act="rmAll">${svg("trash")}<span>Remove drawings &amp; indicators</span></button>`;
+      } else if (g.toggle === "magnet") {
+        flyout.innerHTML = [["off", "magnet", "Magnet off"], ["weak", "magnet", "Weak magnet"], ["strong", "magnetStrong", "Strong magnet"]]
+          .map(([k, ic, name]) => `<button data-magnet="${k}" class="${pref.magnet === k ? "on" : ""}">${svg(ic)}<span>${name}</span></button>`).join("");
+      } else {
+        flyout.innerHTML = g.items.map(([title, list]) => (title ? `<div class="fly-title">${title}</div>` : '<div class="fly-sep"></div>') +
+          list.map((t) => `<button data-tool="${t}" class="${t === tool ? "on" : ""}">${svg(t)}<span>${T[t].name}</span>${T[t].key ? `<kbd>${T[t].key}</kbd>` : ""}</button>`).join("")).join("");
+      }
+      document.body.appendChild(flyout);
+      const r = btn.getBoundingClientRect();
+      flyout.style.left = r.right + 6 + "px";
+      flyout.style.top = Math.max(8, Math.min(r.top, innerHeight - flyout.offsetHeight - 8)) + "px";
+      flyout.addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        if (b.dataset.tool) setTool(b.dataset.tool);
+        if (b.dataset.emoji) { pref.emoji = b.dataset.emoji; pref.groups.icons = "emoji"; setTool("emoji"); }
+        if (b.dataset.magnet) { pref.magnet = b.dataset.magnet; savePref(); renderToolbar(); o.status(b.textContent.trim()); }
+        const act = b.dataset.act;
+        if (act === "hideDraw") { visible = !visible; renderToolbar(); o.status(visible ? "Drawings shown" : "Drawings hidden"); }
+        if (act === "hideInd") o.onIndicators("toggle");
+        if (act === "hidePos") o.onMarkers();
+        if (act === "rmDraw" || act === "rmAll") {
+          if (drawings.length && confirm(`Remove all ${drawings.length} drawings on this chart?`)) { drawings = []; selected = null; save(); }
+        }
+        if (act === "rmInd" || act === "rmAll") o.onIndicators("remove");
+        closeFlyout();
+      });
+    }
+
+    function groupButton(g) {
+      if (g.single) {
+        return `<div class="tool-group"><button class="tool ${tool === g.single ? "on" : ""}" data-g="${g.id}" data-tip="${T[g.single].name}">${svg(g.single)}</button></div>`;
+      }
+      if (g.toggle) {
+        const on = g.toggle === "magnet" ? pref.magnet !== "off" : pref[g.toggle];
+        const icon = g.toggle === "magnet" ? (pref.magnet === "strong" ? "magnetStrong" : "magnet") : g.toggle === "lock" ? (pref.lock ? "lock" : "unlock") : g.toggle;
+        const tip = g.toggle === "magnet" ? `Magnet: ${pref.magnet}` : g.title;
+        return `<div class="tool-group"><button class="tool toggle ${on ? "on" : ""}" data-g="${g.id}" data-tip="${tip}">${svg(icon)}</button>${g.toggle === "magnet" ? '<span class="more" data-more="magnet">›</span>' : ""}</div>`;
+      }
+      if (g.menu) {
+        const icon = g.menu === "hide" ? (visible ? "eye" : "eyeOff") : "trash";
+        const tip = g.menu === "hide" ? "Hide / show" : "Remove";
+        return `<div class="tool-group"><button class="tool ${g.menu === "hide" && !visible ? "on toggle" : ""}" data-g="${g.id}" data-tip="${tip}">${svg(icon)}</button><span class="more" data-more="${g.id}">›</span></div>`;
+      }
+      const cur = g.emoji ? "emoji" : pref.groups[g.id] && groupOf(pref.groups[g.id]) === g ? pref.groups[g.id] : g.items[0][1][0];
+      const icon = g.emoji ? "icons" : cur;
+      const on = g.emoji ? tool === "emoji" : tool === cur;
+      return `<div class="tool-group"><button class="tool ${on ? "on" : ""}" data-g="${g.id}" data-tip="${g.emoji ? "Icons" : T[cur].name}">${g.emoji && pref.groups.icons ? `<span class="emoji">${pref.emoji}</span>` : svg(icon)}</button><span class="more" data-more="${g.id}">›</span></div>`;
+    }
+
+    function renderToolbar() {
+      if (!bar) return;
+      bar.innerHTML = GROUPS.map((g) => (g === "-" ? '<span class="sep"></span>' : groupButton(g))).join("");
     }
 
     function mountToolbar(el) {
-      toolbarEl = el;
-      el.innerHTML = TOOLS.map((x) => x === "-" ? '<span class="sep"></span>'
-        : `<button class="tool ${x[2] || ""}" ${x[2] ? `data-${x[2]}="${x[0]}"` : `data-tool="${x[0]}"`} data-tip="${x[1]}" aria-label="${x[1]}"><svg viewBox="0 0 24 24">${ICONS[x[0]]}</svg></button>`).join("");
+      bar = el;
       el.addEventListener("click", (e) => {
-        const b = e.target.closest("button");
-        if (!b) return;
-        if (b.dataset.tool) setTool(b.dataset.tool === tool && tool !== "cursor" ? "cursor" : b.dataset.tool);
-        if (b.dataset.toggle === "magnet") { magnet = !magnet; b.classList.toggle("on", magnet); o.status(`Magnet ${magnet ? "on" : "off"}`); }
-        if (b.dataset.toggle === "eye") { visible = !visible; b.classList.toggle("on", !visible); o.status(visible ? "Drawings shown" : "Drawings hidden"); }
-        if (b.dataset.action === "trash") {
-          if (drawings.length && confirm(`Remove all ${drawings.length} drawings on this chart?`)) { drawings = []; selected = null; save(); }
+        const more = e.target.closest("[data-more]");
+        const g = GROUPS.find((x) => x !== "-" && x.id === (more ? more.dataset.more : (e.target.closest("[data-g]") || {}).dataset?.g));
+        if (!g) return;
+        const btn = e.target.closest(".tool-group").querySelector(".tool");
+        if (more || g.emoji && !pref.groups.icons) return openFlyout(g, btn);
+        if (g.single) return setTool(tool === g.single ? pref.cursor : g.single);
+        if (g.toggle === "magnet") { pref.magnet = pref.magnet === "off" ? "weak" : "off"; savePref(); renderToolbar(); return o.status(`Magnet ${pref.magnet}`); }
+        if (g.toggle) {
+          pref[g.toggle] = !pref[g.toggle];
+          savePref(); renderToolbar();
+          if (g.toggle === "sync") { reload(); o.status(pref.sync ? "Drawings shared across all sessions" : "Drawings kept per session"); }
+          if (g.toggle === "lock") o.status(pref.lock ? "Drawings locked" : "Drawings unlocked");
+          if (g.toggle === "stay") o.status(pref.stay ? "Stays in drawing mode" : "Back to cursor after each drawing");
+          return;
         }
+        if (g.menu === "hide") { visible = !visible; renderToolbar(); return o.status(visible ? "Drawings shown" : "Drawings hidden"); }
+        if (g.menu === "trash") return openFlyout(g, btn);
+        const cur = g.emoji ? "emoji" : pref.groups[g.id] && groupOf(pref.groups[g.id]) === g ? pref.groups[g.id] : g.items[0][1][0];
+        setTool(tool === cur && !T[cur].cursor ? pref.cursor : cur);
       });
-      setTool("cursor");
+      // long-press opens the group menu too, like TradingView
+      let pressT = null;
+      el.addEventListener("mousedown", (e) => {
+        const b = e.target.closest(".tool");
+        if (!b) return;
+        const g = GROUPS.find((x) => x !== "-" && x.id === b.dataset.g);
+        if (g && (g.items || g.emoji)) pressT = setTimeout(() => openFlyout(g, b), 450);
+      });
+      addEventListener("mouseup", () => clearTimeout(pressT));
+      o.setCursor(pref.cursor);
+      setTool(pref.cursor);
     }
 
     return { redraw, load, mountToolbar, onKey, setTool, get count() { return drawings.length; } };
