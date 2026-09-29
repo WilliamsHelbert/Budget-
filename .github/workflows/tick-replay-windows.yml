@@ -31,7 +31,8 @@ jobs:
 
       - name: Stamp version
         shell: bash
-        run: echo "{\"version\": \"$(date -u +%Y.%m.%d-%H%M) ${GITHUB_SHA::7}\"}" > web/version.json
+        run: |
+          printf '{"version": "%s %s"}\n' "$(date -u +%Y.%m.%d-%H%M)" "${GITHUB_SHA::7}" > web/version.json
 
       - name: Build TickReplay.exe
         run: pyinstaller --noconfirm TickReplay.spec
