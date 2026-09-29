@@ -134,9 +134,17 @@
     midnight: { bgType: "gradient", bg: "#0e1a33", bg2: "#05070d", gridColor: "#15213b", gridColorH: "#15213b", text: "#aab4c8", scaleLine: "#1d2a45", crossColor: "#5f7194",
       upColor: "#26c6da", downColor: "#ff5277", wickUp: "#26c6da", wickDown: "#ff5277", borderUp: "#26c6da", borderDown: "#ff5277" },
   };
+  Object.assign(DEFAULTS, THEMES.fxr, { colorsV: 2 });   // FX Replay colours are the standard look
   const SETTINGS_KEY = "tickreplay.chartSettings";
   let cfg = { ...DEFAULTS };
-  try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") }; } catch { /* defaults */ }
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+    // settings saved before the FX Replay default: switch their colours over once
+    const migrate = !saved.colorsV;
+    if (migrate) Object.assign(saved, THEMES.fxr, { colorsV: 2 });
+    cfg = { ...DEFAULTS, ...saved };
+    if (migrate) localStorage.setItem(SETTINGS_KEY, JSON.stringify(cfg));
+  } catch { /* defaults */ }
   const saveCfg = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(cfg)); } catch { /* ignore */ } };
 
   const CHART_TYPES = {
@@ -894,8 +902,7 @@
     }
     draw.redraw();
     placeOrderLabels();
-    $("clock").textContent = S.sym ? fmtNY(S.t) : "--";
-    $("countdown").textContent = S.sym ? openCountdown(S.t) : "";
+    if (S.sym) dayLabel();
     if (playShown !== S.playing) {
       playShown = S.playing;
       $("play").innerHTML = S.playing ? '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>'
@@ -1103,14 +1110,6 @@
   }
 
   /** "Open in 04:12" during the 30 minutes before the 09:30 New York open. */
-  function openCountdown(t) {
-    const open = parseNY(toInputNY(t).slice(0, 10) + "T" + RTH_OPEN);
-    const left = open - t;
-    if (left <= 0 || left > 30 * 60 * 1000) return "";
-    const s = Math.ceil(left / 1000);
-    return `Open in ${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-  }
-
   // ---- main loop ------------------------------------------------------------
 
   let lastFrame = performance.now();
@@ -1183,6 +1182,58 @@
   }
 
   /** Jump to just before the open of `day` (YYYY-MM-DD, New York) and play live, tick by tick. */
+  // ---- trading days: jump to the next / previous New York session ------------
+
+  const dayCache = new Map();
+  const nyDay = (ms) => toInputNY(ms).slice(0, 10);
+  const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const dayName = (d) => `${WD[new Date(d + "T12:00:00Z").getUTCDay()]} ${+d.slice(8, 10)} ${MON[+d.slice(5, 7) - 1]}`;
+
+  /** Days with a regular session for the current symbol, oldest first, inside the session's range. */
+  async function tradingDays() {
+    const sym = S.sym.symbol;
+    if (!dayCache.has(sym)) {
+      const list = await api(`/api/days?symbol=${encodeURIComponent(sym)}`);
+      dayCache.set(sym, list.map((d) => ({ date: d.date, range: d.high - d.low })).sort((a, b) => (a.date < b.date ? -1 : 1)));
+    }
+    let list = dayCache.get(sym);
+    if (S.bt) { const lo = nyDay(S.bt.start_ts), hi = nyDay(S.bt.end_ts); list = list.filter((d) => d.date >= lo && d.date <= hi); }
+    return list;
+  }
+
+  async function goDay(which) {
+    if (!S.sym) return;
+    const days = (await tradingDays()).map((d) => d.date), cur = nyDay(S.t);
+    let d = which;
+    if (which === "next") d = days.find((x) => x > cur);
+    else if (which === "prev") d = [...days].reverse().find((x) => x < cur);
+    else if (which === "restart") d = days.includes(cur) ? cur : [...days].reverse().find((x) => x < cur);
+    if (!d) return status(which === "prev" ? "No earlier day with data" : S.bt ? "That was the last day of this session" : "No later day with data", 3500);
+    if (S.pos.qty) return status("Close your position before jumping to another day", 3500);
+    if (TR.orders.length) { TR.orders = []; ordersDirty = true; status("Working orders cancelled for the new day", 2500); }
+    S.playing = false;
+    await load(clampToRange(parseNY(`${d}T${PRE_OPEN}`)));
+    status(`${dayName(d)} · from 09:25 New York`, 2500);
+  }
+
+  async function drawDayList() {
+    const days = await tradingDays(), cur = nyDay(S.t);
+    $("dayList").innerHTML = days.length ? [...days].reverse().map((d) =>
+      `<button type="button" data-day="${d.date}" class="${d.date === cur ? "on" : ""}"><span>${dayName(d.date)} ${d.date.slice(0, 4)}</span><span class="rg" title="Regular-session range">${d.range.toFixed(2)} pts</span></button>`).join("")
+      : '<div class="muted" style="padding:8px 10px">No regular sessions in the data</div>';
+    const on = $("dayList").querySelector(".on");
+    if (on) on.scrollIntoView({ block: "nearest" });
+  }
+
+  let shownDay = "";
+  function dayLabel() {
+    const d = nyDay(S.t);
+    if (d === shownDay) return;
+    shownDay = d;
+    $("dayLbl").textContent = dayName(d);
+  }
+
   async function marketOpen(day) {
     const t = parseNY(`${day}T${PRE_OPEN}`);
     if (t < S.sym.first_ts || t > S.sym.last_ts) {
@@ -1190,7 +1241,6 @@
       return boot.on ? boot.fail(msg + ". Pick another day on the dashboard.") : status(msg, 4000);
     }
     boot.step(45, `09:25 New York · plays live at 1x`, `${S.sym.symbol} · ${day} open`);
-    $("start").value = toInputNY(t);
     setSpeed(1);
     await load(t);
     S.playing = true;
@@ -1226,18 +1276,9 @@
     });
     $("speed").innerHTML = SPEEDS.map((s) => `<option value="${s}" ${s === 1 ? "selected" : ""}>${s}x</option>`).join("");
     $("speed").addEventListener("change", (e) => setSpeed(+e.target.value));
-    $("skipGaps").addEventListener("change", (e) => { S.skipGaps = e.target.checked; });
     $("play").addEventListener("click", togglePlay);
     $("stepTick").addEventListener("click", stepTick);
     $("stepBar").addEventListener("click", stepBar);
-    $("go").addEventListener("click", () => {
-      if (!$("start").value) return;
-      load(clampToRange(parseNY($("start").value)));
-    });
-    $("marketOpen").addEventListener("click", () => {
-      const day = ($("start").value || toInputNY(S.t)).slice(0, 10);
-      marketOpen(day).catch((e) => status("Load failed: " + e.message, 5000));
-    });
     const sideAction = (side) => {
       const onOrderTab = !$("side").querySelector('[data-dpane="order"]').hidden;
       const type = $("ordType").querySelector(".on").dataset.otype;
@@ -1269,9 +1310,7 @@
       S.pos = { qty: 0, avg: 0, realized: S.bt ? S.pos.realized : 0, fills: [], openTs: 0, mae: 0, mfe: 0 };
       TR.orders = []; ordersDirty = true;
       $("domSym").textContent = S.sym.symbol;
-      const t = clampToRange(S.t);
-      $("start").value = toInputNY(t);
-      load(t);
+      load(clampToRange(S.t));
     });
 
     setupChrome();
@@ -1284,6 +1323,7 @@
       else if (e.key === "b" || e.key === "B") $("buy").click();
       else if (e.key === "s" || e.key === "S") $("sell").click();
       else if (e.key === "f" || e.key === "F") $("flat").click();
+      else if (e.key === "n" || e.key === "N") goDay("next").catch((ex) => status("Load failed: " + ex.message, 5000));
       else if (e.key === "Escape") { $("orderMenu").hidden = true; }
     });
 
@@ -1321,7 +1361,6 @@
     if (q.get("date")) start = parseNY(`${q.get("date")}T${RTH_OPEN}`);
     if (q.get("t")) start = +q.get("t");
     start = clampToRange(start);
-    $("start").value = toInputNY(start);
     await load(start);
     restoreLive();
     refreshMarkers();
@@ -1425,11 +1464,19 @@
       if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {});
     });
 
-    // date picker lives in a small dropdown next to the replay buttons
-    $("dateBtn").addEventListener("click", (e) => { e.stopPropagation(); openDrop($("dateBtn"), $("dateDrop")); });
-    $("dateDrop").addEventListener("click", (e) => e.stopPropagation());
-    $("go").addEventListener("click", () => $("dateDrop").classList.remove("open"));
-    $("start").addEventListener("keydown", (e) => { if (e.key === "Enter") $("go").click(); });
+    // trading-day menu next to the replay buttons
+    $("dayBtn").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      openDrop($("dayBtn"), $("dayDrop"));
+      if ($("dayDrop").classList.contains("open")) await drawDayList().catch(() => {});
+    });
+    $("dayDrop").addEventListener("click", (e) => {
+      e.stopPropagation();
+      const b = e.target.closest("[data-day]");
+      if (!b) return;
+      $("dayDrop").classList.remove("open");
+      goDay(b.dataset.day).catch((ex) => status("Load failed: " + ex.message, 5000));
+    });
 
     // settings dialog
     const dlg = $("settings");

@@ -178,14 +178,16 @@ input[type="datetime-local"] { color-scheme: dark; }
 #play svg { fill: currentColor; stroke: none; }
 .rp-speed { background: var(--panel2); border: 0; border-radius: 7px; padding: 5px 6px; font-weight: 700; cursor: pointer; }
 .tb-btn.gold { color: var(--gold); }
-.date-drop { min-width: 280px; padding: 10px; }
-.date-drop .ttl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
-.date-row { display: flex; gap: 6px; }
-.date-row .go { width: auto; flex: none; background: var(--accent); color: #fff; border: 0; border-radius: 7px; padding: 6px 14px; font-weight: 700; cursor: pointer; justify-content: center; }
-.date-check { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; margin-top: 10px; cursor: pointer; }
-#start { flex: 1; background: var(--panel2); border: 1px solid var(--border2); border-radius: 7px; padding: 5px 8px; color-scheme: dark; }
-.clock { font: 600 12px var(--mono); padding: 0 4px; }
-.countdown { color: var(--gold); font: 700 12px var(--mono); }
+.day-drop { min-width: 250px; padding: 6px; }
+.day-drop kbd { margin-left: auto; font: 600 10px var(--mono); color: var(--muted); border: 1px solid var(--border2); border-radius: 4px; padding: 1px 5px; }
+.day-drop .di { width: 18px; text-align: center; color: #6f9bff; }
+.day-drop .ttl { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 8px 10px 4px; padding-top: 8px; border-top: 1px solid var(--border); }
+.day-list { max-height: 280px; overflow-y: auto; }
+.day-list button { font-variant-numeric: tabular-nums; justify-content: space-between; }
+.day-list button .wd { color: var(--muted); width: 34px; }
+.day-list button.on { background: rgba(47, 107, 255, .14); color: #fff; }
+.day-list button .rg { margin-left: auto; color: var(--muted); font: 11px var(--mono); }
+#dayBtn .chev { width: 12px; height: 12px; opacity: .7; }
 .text-edit { position: absolute; z-index: 8; }
 .text-edit input { background: var(--panel); border: 1px solid var(--accent); border-radius: 6px; padding: 5px 8px; min-width: 180px; outline: none; }
 

@@ -80,26 +80,25 @@ and progress (replay position, time spent, market time replayed) is saved every 
 Sessions are stored in `data/backtests.json`.
 
 
-On the chart page, pick a day in the date field and press **🔔 Market Open**.
-The chart jumps at 09:25 New York with the whole overnight session as history and plays **live at 1x,
-tick by tick**, so you sit through the last minutes before the bell and trade the open as it happens.
-A countdown shows the time left to 09:30.
+The 📅 day menu in the chart toolbar shows the current day. **Next day** (or the **N** key) jumps to 09:25 New York
+on the next day with a regular session, with the whole overnight session as history, so you sit through the
+last minutes before the bell and trade the open. The menu also has Previous day, Restart this day and a list of
+every day with data (with its regular-session range). Close your position first; working orders are cancelled.
 
 | Control | What it does |
 |---|---|
-| Date/time + **Go** | Jump to that moment (New York time). Everything before it shows as history. |
+| 📅 day menu / **N** | Next day, previous day, restart the day, or pick any day (starts 09:25 New York) |
 | ▶ / **Space** | Play or pause |
 | **+1 tick** / **→** | Advance exactly one tick |
 | **+1 bar** / **Shift+→** | Advance to the close of the next candle |
-| Speed | 0.25x to 3600x real time |
-| skip closed | Jumps over closed-market periods (no trades for 5+ minutes). Shorter quiet stretches play out in real time. |
+| Speed | 0.25x to 3600x real time. Closed-market periods (no trades for 5+ minutes) are skipped automatically. |
 | 1s … 4h | Candle timeframe. The current candle stays partial, as it was at the replay time. |
 | **B** / **S** / **F** | Buy, sell, or flatten at the last traded price (NQ $20/pt, ES $50/pt) |
 
 ## The chart
 
 * **Top bar:** symbol, timeframes (1s–4h), chart type (candles, hollow candles, bars, line, area), indicators
-  (EMA 9/21/50, session VWAP that resets at 18:00 New York), jump to a time, Market Open, screenshot (PNG incl. drawings),
+  (EMA 9/21/50, session VWAP that resets at 18:00 New York), day menu, screenshot (PNG incl. drawings),
   settings, side panel toggle, full screen.
 * **Drawing tools (left), grouped like TradingView:** each button remembers the last tool used; hover and click › (or long-press)
   for the group menu.
@@ -111,8 +110,7 @@ A countdown shows the time left to 09:30.
   sessions · Remove (drawings, indicators). Drag drawings or handles, right-click for colour, line width, clone, bring to front,
   remove. Shortcuts: Alt+T trend, Alt+H horizontal line, Alt+J horizontal ray, Alt+V vertical, Alt+C cross line, Alt+F fib,
   Alt+Shift+R rectangle, Del removes the selected drawing, Esc cancels.
-* **Replay controls (chart toolbar):** play/pause, next tick, next candle, speed, 📅 jump to a date (with "skip closed
-  market"), 🔔 Open and the replay clock.
+* **Replay controls (chart toolbar):** play/pause, next tick, next candle, speed and the 📅 day menu (next / previous day).
 * **Drawing settings (double-click a drawing, or right-click → Settings):** Style (colour, width, solid/dotted/dashed, extend
   left/right, fill and opacity for boxes and channels, price label on/off), Text (text along the line or inside the box, colour,
   size, bold, position and alignment), Coordinates (exact price and time of each point), Visibility (seconds / minutes / hours
