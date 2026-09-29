@@ -53,7 +53,7 @@
           <div class="sub" id="subtitle"></div>
         </div>
         <div class="actions">
-          <button class="btn btn-gold" id="newBtn">
+          <button class="btn btn-primary" id="newBtn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
             New session
           </button>
@@ -93,11 +93,28 @@
         <label class="field">Commission per contract per side ($)
           <input class="input" type="number" id="fFee" value="0" min="0" max="100" step="0.01">
         </label>
+        <div class="rules-box">
+          <label class="field">Evaluation rules
+            <select class="input" id="fRules">
+              <option value="">Off – free practice</option>
+              <option value="50000,3000,2000,1000">$50K evaluation – target $3,000 · drawdown $2,000 · daily $1,000</option>
+              <option value="100000,6000,3000,2000">$100K evaluation – target $6,000 · drawdown $3,000 · daily $2,000</option>
+              <option value="150000,9000,4500,3000">$150K evaluation – target $9,000 · drawdown $4,500 · daily $3,000</option>
+              <option value="custom">Custom rules…</option>
+            </select>
+          </label>
+          <div class="three" id="fRuleVals" hidden>
+            <label class="field">Profit target ($) <input class="input" type="number" id="fTarget" min="0" step="50"></label>
+            <label class="field">Trailing drawdown ($) <input class="input" type="number" id="fDd" min="0" step="50"></label>
+            <label class="field">Daily loss limit ($) <input class="input" type="number" id="fDaily" min="0" step="50"></label>
+          </div>
+          <p class="hint" id="fRuleHint" hidden>Like a prop-firm evaluation: the drawdown trails your highest equity (open P&amp;L included) until it reaches the starting balance. Hitting it fails the session; hitting the daily limit locks trading until 18:00 New York. 0 turns a rule off.</p>
+        </div>
         <p class="hint err" id="dlgErr" hidden></p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" value="cancel" formnovalidate>Cancel</button>
-        <button class="btn btn-gold" id="dlgOk" value="ok">Create session</button>
+        <button class="btn btn-primary" id="dlgOk" value="ok">Create session</button>
       </div>
     </form>
   </dialog>

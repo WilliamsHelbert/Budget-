@@ -32,6 +32,12 @@
       <span class="acct-stat">RP&amp;L <b id="hRpl">$0</b></span>
       <span class="acct-stat">UP&amp;L <b id="hUpl">$ --</b></span>
     </div>
+    <div class="rules" id="rules" hidden title="Evaluation rules for this session">
+      <span class="rstate" id="rulesState">Evaluation</span>
+      <span class="rmeter goal" id="rTarget" hidden></span>
+      <span class="rmeter" id="rDd" hidden></span>
+      <span class="rmeter" id="rDay" hidden></span>
+    </div>
     <div class="acct-badge" id="modeBadge">REPLAY</div>
     <div class="acct-right">
       <span class="ver" id="ver"></span>
@@ -270,6 +276,7 @@
           <h4>Panels</h4>
           <div class="set-row"><label>Order panel (DOM)</label><span><input type="checkbox" data-set="sidePanel"></span></div>
           <div class="set-row"><label>Fill markers on chart</label><span><input type="checkbox" data-set="markers"></span></div>
+          <div class="set-row"><label>Journal card after each trade (sessions)</label><span><input type="checkbox" data-set="journal"></span></div>
           <h4>Order fills</h4>
           <div class="set-row"><label>Limit orders fill when price</label><span>
             <select data-set="limitFill"><option value="through">trades through (realistic)</option><option value="touch">touches</option></select></span></div>
@@ -288,6 +295,14 @@
   </dialog>
 
   <div class="ctx" id="ctx" hidden></div>
+  <div class="rule-banner" id="ruleBanner" role="alert" hidden></div>
+  <div class="jr" id="jr" hidden aria-label="Trade journal">
+    <div class="jr-top"><div class="jr-head" id="jrHead"></div><button type="button" class="jr-x" id="jrClose" aria-label="Close">×</button></div>
+    <div class="jr-exc" id="jrExc"></div>
+    <div class="jr-lbl">Setup</div>
+    <div class="jr-tags" id="jrTags"></div>
+    <input class="jr-note" id="jrNote" maxlength="1000" placeholder="Note: why you took it, what you'd do differently (Enter to save)">
+  </div>
   <div id="status" class="status"></div>
 
   <script src="vendor/lightweight-charts.standalone.production.js"></script>

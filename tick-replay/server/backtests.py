@@ -14,7 +14,9 @@ import time
 import uuid
 from pathlib import Path
 
-TRADE_FIELDS = ("symbol", "side", "qty", "entry_ts", "entry_px", "exit_ts", "exit_px", "pnl", "fees")
+TRADE_FIELDS = ("symbol", "side", "qty", "entry_ts", "entry_px", "exit_ts", "exit_px", "pnl", "fees",
+                "mae", "mfe", "setup", "note")
+JOURNAL_FIELDS = ("setup", "note")
 
 
 class BacktestStore:
@@ -55,7 +57,7 @@ class BacktestStore:
             return self._find(self._load(), sid)
 
     def create(self, name: str, symbols: list[str], start_ts: int, end_ts: int,
-               balance: float, fee_per_side: float) -> dict:
+               balance: float, fee_per_side: float, rules: dict | None = None) -> dict:
         now = int(time.time() * 1000)
         s = {
             "id": uuid.uuid4().hex[:12],
@@ -65,6 +67,8 @@ class BacktestStore:
             "end_ts": int(end_ts),
             "balance": float(balance),
             "fee_per_side": float(fee_per_side),
+            "rules": rules or None,
+            "rule_state": None,
             "current_ts": int(start_ts),
             "current_symbol": symbols[0],
             "time_spent_ms": 0,
@@ -87,15 +91,25 @@ class BacktestStore:
             for k, v in fields.items():
                 if k in allowed and v is not None:
                     s[k] = v
+            if "rules" in fields and fields["rules"] is not False:
+                new = fields["rules"] or None
+                if new != s.get("rules"):
+                    s["rules"] = new
+                    s["rule_state"] = None   # new rules: start the evaluation over
             s["updated"] = int(time.time() * 1000)
             self._save(db)
             return s
 
     def progress(self, sid: str, current_ts: int | None, current_symbol: str | None,
-                 add_time_ms: int, add_replayed_ms: int) -> dict:
+                 add_time_ms: int, add_replayed_ms: int, rule_state: dict | None = None) -> dict:
         with self._lock:
             db = self._load()
             s = self._find(db, sid)
+            if rule_state is not None and s.get("rules"):
+                old = s.get("rule_state") or {}
+                if old.get("status") == "failed":   # a failed evaluation stays failed
+                    rule_state = {**rule_state, "status": "failed", "reason": old.get("reason")}
+                s["rule_state"] = rule_state
             if current_ts is not None:
                 s["current_ts"] = int(min(max(current_ts, s["start_ts"]), s["end_ts"]))
             if current_symbol and current_symbol in s["symbols"]:
@@ -123,6 +137,20 @@ class BacktestStore:
             self._save(db)
             return t
 
+    def edit_trade(self, sid: str, tid: str, fields: dict) -> dict:
+        with self._lock:
+            db = self._load()
+            s = self._find(db, sid)
+            for t in s["trades"]:
+                if t.get("id") == tid:
+                    for k in JOURNAL_FIELDS:
+                        if fields.get(k) is not None:
+                            t[k] = fields[k].strip() or None
+                    s["updated"] = int(time.time() * 1000)
+                    self._save(db)
+                    return t
+        raise KeyError(tid)
+
     def delete(self, sid: str) -> None:
         with self._lock:
             db = self._load()
@@ -135,4 +163,4 @@ class BacktestStore:
     def duplicate(self, sid: str) -> dict:
         s = self.get(sid)
         return self.create(s["name"] + " (copy)", s["symbols"], s["start_ts"], s["end_ts"],
-                           s["balance"], s.get("fee_per_side", 0))
+                           s["balance"], s.get("fee_per_side", 0), s.get("rules"))

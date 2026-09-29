@@ -75,6 +75,7 @@
     if (ms) status._t = setTimeout(() => el.classList.remove("show"), ms);
   }
 
+  const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const money = (v) => (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // ---- state ----------------------------------------------------------------
@@ -98,7 +99,7 @@
     vap: new Map(),     // price -> {b: buy-aggressor volume, s: sell-aggressor volume}
     dirty: false,
     buf: null,
-    pos: { qty: 0, avg: 0, realized: 0, fills: [], openTs: 0 },
+    pos: { qty: 0, avg: 0, realized: 0, fills: [], openTs: 0, mae: 0, mfe: 0 },
     bt: null,           // backtest session (?bt=<id>): range, balance, saved trades
     spentMs: 0,         // real time spent / market time replayed since the last save
     replayedMs: 0,
@@ -115,7 +116,7 @@
     border: false, borderUp: "#26a69a", borderDown: "#ef5350", volume: true,
     bg: "#111318", grid: "both", gridColor: "#1b1f27", crosshair: "normal", crossColor: "#758696",
     watermark: "hidden", text: "#b2b5be", fontSize: "12", scaleLine: "#242b39", rightOffset: 8,
-    sidePanel: true, markers: true, drawColor: "#2962ff", rr: 2, bidAsk: true, limitFill: "through",
+    sidePanel: true, markers: true, journal: true, drawColor: "#2962ff", rr: 2, bidAsk: true, limitFill: "through",
     chartType: "candles", indicators: [],
     bgType: "solid", bg2: "#05070d", gridColorH: "#1b1f27", gridStyle: "0", scaleMode: "0", lastLine: true,
     slSymbol: true, slOhlc: true, slChange: true, slVolume: true, slInd: true,
@@ -297,6 +298,12 @@
     }
     if (S.last !== null && px !== S.last) S.lastDir = px > S.last ? 1 : -1;
     S.last = px;
+    if (S.pos.qty) {
+      const ex = (px - S.pos.avg) * Math.sign(S.pos.qty);
+      if (ex > S.pos.mfe) S.pos.mfe = ex;
+      if (-ex > S.pos.mae) S.pos.mae = -ex;
+      if (R.on) ruleCheck();
+    }
     // volume traded at each price since the replay started, split by aggressor (DOM ladder)
     const aggr = side || S.lastDir || 1, key = px.toFixed(2);
     const v = S.vap.get(key) || { b: 0, s: 0 };
@@ -482,7 +489,7 @@
     const p = pos.qty, q = signedQty;
     const feePerSide = S.bt ? S.bt.fee_per_side || 0 : 0;
     if (p === 0 || Math.sign(p) === Math.sign(q)) {
-      if (p === 0) pos.openTs = S.t;
+      if (p === 0) { pos.openTs = S.t; pos.mae = pos.mfe = 0; }
       pos.avg = (pos.avg * Math.abs(p) + px * Math.abs(q)) / Math.abs(p + q);
     } else {
       const closing = Math.min(Math.abs(q), Math.abs(p));
@@ -493,8 +500,9 @@
         symbol: S.sym.symbol, side: Math.sign(p), qty: closing,
         entry_ts: pos.openTs, entry_px: pos.avg, exit_ts: S.t, exit_px: px,
         pnl: Math.round((gross - fees) * 100) / 100, fees,
+        mae: +(pos.mae || 0).toFixed(2), mfe: +(pos.mfe || 0).toFixed(2),
       });
-      if (Math.abs(q) > Math.abs(p)) { pos.avg = px; pos.openTs = S.t; } // flipped
+      if (Math.abs(q) > Math.abs(p)) { pos.avg = px; pos.openTs = S.t; pos.mae = pos.mfe = 0; } // flipped
     }
     pos.qty = p + q;
     if (pos.qty === 0) pos.avg = 0;
@@ -503,10 +511,17 @@
     syncExits();
     refreshMarkers();
     ordersDirty = true;
+    if (R.on) ruleCheck();
   }
 
   function market(signedQty, bracket = bracketCfg()) {
     if (S.last === null) return status("No price yet");
+    if (!canOpen()) {   // locked by a rule: only reduce or close the position
+      const p = S.pos.qty;
+      if (!p || Math.sign(p) === Math.sign(signedQty)) return status(lockMsg(), 3500);
+      signedQty = Math.sign(signedQty) * Math.min(Math.abs(signedQty), Math.abs(p));
+      bracket = null;
+    }
     const side = Math.sign(signedQty), px = refPx(side);
     execute(signedQty, px, "Market");
     if (bracket) attachBracket(side, Math.abs(signedQty), px, bracket);
@@ -520,6 +535,7 @@
   }
 
   function addOrder(o) {
+    if (o.role === "entry" && !canOpen()) { status(lockMsg(), 3500); return null; }
     const ord = { id: TR.seq++, placed: S.t, ...o, price: roundTick(o.price) };
     // a limit on the wrong side of the market is marketable: fill it now at the quote
     if (ord.role === "entry" && ord.type === "limit" && S.last !== null) {
@@ -595,7 +611,7 @@
   function saveLive() {
     const k = liveKey();
     if (!k || !S.sym || !liveRestored) return;
-    const live = { symbol: S.sym.symbol, pos: { qty: S.pos.qty, avg: S.pos.avg, openTs: S.pos.openTs }, orders: TR.orders, seq: TR.seq };
+    const live = { symbol: S.sym.symbol, pos: { qty: S.pos.qty, avg: S.pos.avg, openTs: S.pos.openTs, mae: S.pos.mae, mfe: S.pos.mfe }, orders: TR.orders, seq: TR.seq };
     try { localStorage.setItem(k, JSON.stringify(live)); } catch { /* storage blocked */ }
   }
   function restoreLive() {
@@ -606,6 +622,7 @@
       const live = JSON.parse(localStorage.getItem(k) || "null");
       if (!live || live.symbol !== S.sym.symbol) return;
       Object.assign(S.pos, live.pos);
+      S.pos.mae = S.pos.mae || 0; S.pos.mfe = S.pos.mfe || 0;
       TR.orders = live.orders || [];
       TR.seq = Math.max(TR.seq, live.seq || 1);
       ordersDirty = true;
@@ -620,9 +637,180 @@
   function recordTrade(trade) {
     if (!S.bt) return;
     S.bt.trades.push(trade);
+    R.dayClosed += trade.pnl;
     fetch(`/api/backtests/${S.bt.id}/trades`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(trade),
-    }).catch(() => status("Could not save the trade", 4000));
+    }).then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((saved) => { trade.id = saved.id; journal.open(trade); })
+      .catch(() => status("Could not save the trade", 4000));
+  }
+
+  // ---- trade journal: tag the setup right after the trade closes ---------------
+
+  const SETUP_KEY = "tickreplay.setups";
+  const DEFAULT_SETUPS = ["Opening range", "VWAP", "Pullback", "Breakout", "Reversal", "News"];
+  const journal = {
+    trade: null, timer: 0,
+    setups() {
+      try { const v = JSON.parse(localStorage.getItem(SETUP_KEY)); if (Array.isArray(v) && v.length) return v; } catch { /* ignore */ }
+      return DEFAULT_SETUPS.slice();
+    },
+    remember(name) {
+      const list = [name, ...this.setups().filter((x) => x !== name)].slice(0, 12);
+      try { localStorage.setItem(SETUP_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+    },
+    open(t) {
+      if (!cfg.journal) return;
+      this.trade = t;
+      const el = $("jr"), pv = S.sym.point_value;
+      const pts = (t.exit_px - t.entry_px) * t.side;
+      $("jrHead").innerHTML = `<b class="${cls(t.pnl)}">${signed$(t.pnl)}</b>
+        <span>${t.side > 0 ? "Long" : "Short"} ${t.qty} ${esc(t.symbol)} · ${pts >= 0 ? "+" : ""}${pts.toFixed(2)} pts</span>`;
+      const eff = t.mfe > 0 && pts > 0 ? Math.round((pts / t.mfe) * 100) : null;
+      $("jrExc").innerHTML = `<span title="Maximum adverse excursion: the most the trade went against you">Heat <b class="neg">${t.mae.toFixed(2)}</b> pts</span>
+        <span title="Maximum favourable excursion: the most the trade was in profit">Best <b class="pos">${t.mfe.toFixed(2)}</b> pts</span>
+        ${eff !== null ? `<span title="How much of the best move you kept">Kept <b>${eff}%</b></span>` : ""}
+        ${pts < 0 && t.mfe * pv * t.qty >= Math.abs(t.pnl) * 0.5 && t.mfe > 0 ? `<span class="warn">Was +${t.mfe.toFixed(2)} pts in profit</span>` : ""}`;
+      this.draw();
+      $("jrNote").value = "";
+      el.hidden = false;
+      el.classList.remove("hold");
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => { if (!el.classList.contains("hold")) this.close(); }, 12000);
+    },
+    draw() {
+      $("jrTags").innerHTML = this.setups().map((x) => `<button type="button" class="${this.trade && this.trade.setup === x ? "on" : ""}" data-setup="${esc(x)}">${esc(x)}</button>`).join("") +
+        `<input id="jrNew" maxlength="40" placeholder="+ New setup">`;
+    },
+    save(fields) {
+      const t = this.trade;
+      if (!t || !t.id) return;
+      Object.assign(t, fields);
+      fetch(`/api/backtests/${S.bt.id}/trades/${t.id}`, {
+        method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(fields),
+      }).catch(() => status("Could not save the journal entry", 4000));
+    },
+    close() { $("jr").hidden = true; clearTimeout(this.timer); this.trade = null; },
+    setup() {
+      const el = $("jr");
+      el.addEventListener("pointerdown", () => el.classList.add("hold"));
+      el.addEventListener("focusin", () => el.classList.add("hold"));
+      $("jrTags").addEventListener("click", (e) => {
+        const b = e.target.closest("[data-setup]");
+        if (!b) return;
+        const v = this.trade.setup === b.dataset.setup ? "" : b.dataset.setup;
+        this.save({ setup: v });
+        if (v) this.remember(v);
+        this.draw();
+      });
+      $("jrTags").addEventListener("keydown", (e) => {
+        if (e.target.id !== "jrNew" || e.key !== "Enter") return;
+        const v = e.target.value.trim().slice(0, 40);
+        if (!v) return;
+        this.remember(v); this.save({ setup: v }); this.draw();
+      });
+      $("jrNote").addEventListener("change", (e) => this.save({ note: e.target.value.trim() }));
+      $("jrNote").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.target.blur(); this.close(); } else if (e.key === "Escape") this.close(); });
+      $("jrClose").addEventListener("click", () => { if ($("jrNote").value.trim()) this.save({ note: $("jrNote").value.trim() }); this.close(); });
+    },
+  };
+
+  // ---- evaluation rules (prop-firm style) ----------------------------------------
+  // Profit target on closed P&L, a trailing drawdown on equity including open P&L that
+  // stops trailing at the starting balance, and a daily loss limit per CME trading day.
+
+  const R = { on: false, rules: null, st: null, day: null, dayClosed: 0, locked: null };
+  /** CME trading day: the evening session from 18:00 New York counts toward the next date. */
+  const tradingDay = (ms) => fmtNY(ms + 6 * 3600000).slice(0, 10);
+
+  function rulesInit() {
+    R.rules = S.bt && S.bt.rules;
+    R.on = !!R.rules;
+    if (!R.on) return;
+    R.st = S.bt.rule_state || { peak: S.bt.balance, status: "active" };
+    rulesNewDay(true);
+    $("rules").hidden = false;
+  }
+  function rulesNewDay(force) {
+    const d = tradingDay(S.t || S.bt.current_ts);
+    if (!force && d === R.day) return;
+    R.day = d;
+    R.dayClosed = S.bt.trades.filter((t) => tradingDay(t.exit_ts) === d).reduce((a, t) => a + t.pnl, 0);
+    if (R.locked && R.locked !== d) R.locked = null;
+  }
+  const canOpen = () => !R.on || (R.st.status !== "failed" && R.locked !== R.day);
+  const lockMsg = () => (R.st.status === "failed" ? `Evaluation failed: ${R.st.reason}. Trading is off in this session.`
+    : "Daily loss limit reached. Trading unlocks at 18:00 New York.");
+
+  function ruleBreach(kind) {
+    TR.orders = []; ordersDirty = true;
+    if (S.pos.qty) { const q = -S.pos.qty; execute(q, refPx(Math.sign(q)), "Rule"); }
+    if (kind === "dd") {
+      R.st.status = "failed";
+      R.st.reason = `max drawdown of ${money(R.rules.max_dd)} hit on ${R.day}`;
+      showRuleBanner("fail", "Evaluation failed", `Trailing drawdown hit. Your position was closed and trading is off in this session. Duplicate it on the dashboard to try again.`);
+      saveProgress();
+    } else {
+      R.locked = R.day;
+      showRuleBanner("lock", "Daily loss limit hit", `You lost ${money(R.rules.daily_loss)} today. Positions closed; trading unlocks at 18:00 New York.`);
+    }
+  }
+
+  function ruleCheck() {
+    if (!R.on || R.st.status === "failed" || ruleCheck.busy) return;
+    ruleCheck.busy = true;
+    try {
+      rulesNewDay();
+      const open = openPnl(), eq = S.bt.balance + S.pos.realized + open;
+      const r = R.rules;
+      if (r.max_dd) {
+        if (eq > R.st.peak) R.st.peak = eq;
+        if (eq <= ddFloor()) return ruleBreach("dd");
+      }
+      if (r.daily_loss && R.locked !== R.day && R.dayClosed + open <= -r.daily_loss) return ruleBreach("day");
+      if (r.target && R.st.status === "active" && S.pos.realized >= r.target) {
+        R.st.status = "passed";
+        showRuleBanner("pass", "Profit target reached", `${money(r.target)} made within the rules. Keep trading or start a new evaluation.`);
+        saveProgress();
+      }
+    } finally { ruleCheck.busy = false; }
+  }
+  const ddFloor = () => Math.min(R.st.peak - R.rules.max_dd, S.bt.balance);
+
+  function showRuleBanner(kind, title, text) {
+    const el = $("ruleBanner");
+    el.className = "rule-banner " + kind;
+    el.innerHTML = `<b>${title}</b><span>${text}</span><button type="button" aria-label="Dismiss">×</button>`;
+    el.hidden = false;
+    el.querySelector("button").onclick = () => { el.hidden = true; };
+    if (S.playing) togglePlay();
+  }
+
+  function renderRules() {
+    if (!R.on) return;
+    rulesNewDay();
+    const r = R.rules, open = openPnl(), eq = S.bt.balance + S.pos.realized + open;
+    const meter = (id, label, left, total, txt) => {
+      const el = $(id);
+      if (!total) { el.hidden = true; return; }
+      el.hidden = false;
+      const f = Math.max(0, Math.min(1, left / total));
+      el.className = "rmeter" + (f < 0.25 ? " danger" : f < 0.5 ? " warn" : "");
+      el.innerHTML = `<span class="rl">${label}</span><span class="rbar"><i style="width:${(f * 100).toFixed(1)}%"></i></span><span class="rv">${txt}</span>`;
+    };
+    const st = R.st.status;
+    $("rulesState").textContent = st === "failed" ? "Failed" : st === "passed" ? "Passed" : R.locked === R.day ? "Locked today" : "Evaluation";
+    $("rulesState").className = "rstate " + (st === "failed" ? "fail" : st === "passed" ? "pass" : R.locked === R.day ? "lock" : "");
+    const toGo = r.target - S.pos.realized;
+    const tgt = $("rTarget");
+    if (r.target) {
+      tgt.hidden = false;
+      const f = Math.max(0, Math.min(1, S.pos.realized / r.target));
+      tgt.className = "rmeter goal";
+      tgt.innerHTML = `<span class="rl">Target</span><span class="rbar"><i style="width:${(f * 100).toFixed(1)}%"></i></span><span class="rv">${toGo > 0 ? money(toGo) + " to go" : "reached"}</span>`;
+    } else tgt.hidden = true;
+    if (r.max_dd) { const left = eq - ddFloor(); meter("rDd", "Drawdown", left, r.max_dd, `${money(Math.max(0, left))} left`); } else $("rDd").hidden = true;
+    if (r.daily_loss) { const left = r.daily_loss + R.dayClosed + open; meter("rDay", "Today", left, r.daily_loss, `${money(Math.max(0, left))} left`); } else $("rDay").hidden = true;
   }
 
   // ---- backtest session progress ------------------------------------------
@@ -631,6 +819,7 @@
     const body = JSON.stringify({
       current_ts: Math.round(S.t), current_symbol: S.sym ? S.sym.symbol : null,
       add_time_ms: Math.round(S.spentMs), add_replayed_ms: Math.round(S.replayedMs),
+      rule_state: R.on ? { peak: Math.round(R.st.peak * 100) / 100, status: R.st.status, reason: R.st.reason || null } : null,
     });
     S.spentMs = 0;
     S.replayedMs = 0;
@@ -738,6 +927,7 @@
     $("hBal").textContent = money(start + S.pos.realized + open);
     $("hRpl").textContent = signed$(S.pos.realized); $("hRpl").className = cls(S.pos.realized);
     $("hUpl").textContent = S.pos.qty ? signed$(open) : "$ --"; $("hUpl").className = cls(open);
+    renderRules();
   }
 
   // ---- bid / ask labels on the price axis ------------------------------------
@@ -1076,7 +1266,7 @@
         return status("Close your position before switching symbol", 3000);
       }
       S.sym = S.symbols.find((s) => s.symbol === e.target.value);
-      S.pos = { qty: 0, avg: 0, realized: S.bt ? S.pos.realized : 0, fills: [], openTs: 0 };
+      S.pos = { qty: 0, avg: 0, realized: S.bt ? S.pos.realized : 0, fills: [], openTs: 0, mae: 0, mfe: 0 };
       TR.orders = []; ordersDirty = true;
       $("domSym").textContent = S.sym.symbol;
       const t = clampToRange(S.t);
@@ -1109,6 +1299,8 @@
       S.symbols = S.symbols.filter((s) => S.bt.symbols.includes(s.symbol));
       if (!S.symbols.length) return boot.fail("The data for this session's symbols was deleted. Import it again on the Data page.");
       S.pos.realized = S.bt.trades.reduce((a, t) => a + t.pnl, 0);
+      rulesInit();
+      journal.setup();
       $("acctName").textContent = S.bt.name;
       document.title = `${S.bt.name} · Tick Replay`;
       setInterval(saveProgress, 10000);

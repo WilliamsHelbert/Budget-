@@ -86,3 +86,34 @@ def test_backtest_lifecycle(client):
 def test_backtest_rejects_unknown_symbol(client):
     r = client.post("/api/backtests", json={"symbols": ["ZZ"], "start_ts": 1, "end_ts": 2})
     assert r.status_code == 404
+
+
+def test_rules_and_trade_journal(client):
+    client.post("/api/import", data={"symbol": "NQ", "tz": "America/New_York"},
+                files=[("files", ("NQ.txt", NINJA, "text/plain"))])
+    bt = client.post("/api/backtests", json={
+        "name": "Eval", "symbols": ["NQ"], "start_ts": 1709600000000, "end_ts": 1709700000000,
+        "rules": {"target": 3000, "max_dd": 2000, "daily_loss": 1000}}).json()
+    assert bt["rules"] == {"target": 3000, "max_dd": 2000, "daily_loss": 1000} and bt["rule_state"] is None
+    url = f"/api/backtests/{bt['id']}"
+
+    # the chart reports the evaluation state; a failed evaluation cannot be revived by the client
+    r = client.post(url + "/progress", json={"rule_state": {"peak": 50400, "status": "failed", "reason": "Max drawdown"}})
+    assert r.json()["rule_state"]["status"] == "failed"
+    r = client.post(url + "/progress", json={"rule_state": {"peak": 50400, "status": "active"}})
+    assert r.json()["rule_state"] == {"peak": 50400, "status": "failed", "reason": "Max drawdown"}
+
+    # editing other fields keeps the rules; changing the rules restarts the evaluation
+    assert client.patch(url, json={"name": "Eval 2"}).json()["rules"]["target"] == 3000
+    got = client.patch(url, json={"rules": {"target": 2500, "max_dd": 2000}}).json()
+    assert got["rules"] == {"target": 2500, "max_dd": 2000, "daily_loss": 0} and got["rule_state"] is None
+    assert client.patch(url, json={"rules": None}).json()["rules"] is None
+
+    trade = {"symbol": "NQ", "side": -1, "qty": 1, "entry_ts": 1709649000123, "entry_px": 18123.25,
+             "exit_ts": 1709649000500, "exit_px": 18120, "pnl": 65, "mae": 1.5, "mfe": 4.25}
+    t = client.post(url + "/trades", json=trade).json()
+    assert t["mae"] == 1.5 and t["mfe"] == 4.25 and t["setup"] is None
+    r = client.patch(f"{url}/trades/{t['id']}", json={"setup": " ORB ", "note": "waited for the retest"})
+    assert r.json()["setup"] == "ORB" and r.json()["note"] == "waited for the retest"
+    assert client.patch(f"{url}/trades/nope", json={"setup": "x"}).status_code == 404
+    assert client.post(url + "/duplicate").json()["rules"] is None

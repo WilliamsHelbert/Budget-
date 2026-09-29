@@ -115,6 +115,32 @@
 
   function equity(b) { return b.balance + b.trades.reduce((a, t) => a + t.pnl, 0); }
 
+  /** Evaluation status of a session with rules: where it stands against target and drawdown. */
+  function ruleInfo(b) {
+    const r = b.rules;
+    if (!r) return null;
+    const st = b.rule_state || {}, eq = equity(b), closed = eq - b.balance;
+    const peak = Math.max(st.peak ?? b.balance, eq);
+    const floor = r.max_dd ? Math.min(peak - r.max_dd, b.balance) : null;
+    const status = st.status || (r.target && closed >= r.target ? "passed" : "active");
+    return { r, status, reason: st.reason, toGo: r.target ? r.target - closed : null, ddLeft: floor !== null ? eq - floor : null };
+  }
+  function ruleBadge(b) {
+    const i = ruleInfo(b);
+    if (!i) return "";
+    const txt = { passed: "Passed", failed: "Failed", active: "Evaluation" }[i.status];
+    return `<span class="rbadge ${i.status}" title="${esc(i.status === "failed" ? "Failed: " + (i.reason || "rule broken") : "Evaluation rules on")}">${txt}</span>`;
+  }
+  function ruleLine(b) {
+    const i = ruleInfo(b);
+    if (!i || i.status === "failed") return i ? `<div class="rule-line neg">Failed – ${esc(i.reason || "a rule was broken")}. Duplicate the session to try again.</div>` : "";
+    const parts = [];
+    if (i.toGo !== null) parts.push(i.toGo > 0 ? `<b>${money(i.toGo, 0)}</b> to target` : "<b class=\"pos\">Target reached</b>");
+    if (i.ddLeft !== null) parts.push(`<b class="${i.ddLeft < i.r.max_dd * 0.25 ? "neg" : ""}">${money(i.ddLeft, 0)}</b> drawdown room`);
+    if (i.r.daily_loss) parts.push(`daily limit ${money(i.r.daily_loss, 0)}`);
+    return `<div class="rule-line">${parts.join(" · ")}</div>`;
+  }
+
   /** Trading days (weekdays with data) still ahead in a session. */
   function remainingDays(b) {
     const set = new Set();
@@ -173,7 +199,7 @@
       const every = Math.ceil(items.length / Math.max(1, Math.floor((W - L) / 56)));
       items.forEach((it, k) => {
         const x = L + k * slot + (slot - bw) / 2;
-        const color = opts.polarity ? (it.value >= 0 ? "var(--up)" : "var(--down)") : opts.color || "var(--gold)";
+        const color = opts.polarity ? (it.value >= 0 ? "var(--up)" : "var(--down)") : opts.color || "var(--accent)";
         if (it.value) s += `<path class="bar" d="${roundedBar(x, y(0), y(it.value), bw)}" fill="${color}"/>`;
         s += `<rect class="hit" x="${L + k * slot}" y="${T}" width="${slot}" height="${H - T - B}" data-tip="${esc(it.tip)}"/>`;
         if (k % every === 0) s += `<text class="axis" x="${x + bw / 2}" y="${H - 6}" text-anchor="middle">${esc(it.label)}</text>`;
@@ -281,7 +307,7 @@
     return `<div class="srow">
       <a class="play" href="chart.html?bt=${b.id}" title="Continue replay">${ICON.play}</a>
       <div>
-        <div class="name">${esc(b.name)}</div>
+        <div class="name">${esc(b.name)} ${ruleBadge(b)}</div>
         <div class="meta">
           <span>${ICON.cal}${shortDate(nyDate(b.start_ts))} – ${shortDate(nyDate(b.end_ts))}</span>
           <span>${ICON.wallet}${money(b.balance, 0)}</span>
@@ -309,7 +335,7 @@
     return `<div class="empty">
       <h3>No backtest sessions yet</h3>
       <div>Create a session with a date range and a starting balance. Your trades and progress are saved as you go.</div>
-      <button class="btn btn-gold" data-act="new">+ New session</button>
+      <button class="btn btn-primary" data-act="new">+ New session</button>
     </div>`;
   }
 
@@ -352,7 +378,7 @@
       <div class="eyebrow">Continue where you left off <span class="muted">· played ${agoTxt}</span></div>
       <div class="hero-main">
         <div class="hero-info">
-          <h2>${esc(b.name)}</h2>
+          <h2>${esc(b.name)} ${ruleBadge(b)}</h2>
           <div class="hero-meta">
             <span>${ICON.cal}${shortDate(nyDate(b.start_ts))} – ${shortDate(nyDate(b.end_ts))}</span>
             <span>${ICON.clock}at ${nyDate(b.current_ts)} ${nyClock(b.current_ts).slice(0, 5)} NY</span>
@@ -362,6 +388,7 @@
             <div class="bar"><span style="width:${(done * 100).toFixed(1)}%"></span></div>
             <div class="lbl"><span>${(done * 100).toFixed(0)}% replayed</span><span>${remainingDays(b)} trading days left</span></div>
           </div>
+          ${ruleLine(b)}
         </div>
         <div class="hero-eq">
           <div class="muted small">Balance</div>
@@ -548,7 +575,7 @@
       }
       $("tbl").innerHTML = `<div class="table-wrap"><table class="t">
         <thead><tr><th>Session</th><th>Symbol</th><th>Side</th><th class="num">Qty</th><th>Entry (NY)</th><th class="num">Entry</th>
-          <th>Exit (NY)</th><th class="num">Exit</th><th class="num">Points</th><th class="num">P&amp;L</th><th class="num">Held</th></tr></thead>
+          <th>Exit (NY)</th><th class="num">Exit</th><th class="num">Points</th><th class="num" title="Heat: most points against you / best: most points in profit">Heat / best</th><th class="num">P&amp;L</th><th class="num">Held</th><th>Setup</th></tr></thead>
         <tbody>${rows.map((t) => {
           const pts = (t.exit_px - t.entry_px) * t.side, held = (t.exit_ts - t.entry_ts) / 1000;
           return `<tr><td>${esc(t.session)}</td><td><b>${esc(t.symbol)}</b></td>
@@ -556,15 +583,31 @@
             <td class="num">${t.qty}</td><td class="mono">${nyDate(t.entry_ts)} ${nyClock(t.entry_ts).slice(0, 8)}</td><td class="num">${t.entry_px.toFixed(2)}</td>
             <td class="mono">${nyClock(t.exit_ts).slice(0, 8)}</td><td class="num">${t.exit_px.toFixed(2)}</td>
             <td class="num ${cls(pts)}">${pts > 0 ? "+" : ""}${pts.toFixed(2)}</td>
+            <td class="num">${t.mae != null ? `<span class="neg">${t.mae.toFixed(2)}</span> / <span class="pos">${t.mfe.toFixed(2)}</span>` : '<span class="muted">–</span>'}</td>
             <td class="num ${cls(t.pnl)}">${signedMoney(t.pnl)}</td>
-            <td class="num">${held < 60 ? held.toFixed(0) + "s" : held < 3600 ? (held / 60).toFixed(1) + "m" : (held / 3600).toFixed(1) + "h"}</td></tr>`;
+            <td class="num">${held < 60 ? held.toFixed(0) + "s" : held < 3600 ? (held / 60).toFixed(1) + "m" : (held / 3600).toFixed(1) + "h"}</td>
+            <td><button class="setup-cell ${t.setup ? "" : "empty"}" data-jr="${t.sid}/${t.id}" title="${esc(t.note || "Tag the setup and add a note")}">${t.setup ? esc(t.setup) : "+ tag"}${t.note ? " ✎" : ""}</button></td></tr>`;
         }).join("")}</tbody></table></div>`;
     };
     $("sf").addEventListener("change", draw);
+    $("tbl").addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-jr]");
+      if (!btn) return;
+      const [sid, tid] = btn.dataset.jr.split("/");
+      const t = backtests.find((b) => b.id === sid)?.trades.find((x) => x.id === tid);
+      if (!t) return;
+      const setup = prompt("Setup for this trade (e.g. Opening range, VWAP, Pullback):", t.setup || "");
+      if (setup === null) return;
+      const note = prompt("Note (optional):", t.note || "");
+      const body = { setup: setup.trim() || "" };
+      if (note !== null) body.note = note.trim();
+      Object.assign(t, await post(`/api/backtests/${sid}/trades/${tid}`, body, "PATCH"));
+      draw();
+    });
     $("csv").addEventListener("click", () => {
-      const head = "session,symbol,side,qty,entry_time_ny,entry_px,exit_time_ny,exit_px,pnl,fees\n";
+      const head = "session,symbol,side,qty,entry_time_ny,entry_px,exit_time_ny,exit_px,pnl,fees,mae_pts,mfe_pts,setup,note\n";
       const body = rows.map((t) => [t.session, t.symbol, t.side > 0 ? "long" : "short", t.qty,
-        `${nyDate(t.entry_ts)} ${nyClock(t.entry_ts)}`, t.entry_px, `${nyDate(t.exit_ts)} ${nyClock(t.exit_ts)}`, t.exit_px, t.pnl, t.fees || 0]
+        `${nyDate(t.entry_ts)} ${nyClock(t.entry_ts)}`, t.entry_px, `${nyDate(t.exit_ts)} ${nyClock(t.exit_ts)}`, t.exit_px, t.pnl, t.fees || 0, t.mae ?? "", t.mfe ?? "", t.setup || "", t.note || ""]
         .map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n");
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([head + body], { type: "text/csv" }));
@@ -572,6 +615,134 @@
       a.click();
     });
     draw();
+  }
+
+  // ---- edge finder: plain-language findings from the trade log --------------
+
+  const tradeDay = (ms) => nyDate(ms + 6 * 3600000);   // CME trading day (18:00 New York rollover)
+  const net = (list) => list.reduce((a, t) => a + t.pnl, 0);
+  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+  /** Each finding: { tone: good|bad|info, title, text }. Only says something when there's enough data. */
+  function insights(trades) {
+    const out = [];
+    if (trades.length < 5) return out;
+
+    // 1. overtrading: the first trades of a day vs. the rest
+    const byDay = new Map();
+    for (const t of [...trades].sort((a, b) => a.entry_ts - b.entry_ts)) {
+      const d = tradeDay(t.entry_ts);
+      byDay.set(d, [...(byDay.get(d) || []), t]);
+    }
+    const early = [], late = [];
+    for (const list of byDay.values()) list.forEach((t, k) => (k < 3 ? early : late).push(t));
+    if (late.length >= 3) {
+      const a = net(early), b = net(late);
+      if (b < 0 && a > b) out.push({ tone: "bad", title: "You give it back after trade 3",
+        text: `Your first 3 trades of a day made ${signedMoney(a)}; trades 4 and later made ${signedMoney(b)} over ${plural(late.length, "trade")}. A 3-trade daily cap would have saved ${money(-b)}.` });
+      else if (b > 0) out.push({ tone: "good", title: "Later trades hold up",
+        text: `Trades 4+ of the day made ${signedMoney(b)} over ${plural(late.length, "trade")}, so more trades are not hurting you.` });
+    }
+
+    // 2. revenge trading: entries within 2 minutes of closing a loser
+    const sorted = [...trades].sort((a, b) => a.entry_ts - b.entry_ts);
+    const revenge = sorted.filter((t) => sorted.some((p) => p.pnl < 0 && p.exit_ts <= t.entry_ts && t.entry_ts - p.exit_ts < 120000 && p !== t));
+    if (revenge.length >= 2) {
+      const r = net(revenge), wr = revenge.filter((t) => t.pnl > 0).length / revenge.length;
+      out.push({ tone: r < 0 ? "bad" : "info", title: "Trades right after a loss",
+        text: `${plural(revenge.length, "trade")} were entered less than 2 minutes after a losing trade: ${signedMoney(r)}, ${pct(wr)} win rate${r < 0 ? ". Take a breath before the next one." : "."}` });
+    }
+
+    // 3. best and worst hour (New York), entry time
+    const hours = new Map();
+    for (const t of trades) { const h = +nyParts(t.entry_ts).hour; hours.set(h, [...(hours.get(h) || []), t]); }
+    const hs = [...hours].filter(([, l]) => l.length >= 2).map(([h, l]) => ({ h, n: l.length, pnl: net(l) })).sort((a, b) => a.pnl - b.pnl);
+    if (hs.length >= 2) {
+      const worst = hs[0], best = hs[hs.length - 1];
+      const grossLoss = -net(trades.filter((t) => t.pnl < 0));
+      if (worst.pnl < 0 && -worst.pnl >= Math.max(25, grossLoss * 0.15)) out.push({ tone: "bad", title: `${worst.h}:00–${worst.h}:59 is costing you`,
+        text: `${plural(worst.n, "trade")} entered in that hour lost ${money(-worst.pnl)}. Your best hour is ${best.h}:00 (${signedMoney(best.pnl)}, ${plural(best.n, "trade")}).` });
+      else if (best.pnl > 0) out.push({ tone: "good", title: `Your hour: ${best.h}:00 New York`,
+        text: `${signedMoney(best.pnl)} from ${plural(best.n, "trade")} entered between ${best.h}:00 and ${best.h}:59.` });
+    }
+
+    // 4. exits: how much of the move winners keep, and losers that were green first
+    const withExc = trades.filter((t) => t.mfe != null);
+    const winners = withExc.filter((t) => t.pnl > 0 && t.mfe > 0);
+    if (winners.length >= 3) {
+      const kept = winners.reduce((a, t) => a + Math.min(1, ((t.exit_px - t.entry_px) * t.side) / t.mfe), 0) / winners.length;
+      if (kept < 0.55) out.push({ tone: "bad", title: "You exit winners early",
+        text: `Your winners kept ${Math.round(kept * 100)}% of their best move on average. Trailing the stop or leaving a runner could pay more.` });
+      else out.push({ tone: "good", title: "Good exits on winners",
+        text: `Your winners kept ${Math.round(kept * 100)}% of their best move on average.` });
+    }
+    const greenLosers = withExc.filter((t) => t.pnl < 0 && t.mfe > 0 && t.mfe >= Math.abs(t.exit_px - t.entry_px));
+    if (greenLosers.length >= 2) {
+      out.push({ tone: "bad", title: "Winners that turned into losers",
+        text: `${plural(greenLosers.length, "losing trade")} had been in profit by at least as much as they finally lost (${money(-net(greenLosers))} in total). A move to breakeven at that point would have saved most of it.` });
+    }
+
+    // 5. stop sizing: how much heat winners take vs. losers
+    const wHeat = winners.map((t) => t.mae).sort((a, b) => a - b);
+    const losers = withExc.filter((t) => t.pnl < 0);
+    if (wHeat.length >= 5 && losers.length >= 3) {
+      const p90 = wHeat[Math.min(wHeat.length - 1, Math.ceil(wHeat.length * 0.9) - 1)];
+      const lHeat = losers.reduce((a, t) => a + t.mae, 0) / losers.length;
+      if (lHeat > p90 * 1.3) out.push({ tone: "info", title: "Where your stop could be",
+        text: `9 of 10 of your winners never went more than ${p90.toFixed(2)} pts against you, but your losers averaged ${lHeat.toFixed(2)} pts of heat. A stop around ${p90.toFixed(2)} pts would have cut them earlier.` });
+    }
+
+    // 6. long vs. short
+    const L = trades.filter((t) => t.side > 0), S = trades.filter((t) => t.side < 0);
+    if (L.length >= 3 && S.length >= 3) {
+      const a = net(L), b = net(S);
+      if (Math.sign(a) !== Math.sign(b)) out.push({ tone: "info", title: a > b ? "Longs work, shorts don't" : "Shorts work, longs don't",
+        text: `Longs: ${signedMoney(a)} over ${plural(L.length, "trade")}. Shorts: ${signedMoney(b)} over ${plural(S.length, "trade")}.` });
+    }
+
+    // 7. setups
+    const tagged = trades.filter((t) => t.setup);
+    const untagged = trades.length - tagged.length;
+    const bySetup = setupStats(tagged).filter((x) => x.n >= 3);
+    if (bySetup.length >= 2) {
+      const best = bySetup[0], worst = bySetup[bySetup.length - 1];
+      if (worst.net < 0) out.push({ tone: "bad", title: `Drop "${worst.name}"?`,
+        text: `${worst.name} lost ${money(-worst.net)} over ${plural(worst.n, "trade")} (${pct(worst.wr)} win rate), while ${best.name} made ${signedMoney(best.net)}.` });
+    }
+    if (untagged > trades.length / 2) out.push({ tone: "info", title: "Tag your setups",
+      text: `${untagged} of ${trades.length} trades have no setup. Tag them in the card that pops up after each trade (or on the Trades page) and this page will show which setups actually make money.` });
+    return out;
+  }
+
+  function setupStats(trades) {
+    const m = new Map();
+    for (const t of trades) { const k = t.setup || "Untagged"; m.set(k, [...(m.get(k) || []), t]); }
+    return [...m].map(([name, l]) => {
+      const w = l.filter((t) => t.pnl > 0), lo = l.filter((t) => t.pnl < 0);
+      const gw = net(w), gl = net(lo);
+      return { name, n: l.length, net: gw + gl, wr: w.length / l.length, avg: (gw + gl) / l.length, pf: gl ? gw / -gl : gw > 0 ? Infinity : NaN };
+    }).sort((a, b) => b.net - a.net);
+  }
+
+  function insightsPanel(trades) {
+    const list = insights(trades);
+    const icon = { good: "▲", bad: "▼", info: "●" };
+    return `<div class="panel insights" style="margin-top:16px">
+      <h3>Edge finder <span class="muted">what your trades say</span></h3>
+      ${list.length ? `<div class="ins-grid">${list.map((i) => `<div class="ins ${i.tone}"><span class="ins-i">${icon[i.tone]}</span><div><b>${esc(i.title)}</b><p>${i.text}</p></div></div>`).join("")}</div>`
+        : `<div class="empty-chart" style="height:auto;padding:18px 0">${trades.length < 5 ? `Take ${5 - trades.length} more trade${trades.length === 4 ? "" : "s"} and this will start pointing out what works and what doesn't.` : "Nothing stands out yet. Keep trading and tagging setups."}</div>`}
+    </div>`;
+  }
+
+  function setupPanel(trades) {
+    if (!trades.some((t) => t.setup)) return "";
+    const rows = setupStats(trades);
+    return `<div class="panel" style="margin-top:16px"><h3>By setup</h3><div class="table-wrap"><table class="t">
+      <thead><tr><th>Setup</th><th class="num">Trades</th><th class="num">Win rate</th><th class="num">Profit factor</th><th class="num">Avg / trade</th><th class="num">Net P&amp;L</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr><td><b>${esc(r.name)}</b></td><td class="num">${r.n}</td><td class="num">${pct(r.wr)}</td>
+        <td class="num">${isFinite(r.pf) ? r.pf.toFixed(2) : r.pf === Infinity ? "∞" : "–"}</td>
+        <td class="num ${cls(r.avg)}">${signedMoney(r.avg)}</td><td class="num ${cls(r.net)}">${signedMoney(r.net)}</td></tr>`).join("")}</tbody>
+    </table></div></div>`;
   }
 
   function renderAnalytics(v, arg) {
@@ -590,6 +761,7 @@
           ${tile("trades", "Expectancy", `<span class="${cls(st.expectancy)}">${signedMoney(st.expectancy)}</span>`, "per trade")}
           ${tile("hist", "Max drawdown", `<span class="neg">${money(st.maxDD)}</span>`)}
         </div>
+        ${insightsPanel(trades)}
         <div class="panel" style="margin-top:16px"><h3>${sid ? "Equity" : "Cumulative P&amp;L"} <span class="muted">trade by trade</span></h3><div class="chart" id="cEq" style="height:240px"></div></div>
         <div class="grid row3" style="margin-top:16px">
           <div class="panel"><h3>P&amp;L by weekday</h3><div class="chart" id="cWd"></div></div>
@@ -603,7 +775,8 @@
             <dt>Short trades · win rate</dt><dd>${st.shorts} · ${pct(st.shortWR)}</dd>
             <dt>Commission paid</dt><dd>${money(st.fees)}</dd>
           </dl></div>
-        </div>`;
+        </div>
+        ${setupPanel(trades)}`;
       let eq = base;
       const pts = [{ v: base, tip: `Start: <b>${money(base)}</b>` }].concat(trades.map((t, k) => {
         eq += t.pnl;
@@ -658,7 +831,7 @@
                   <option value="UTC">UTC</option>
                 </select>
               </label>
-              <button type="submit" class="btn btn-gold" id="impBtn" disabled>Import</button>
+              <button type="submit" class="btn btn-primary" id="impBtn" disabled>Import</button>
             </div>
             <div class="progress" id="impBar" hidden><span></span></div>
             <p class="hint" id="impMsg">Databento CSV (TBBO or trades) carries its own time zone. With several contracts in one file, the most-traded one is kept for each day.</p>
@@ -750,6 +923,7 @@
     if (!symbols.length) { location.hash = "#data"; return; }
     const lo = nyDate(Math.min(...symbols.map((s) => s.first_ts))), hi = nyDate(Math.max(...symbols.map((s) => s.last_ts)));
     for (const id of ["fStart", "fEnd"]) { $(id).min = lo; $(id).max = hi; }
+    setRules(b ? b.rules : null, b ? b.balance : 50000);
     if (b) {
       $("fName").value = b.name; $("fEnd").value = nyDate(b.end_ts); $("fBal").value = b.balance; $("fFee").value = b.fee_per_side || 0;
       $("fStart").required = false;
@@ -767,6 +941,30 @@
     dlg.showModal();
   }
 
+  /** Put a session's rules into the dialog, picking the matching preset when there is one. */
+  function setRules(r, balance) {
+    const sel = $("fRules");
+    const key = r ? `${balance},${r.target},${r.max_dd},${r.daily_loss}` : "";
+    sel.value = [...sel.options].some((o) => o.value === key) ? key : r ? "custom" : "";
+    $("fTarget").value = r ? r.target : 3000; $("fDd").value = r ? r.max_dd : 2000; $("fDaily").value = r ? r.daily_loss : 1000;
+    showRuleFields();
+  }
+  function showRuleFields() {
+    const v = $("fRules").value;
+    $("fRuleVals").hidden = v !== "custom";
+    $("fRuleHint").hidden = !v;
+  }
+  $("fRules").addEventListener("change", () => {
+    const v = $("fRules").value;
+    if (v && v !== "custom") {
+      const [bal, target, dd, daily] = v.split(",").map(Number);
+      $("fBal").value = bal; $("fTarget").value = target; $("fDd").value = dd; $("fDaily").value = daily;
+    }
+    showRuleFields();
+  });
+  const dialogRules = () => ($("fRules").value
+    ? { target: +$("fTarget").value || 0, max_dd: +$("fDd").value || 0, daily_loss: +$("fDaily").value || 0 } : null);
+
   $("dlgForm").addEventListener("submit", async (e) => {
     if (e.submitter && e.submitter.value === "cancel") return;
     e.preventDefault();
@@ -775,10 +973,16 @@
     try {
       const end_ts = parseNY(`${$("fEnd").value}T17:00`);
       if (editing) {
-        await post(`/api/backtests/${editing.id}`, {
+        const body = {
           name: $("fName").value, end_ts: Math.max(end_ts, editing.start_ts + 60000),
           balance: +$("fBal").value, fee_per_side: +$("fFee").value,
-        }, "PATCH");
+        };
+        const rules = dialogRules(), old = editing.rules || null;
+        if (JSON.stringify(rules) !== JSON.stringify(old && { target: old.target, max_dd: old.max_dd, daily_loss: old.daily_loss })) {
+          if (old && !confirm("Changing the rules restarts this session's evaluation status. Continue?")) return;
+          body.rules = rules;
+        }
+        await post(`/api/backtests/${editing.id}`, body, "PATCH");
       } else {
         const rank = (s) => (/^NQ/.test(s) ? 0 : /^ES/.test(s) ? 1 : 2);
         const syms = [...$("fSyms").querySelectorAll("input:checked")].map((x) => x.value).sort((a, b) => rank(a) - rank(b));
@@ -787,6 +991,7 @@
         if (end_ts <= start_ts) throw new Error("The end date must be after the start date");
         const b = await post("/api/backtests", {
           name: $("fName").value, symbols: syms, start_ts, end_ts, balance: +$("fBal").value, fee_per_side: +$("fFee").value,
+          rules: dialogRules(),
         });
         $("dlg").close();
         location.href = `chart.html?bt=${b.id}`;

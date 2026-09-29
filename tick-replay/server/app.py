@@ -79,6 +79,19 @@ def days(symbol: str):
 
 # ---- backtest sessions -------------------------------------------------------
 
+class Rules(BaseModel):
+    """Prop-firm style evaluation rules, all in dollars. 0 or missing = rule off."""
+    target: float = Field(0, ge=0, le=1e8)
+    max_dd: float = Field(0, ge=0, le=1e8)       # trailing drawdown from the equity high
+    daily_loss: float = Field(0, ge=0, le=1e8)   # per trading day (18:00 New York to 18:00)
+
+
+class RuleState(BaseModel):
+    peak: float
+    status: str = Field("active", pattern="^(active|passed|failed)$")
+    reason: str | None = Field(None, max_length=200)
+
+
 class NewBacktest(BaseModel):
     name: str = Field("", max_length=80)
     symbols: list[str] = Field(..., min_length=1, max_length=4)
@@ -86,6 +99,7 @@ class NewBacktest(BaseModel):
     end_ts: int
     balance: float = Field(50_000, gt=0, le=1e9)
     fee_per_side: float = Field(0, ge=0, le=100)
+    rules: Rules | None = None
 
 
 class EditBacktest(BaseModel):
@@ -93,6 +107,7 @@ class EditBacktest(BaseModel):
     end_ts: int | None = None
     balance: float | None = Field(None, gt=0, le=1e9)
     fee_per_side: float | None = Field(None, ge=0, le=100)
+    rules: Rules | None | bool = False   # False = leave unchanged, None = remove
 
 
 class Progress(BaseModel):
@@ -100,6 +115,7 @@ class Progress(BaseModel):
     current_symbol: str | None = None
     add_time_ms: int = 0
     add_replayed_ms: int = 0
+    rule_state: RuleState | None = None
 
 
 class Trade(BaseModel):
@@ -112,6 +128,21 @@ class Trade(BaseModel):
     exit_px: float
     pnl: float
     fees: float = 0
+    mae: float | None = None   # worst excursion against the trade, in points
+    mfe: float | None = None   # best excursion in favour, in points
+    setup: str | None = Field(None, max_length=40)
+    note: str | None = Field(None, max_length=1000)
+
+
+class TradeJournal(BaseModel):
+    setup: str | None = Field(None, max_length=40)
+    note: str | None = Field(None, max_length=1000)
+
+
+def _rules(r: Rules | None) -> dict | None:
+    if r is None or not (r.target or r.max_dd or r.daily_loss):
+        return None
+    return r.model_dump()
 
 
 def _bt(sid: str) -> dict:
@@ -133,7 +164,8 @@ def create_backtest(body: NewBacktest):
         _check_symbol(x)
     if body.end_ts <= body.start_ts:
         raise HTTPException(400, "end must be after start")
-    return backtests.create(body.name, syms, body.start_ts, body.end_ts, body.balance, body.fee_per_side)
+    return backtests.create(body.name, syms, body.start_ts, body.end_ts, body.balance, body.fee_per_side,
+                            _rules(body.rules))
 
 
 @app.get("/api/backtests/{sid}")
@@ -144,7 +176,10 @@ def get_backtest(sid: str):
 @app.patch("/api/backtests/{sid}")
 def edit_backtest(sid: str, body: EditBacktest):
     _bt(sid)
-    return backtests.update(sid, body.model_dump())
+    fields = body.model_dump(exclude={"rules"})
+    if body.rules is not False:
+        fields["rules"] = _rules(body.rules) if body.rules is not True else False
+    return backtests.update(sid, fields)
 
 
 @app.post("/api/backtests/{sid}/progress")
@@ -155,14 +190,24 @@ async def backtest_progress(sid: str, request: Request):
     except ValueError as e:
         raise HTTPException(422, str(e))
     _bt(sid)
-    s = backtests.progress(sid, body.current_ts, body.current_symbol, body.add_time_ms, body.add_replayed_ms)
-    return {"ok": True, "current_ts": s["current_ts"]}
+    s = backtests.progress(sid, body.current_ts, body.current_symbol, body.add_time_ms, body.add_replayed_ms,
+                            body.rule_state.model_dump() if body.rule_state else None)
+    return {"ok": True, "current_ts": s["current_ts"], "rule_state": s.get("rule_state")}
 
 
 @app.post("/api/backtests/{sid}/trades")
 def backtest_trade(sid: str, body: Trade):
     _bt(sid)
     return backtests.add_trade(sid, body.model_dump())
+
+
+@app.patch("/api/backtests/{sid}/trades/{tid}")
+def journal_trade(sid: str, tid: str, body: TradeJournal):
+    _bt(sid)
+    try:
+        return backtests.edit_trade(sid, tid, body.model_dump())
+    except KeyError:
+        raise HTTPException(404, "trade not found")
 
 
 @app.post("/api/backtests/{sid}/duplicate")

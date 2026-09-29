@@ -135,6 +135,24 @@ A countdown shows the time left to 09:30.
 * **Order panel:** lots with quick sizes, Buy / Sell, Join Bid / Join Ask, Close Position / Reverse, Cancel All / Flatten All,
   and an Order tab for exact limit/stop prices.
 
+## Train like it counts
+
+**Evaluation rules.** When you create a session, pick an evaluation preset ($50K / $100K / $150K) or set
+your own profit target, trailing drawdown and daily loss limit. The chart header then shows how far you
+are from the target and how much drawdown and daily room is left. The drawdown trails your highest
+equity (open P&L included) until it reaches the starting balance. Hitting it closes your position and
+fails the session; hitting the daily limit locks new trades until 18:00 New York. Passed / Failed shows
+on the dashboard.
+
+**Trade journal.** After every closed trade in a session a small card shows the P&L, the *heat* (most
+points against you, MAE) and the *best* point (most points in profit, MFE), and lets you tag the setup
+with one click and add a note. Tags and notes can be edited on the Trades page and are in the CSV export.
+
+**Edge finder.** The Analytics page turns the trade log into plain findings once you have 5+ trades:
+losses after your 3rd trade of the day, trades taken right after a loss, your best and worst hour,
+whether you exit winners early, winners that turned into losers, where a stop would have cut losers,
+long vs. short, and P&L per setup.
+
 ## Licenses
 
 Tick Replay's own code is yours. It builds on open-source parts that allow commercial use:
