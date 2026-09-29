@@ -4,7 +4,13 @@ Replays historical NQ / ES futures ticks at millisecond resolution in a TradingV
 Each tick has a millisecond timestamp, and the price stays on screen until the next tick's timestamp is reached.
 Candles form tick by tick, just like a live market, and you can place simulated trades while it plays.
 
-## Quick start
+## Quick start (Windows)
+
+Download or clone the repo, open the `tick-replay` folder and double-click **`start.bat`**.
+It installs the Python packages, generates sample data the first time, starts the server and opens
+http://localhost:8000. Keep the black window open while you use the site.
+
+## Quick start (manual)
 
 ```bash
 cd tick-replay
@@ -12,7 +18,7 @@ python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\act
 pip install -r requirements.txt
 
 python tools/make_sample.py          # fake NQ + ES ticks so you can try it right away
-uvicorn server.app:app --reload      # then open http://localhost:8000
+python -m uvicorn server.app:app     # then open http://localhost:8000
 ```
 
 ## Importing your real tick data
@@ -42,6 +48,11 @@ Set `TICK_DATA_DIR` to keep the data somewhere else.
 
 ## Using the replay
 
+The start page (`/`) lists your data. Pick a symbol and session and press **🔔 Market Open**.
+The chart opens at 09:25 New York with the whole overnight session as history and plays **live at 1x,
+tick by tick**, so you sit through the last minutes before the bell and trade the open as it happens.
+A countdown shows the time left to 09:30. The same button is on the chart page and uses the date in the date field.
+
 | Control | What it does |
 |---|---|
 | Date/time + **Go** | Jump to that moment (New York time). Everything before it shows as history. |
@@ -49,7 +60,7 @@ Set `TICK_DATA_DIR` to keep the data somewhere else.
 | **+1 tick** / **→** | Advance exactly one tick |
 | **+1 bar** / **Shift+→** | Advance to the close of the next candle |
 | Speed | 0.25x to 3600x real time |
-| skip gaps | Jumps over closed hours and quiet stretches instead of waiting through them |
+| skip closed | Jumps over closed-market periods (no trades for 5+ minutes). Shorter quiet stretches play out in real time. |
 | 1s … 4h | Candle timeframe. The current candle stays partial, as it was at the replay time. |
 | **B** / **S** / **F** | Buy, sell, or flatten at the last traded price (NQ $20/pt, ES $50/pt) |
 
@@ -57,7 +68,8 @@ Set `TICK_DATA_DIR` to keep the data somewhere else.
 
 * `server/store.py` loads day files, cuts tick windows (`after < ts <= until`), and builds candles
   from 1-second bars plus the raw ticks of the current second, so the last candle is exactly partial.
-* `server/app.py` has a FastAPI backend with `/api/symbols`, `/api/candles` and `/api/ticks`, and it also serves `web/`.
+* `server/app.py` has a FastAPI backend with `/api/symbols`, `/api/candles` and `/api/ticks`. It also serves `web/`:
+  `index.html` is the start page and `chart.html` is the replay (URL options: `?symbol=NQ&date=YYYY-MM-DD&open=1&tf=60`).
 * `web/app.js` runs the replay clock in the browser. It fetches ticks in chunks ahead of the clock.
   On every frame it applies all ticks with `ts <= clock` to the forming candle, using
   [Lightweight Charts](https://github.com/tradingview/lightweight-charts) (Apache-2.0, bundled in `web/vendor/`).

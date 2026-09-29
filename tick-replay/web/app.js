@@ -16,8 +16,11 @@
   const SPEEDS = [0.25, 0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600, 1800, 3600];
   const HISTORY_CANDLES = 600;
   const TICK_LIMIT = 200000;
+  const CLOSED_GAP_MS = 5 * 60 * 1000; // "skip gaps" only jumps over silences at least this long
   const TAPE_ROWS = 40;
   const TZ = "America/New_York";
+  const RTH_OPEN = "09:30:00";      // CME equity index regular session open, New York
+  const PRE_OPEN = "09:25:00";      // Market Open mode starts here, so the open is lived through at 1x
 
   const $ = (id) => document.getElementById(id);
 
@@ -189,12 +192,15 @@
     return buf.i < buf.ts.length ? buf.ts[buf.i] : null;
   }
 
-  /** Jump the clock over a quiet stretch that would take more than ~1.5 s of real time. */
+  /**
+   * Jump the clock over closed-market stretches (no trade for 5+ minutes). Shorter quiet
+   * periods are played out in full so the tape keeps its real rhythm.
+   */
   function maybeSkipGap() {
     if (!S.skipGaps || S.buf.eof) return;
     // with the buffer drained, everything up to `covered` is known to be empty
     const nt = nextTickTs() ?? S.buf.covered + 1;
-    if ((nt - S.t) / S.speed > 1500) {
+    if (nt - S.t >= CLOSED_GAP_MS && (nt - S.t) / S.speed > 1500) {
       S.t = Math.max(S.t, nt - Math.min(500 * S.speed, 60000));
     }
   }
@@ -291,6 +297,7 @@
       S.dirty = false;
     }
     $("clock").textContent = S.sym ? fmtNY(S.t) : "--";
+    $("countdown").textContent = S.sym ? openCountdown(S.t) : "";
     $("play").textContent = S.playing ? "❚❚" : "▶";
 
     const now = performance.now();
@@ -313,6 +320,15 @@
     $("tape").innerHTML = rows.map(([ts, px, sz, dir]) =>
       `<tr class="${dir > 0 ? "up" : dir < 0 ? "down" : ""}"><td>${fmtNY(ts, false)}</td><td>${px.toFixed(2)}</td><td>${sz}</td></tr>`
     ).join("");
+  }
+
+  /** "Open in 04:12" during the 30 minutes before the 09:30 New York open. */
+  function openCountdown(t) {
+    const open = parseNY(toInputNY(t).slice(0, 10) + "T" + RTH_OPEN);
+    const left = open - t;
+    if (left <= 0 || left > 30 * 60 * 1000) return "";
+    const s = Math.ceil(left / 1000);
+    return `Open in ${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
   }
 
   // ---- main loop ------------------------------------------------------------
@@ -367,10 +383,27 @@
     render(true);
   }
 
-  function setTf(tf) {
+  function setTf(tf, reload = true) {
     S.tf = tf;
     for (const b of $("tfs").children) b.classList.toggle("active", +b.dataset.tf === tf);
-    if (S.sym) load(S.t);
+    if (S.sym && reload) return load(S.t);
+  }
+
+  function setSpeed(speed) {
+    S.speed = speed;
+    $("speed").value = String(speed);
+  }
+
+  /** Jump to just before the open of `day` (YYYY-MM-DD, New York) and play live, tick by tick. */
+  async function marketOpen(day) {
+    const t = parseNY(`${day}T${PRE_OPEN}`);
+    if (t < S.sym.first_ts || t > S.sym.last_ts) return status(`No ${S.sym.symbol} data around the open on ${day}`, 4000);
+    $("start").value = toInputNY(t);
+    setSpeed(1);
+    await load(t);
+    S.playing = true;
+    lastFrame = performance.now();
+    render(true);
   }
 
   function defaultStart(sym) {
@@ -385,7 +418,7 @@
     $("tfs").innerHTML = TIMEFRAMES.map(([s, l]) => `<button data-tf="${s}">${l}</button>`).join("");
     $("tfs").addEventListener("click", (e) => { if (e.target.dataset.tf) setTf(+e.target.dataset.tf); });
     $("speed").innerHTML = SPEEDS.map((s) => `<option value="${s}" ${s === 1 ? "selected" : ""}>${s}x</option>`).join("");
-    $("speed").addEventListener("change", (e) => { S.speed = +e.target.value; });
+    $("speed").addEventListener("change", (e) => setSpeed(+e.target.value));
     $("skipGaps").addEventListener("change", (e) => { S.skipGaps = e.target.checked; });
     $("play").addEventListener("click", togglePlay);
     $("stepTick").addEventListener("click", stepTick);
@@ -393,6 +426,10 @@
     $("go").addEventListener("click", () => {
       if (!$("start").value) return;
       load(parseNY($("start").value));
+    });
+    $("marketOpen").addEventListener("click", () => {
+      const day = ($("start").value || toInputNY(S.t)).slice(0, 10);
+      marketOpen(day).catch((e) => status("Load failed: " + e.message, 5000));
     });
     $("buy").addEventListener("click", () => order(Math.max(1, +$("qty").value | 0)));
     $("sell").addEventListener("click", () => order(-Math.max(1, +$("qty").value | 0)));
@@ -419,13 +456,22 @@
       status("No tick data found. Run tools/make_sample.py or tools/import_ticks.py first.", 0);
       return;
     }
+    // URL options from the start page: ?symbol=NQ&date=2024-03-05&open=1&tf=60&t=<ms>
+    const q = new URLSearchParams(location.search);
     $("symbol").innerHTML = S.symbols.map((s) => `<option>${s.symbol}</option>`).join("");
-    S.sym = S.symbols[0];
-    const start = defaultStart(S.sym);
-    $("start").value = toInputNY(start);
-    S.t = start;
-    setTf(S.tf);
+    S.sym = S.symbols.find((s) => s.symbol === (q.get("symbol") || "").toUpperCase()) || S.symbols[0];
+    $("symbol").value = S.sym.symbol;
+    if (TIMEFRAMES.some(([s]) => s === +q.get("tf"))) S.tf = +q.get("tf");
+    setTf(S.tf, false);
     requestAnimationFrame(frame);
+
+    if (q.get("open") && q.get("date")) return marketOpen(q.get("date"));
+    let start = defaultStart(S.sym);
+    if (q.get("date")) start = parseNY(`${q.get("date")}T${RTH_OPEN}`);
+    if (q.get("t")) start = +q.get("t");
+    start = Math.min(Math.max(start, S.sym.first_ts), S.sym.last_ts);
+    $("start").value = toInputNY(start);
+    await load(start);
   }
 
   init().catch((e) => status("Startup failed: " + e.message, 0));

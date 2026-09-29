@@ -52,6 +52,12 @@ button.primary { min-width: 36px; }
 button:disabled { opacity: .4; cursor: default; }
 input[type="datetime-local"] { color-scheme: dark; }
 
+a.home { color: var(--muted); text-decoration: none; padding: 4px 6px; }
+a.home:hover { color: var(--text); }
+button.open-btn { border-color: #f5a623; color: #f5a623; font-weight: 600; }
+button.open-btn:hover { background: rgba(245, 166, 35, .12); }
+.countdown { color: #f5a623; font-variant-numeric: tabular-nums; font-weight: 600; }
+
 .check { display: flex; align-items: center; gap: 4px; color: var(--muted); }
 
 .clock {
