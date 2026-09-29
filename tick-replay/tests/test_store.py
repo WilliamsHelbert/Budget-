@@ -87,3 +87,39 @@ def test_import_csv_variants(tmp_path):
     c.write_text("timestamp,price,volume\n2024-03-05T14:30:00.123Z,1.5,4\n")
     ts, px, sz = read_any(c, "America/New_York")  # explicit offset wins over --tz
     assert list(ts) == [T0 + 123]
+
+
+DB_HEADER = "ts_recv,ts_event,rtype,publisher_id,instrument_id,action,side,depth,price,size,flags,ts_in_delta,sequence,symbol\n"
+
+
+def _db_row(ms_offset, inst, px, sz, sym):
+    ns = (T0 + ms_offset) * 1_000_000
+    return f"{ns},{ns},0,1,{inst},T,A,0,{int(px * 1e9)},{sz},0,0,0,{sym}\n"
+
+
+def test_databento_parent_download_keeps_front_contract(tmp_path):
+    rows = [
+        _db_row(0, 1, 18000.25, 5, "NQZ6"),       # front month, most volume
+        _db_row(5, 2, 18250.00, 1, "NQH7"),       # back month
+        _db_row(7, 3, 250.25, 40, "NQZ6-NQH7"),   # calendar spread (big size, must still be dropped)
+        _db_row(9, 1, 18000.50, 3, "NQZ6"),
+    ]
+    f = tmp_path / "glbx-mdp3-trades.csv"
+    f.write_text(DB_HEADER + "".join(rows))
+    ts, px, sz = read_any(f, "UTC")
+    assert list(px) == [18000.25, 18000.5] and list(ts) == [T0, T0 + 9]
+
+
+def test_databento_zst_and_dbn(tmp_path):
+    import zstandard
+    raw = (DB_HEADER + _db_row(0, 1, 18000.25, 5, "NQZ6")).encode()
+    f = tmp_path / "glbx-mdp3-20240305.trades.csv.zst"
+    f.write_bytes(zstandard.ZstdCompressor().compress(raw))
+    ts, px, sz = read_any(f, "UTC")
+    assert list(px) == [18000.25] and list(ts) == [T0]
+    assert not (tmp_path / "glbx-mdp3-20240305.trades.csv").exists()  # temp file cleaned up
+
+    d = tmp_path / "x.trades.dbn.zst"
+    d.write_bytes(b"DBN")
+    with pytest.raises(SystemExit, match="Encoding = CSV"):
+        read_any(d, "UTC")

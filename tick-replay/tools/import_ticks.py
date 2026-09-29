@@ -129,21 +129,68 @@ def read_csv(path: Path, tz: str):
     px_col = next((c for c in PRICE_COLS if c in cols), None)
     if px_col is None:
         raise SystemExit(f"{path}: no price column found (have {sorted(cols)})")
-    price = df[px_col].to_numpy(np.float64)
-    if np.nanmedian(price) > 1e8:  # Databento fixed-point prices
+    price = df[px_col].to_numpy(np.float64, copy=True)
+    if np.nanmedian(np.abs(price)) > 1e8:  # Databento fixed-point prices
         price = price / 1e9
+    price[np.abs(price) >= 1e8] = np.nan  # Databento's "undefined price" sentinel
 
     sz_col = next((c for c in SIZE_COLS if c in cols), None)
     size = df[sz_col].to_numpy(np.int64) if sz_col else np.ones(len(df), np.int64)
-    return ts, price, size
+
+    keep = front_contract_mask(df, ts, size)
+    return ts[keep], price[keep], size[keep]
+
+
+def front_contract_mask(df, ts: np.ndarray, size: np.ndarray) -> np.ndarray:
+    """Keep only the most-traded outright contract of each day.
+
+    A Databento "parent" download (e.g. NQ.FUT) holds every expiry plus calendar
+    spreads in one file; mixing them would make the chart jump between prices.
+    Picking the highest-volume contract per day is what Databento's NQ.v.0 does.
+    """
+    import pandas as pd
+
+    inst_col = next((c for c in ("instrument_id", "symbol") if c in df.columns), None)
+    keep = np.ones(len(df), bool)
+    if inst_col is None or df[inst_col].nunique() <= 1:
+        return keep
+    if "symbol" in df.columns:  # spreads look like "NQZ6-NQH7"
+        keep &= ~df["symbol"].astype(str).str.contains(r"[-: ]", regex=True).to_numpy()
+    frame = pd.DataFrame({"day": ts // DAY_MS, "inst": df[inst_col].to_numpy(), "size": size})[keep]
+    vol = frame.groupby(["day", "inst"])["size"].sum()
+    top = vol.loc[vol.groupby(level="day").idxmax()].index  # (day, inst) pairs to keep
+    chosen = pd.MultiIndex.from_arrays([ts // DAY_MS, df[inst_col].to_numpy()]).isin(top)
+    return keep & chosen
 
 
 def read_any(path: Path, tz: str):
+    path = Path(path)
+    name = path.name.lower()
+    if ".dbn" in name:
+        raise SystemExit(f"{path.name}: this is Databento's binary format (DBN). "
+                         "Download again with Encoding = CSV.")
+    if name.endswith(".zst"):
+        return _read_zst(path, tz)
     with open(path, "r", errors="replace") as f:
         first = f.readline()
     if NINJA_RE.match(first):
         return read_ninjatrader(path, tz)
     return read_csv(path, tz)
+
+
+def _read_zst(path: Path, tz: str):
+    """Databento compresses downloads with zstd (file.csv.zst): unpack next to it, then read."""
+    import zstandard
+
+    plain = path.with_name(path.name[:-4])  # drop ".zst"
+    if plain.suffix.lower() not in (".csv", ".txt"):
+        plain = plain.with_name(plain.name + ".csv")
+    with open(path, "rb") as src, open(plain, "wb") as dst:
+        zstandard.ZstdDecompressor().copy_stream(src, dst)
+    try:
+        return read_any(plain, tz)
+    finally:
+        plain.unlink(missing_ok=True)
 
 
 def main() -> None:

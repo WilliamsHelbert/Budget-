@@ -71,7 +71,7 @@
   <section class="data" id="import">
     <h2>Import tick data</h2>
     <p class="muted small">
-      NinjaTrader tick exports (.txt), Databento, Sierra Chart or any CSV with time, price and volume columns.
+      NinjaTrader tick exports (.txt), Databento CSV (also .csv.zst), Sierra Chart or any CSV with time, price and volume columns. Databento downloads with every NQ/ES contract are cut down to the most-traded contract each day.
       Importing the same days again replaces them.
     </p>
     <form id="importForm" class="launch import">
@@ -91,7 +91,7 @@
       </label>
       <label class="file">
         <span>Files</span>
-        <input id="impFiles" type="file" multiple required accept=".csv,.txt">
+        <input id="impFiles" type="file" multiple required accept=".csv,.txt,.zst">
       </label>
       <button type="submit" class="cta" id="impBtn">Import</button>
     </form>
