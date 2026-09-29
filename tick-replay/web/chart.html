@@ -68,8 +68,8 @@
         <button class="tb-btn" id="shotBtn" title="Save a screenshot (PNG)">
           <svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
         </button>
-        <button class="tb-btn" id="settingsBtn" title="Chart settings">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+        <button class="tb-btn text" id="settingsBtn" title="Chart settings: colours, background, grid, scales">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span>
         </button>
         <button class="tb-btn" id="panelBtn" title="Show / hide the order panel">
           <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
@@ -184,38 +184,66 @@
       <div class="set-body">
         <nav class="set-tabs" id="setTabs">
           <button type="button" data-tab="symbol" class="on">Symbol</button>
+          <button type="button" data-tab="status">Status line</button>
+          <button type="button" data-tab="scales">Scales and lines</button>
           <button type="button" data-tab="canvas">Canvas</button>
           <button type="button" data-tab="trading">Trading</button>
         </nav>
         <div class="set-pane" data-pane="symbol">
           <h4>Candles</h4>
-          <div class="set-row"><label>Body</label><span><input type="color" data-set="upColor"> <input type="color" data-set="downColor"></span></div>
-          <div class="set-row"><label>Wick</label><span><input type="color" data-set="wickUp"> <input type="color" data-set="wickDown"></span></div>
-          <div class="set-row"><label>Border</label><span><input type="checkbox" data-set="border"> <input type="color" data-set="borderUp"> <input type="color" data-set="borderDown"></span></div>
+          <div class="set-row"><label>Body (up / down)</label><span><input type="color" data-set="upColor"> <input type="color" data-set="downColor"></span></div>
+          <div class="set-row"><label>Wick (up / down)</label><span><input type="color" data-set="wickUp"> <input type="color" data-set="wickDown"></span></div>
+          <div class="set-row"><label>Borders</label><span><input type="checkbox" data-set="border"> <input type="color" data-set="borderUp"> <input type="color" data-set="borderDown"></span></div>
           <h4>Volume</h4>
-          <div class="set-row"><label>Show volume</label><span><input type="checkbox" data-set="volume"></span></div>
+          <div class="set-row"><label>Show volume bars</label><span><input type="checkbox" data-set="volume"></span></div>
+        </div>
+        <div class="set-pane" data-pane="status" hidden>
+          <h4>Status line (top left)</h4>
+          <div class="set-row"><label>Symbol and timeframe</label><span><input type="checkbox" data-set="slSymbol"></span></div>
+          <div class="set-row"><label>Open, high, low, close</label><span><input type="checkbox" data-set="slOhlc"></span></div>
+          <div class="set-row"><label>Bar change</label><span><input type="checkbox" data-set="slChange"></span></div>
+          <div class="set-row"><label>Volume</label><span><input type="checkbox" data-set="slVolume"></span></div>
+          <div class="set-row"><label>Indicator values</label><span><input type="checkbox" data-set="slInd"></span></div>
+        </div>
+        <div class="set-pane" data-pane="scales" hidden>
+          <h4>Price scale</h4>
+          <div class="set-row"><label>Scale type</label><span>
+            <select data-set="scaleMode"><option value="0">Regular</option><option value="1">Logarithmic</option><option value="2">Percent</option></select></span></div>
+          <div class="set-row"><label>Last price line</label><span><input type="checkbox" data-set="lastLine"></span></div>
+          <div class="set-row"><label>Bid / Ask labels</label><span><input type="checkbox" data-set="bidAsk"></span></div>
+          <h4>Text and lines</h4>
+          <div class="set-row"><label>Text</label><span><input type="color" data-set="text">
+            <select data-set="fontSize"><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>16</option></select></span></div>
+          <div class="set-row"><label>Scale lines</label><span><input type="color" data-set="scaleLine"></span></div>
+          <div class="set-row"><label>Right margin (bars)</label><span><input type="number" data-set="rightOffset" min="0" max="100" style="width:70px"></span></div>
         </div>
         <div class="set-pane" data-pane="canvas" hidden>
+          <h4>Theme</h4>
+          <div class="presets" id="presets">
+            <button type="button" data-preset="dark"><i style="background:#111318"></i>Dark</button>
+            <button type="button" data-preset="tradesea"><i style="background:#e4e2d6"></i>Tradesea</button>
+            <button type="button" data-preset="tv"><i style="background:#ffffff"></i>TradingView</button>
+            <button type="button" data-preset="fxr"><i style="background:#d9d6bf"></i>FX Replay</button>
+            <button type="button" data-preset="midnight"><i style="background:linear-gradient(#0e1a33,#05070d)"></i>Midnight</button>
+          </div>
           <h4>Chart basic styles</h4>
-          <div class="set-row"><label>Background</label><span><input type="color" data-set="bg"></span></div>
+          <div class="set-row"><label>Background</label><span>
+            <select data-set="bgType"><option value="solid">Solid</option><option value="gradient">Gradient</option></select>
+            <input type="color" data-set="bg"> <input type="color" data-set="bg2" title="Bottom colour (gradient)"></span></div>
           <div class="set-row"><label>Grid lines</label><span>
-            <select data-set="grid"><option value="both">Vert and horz</option><option value="vert">Vert only</option><option value="horz">Horz only</option><option value="none">None</option></select>
-            <input type="color" data-set="gridColor"></span></div>
+            <select data-set="grid"><option value="both">Vert and horz</option><option value="vert">Vert</option><option value="horz">Horz</option><option value="none">None</option></select>
+            <input type="color" data-set="gridColor" title="Vertical lines"> <input type="color" data-set="gridColorH" title="Horizontal lines"></span></div>
+          <div class="set-row"><label>Grid line style</label><span>
+            <select data-set="gridStyle"><option value="0">Solid</option><option value="1">Dotted</option><option value="2">Dashed</option></select></span></div>
           <div class="set-row"><label>Crosshair</label><span>
             <select data-set="crosshair"><option value="normal">Free</option><option value="magnet">Magnet to candles</option></select>
             <input type="color" data-set="crossColor"></span></div>
           <div class="set-row"><label>Watermark</label><span>
             <select data-set="watermark"><option value="hidden">Hidden</option><option value="symbol">Symbol + timeframe</option></select></span></div>
-          <h4>Scales</h4>
-          <div class="set-row"><label>Text</label><span><input type="color" data-set="text">
-            <select data-set="fontSize"><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>16</option></select></span></div>
-          <div class="set-row"><label>Lines</label><span><input type="color" data-set="scaleLine"></span></div>
-          <div class="set-row"><label>Right margin (bars)</label><span><input type="number" data-set="rightOffset" min="0" max="100" style="width:70px"></span></div>
         </div>
         <div class="set-pane" data-pane="trading" hidden>
           <h4>Panels</h4>
           <div class="set-row"><label>Order panel (DOM)</label><span><input type="checkbox" data-set="sidePanel"></span></div>
-          <div class="set-row"><label>Bid / Ask labels on the price axis</label><span><input type="checkbox" data-set="bidAsk"></span></div>
           <div class="set-row"><label>Fill markers on chart</label><span><input type="checkbox" data-set="markers"></span></div>
           <h4>Order fills</h4>
           <div class="set-row"><label>Limit orders fill when price</label><span>

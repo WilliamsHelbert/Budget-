@@ -117,6 +117,21 @@
     watermark: "hidden", text: "#b2b5be", fontSize: "12", scaleLine: "#242b39", rightOffset: 8,
     sidePanel: true, markers: true, drawColor: "#2962ff", rr: 2, bidAsk: true, limitFill: "through",
     chartType: "candles", indicators: [],
+    bgType: "solid", bg2: "#05070d", gridColorH: "#1b1f27", gridStyle: "0", scaleMode: "0", lastLine: true,
+    slSymbol: true, slOhlc: true, slChange: true, slVolume: true, slInd: true,
+  };
+  // one-click looks for the Canvas tab; each only sets colours, never layout or trading options
+  const THEMES = {
+    dark: { bgType: "solid", bg: "#111318", gridColor: "#1b1f27", gridColorH: "#1b1f27", text: "#b2b5be", scaleLine: "#242b39", crossColor: "#758696",
+      upColor: "#26a69a", downColor: "#ef5350", wickUp: "#26a69a", wickDown: "#ef5350", borderUp: "#26a69a", borderDown: "#ef5350" },
+    tradesea: { bgType: "solid", bg: "#e4e2d6", gridColor: "#d3d0c2", gridColorH: "#d3d0c2", text: "#3b3d44", scaleLine: "#c5c2b3", crossColor: "#6b6e78",
+      upColor: "#1f9d55", downColor: "#111111", wickUp: "#1f9d55", wickDown: "#111111", borderUp: "#1f9d55", borderDown: "#111111" },
+    tv: { bgType: "solid", bg: "#ffffff", gridColor: "#f0f3fa", gridColorH: "#f0f3fa", text: "#131722", scaleLine: "#e0e3eb", crossColor: "#9598a1",
+      upColor: "#089981", downColor: "#f23645", wickUp: "#089981", wickDown: "#f23645", borderUp: "#089981", borderDown: "#f23645" },
+    fxr: { bgType: "solid", bg: "#d9d6bf", gridColor: "#cbc7ae", gridColorH: "#cbc7ae", text: "#2b2b2b", scaleLine: "#bdb99f", crossColor: "#55585f",
+      upColor: "#4caf50", downColor: "#e53935", wickUp: "#4caf50", wickDown: "#e53935", borderUp: "#4caf50", borderDown: "#e53935" },
+    midnight: { bgType: "gradient", bg: "#0e1a33", bg2: "#05070d", gridColor: "#15213b", gridColorH: "#15213b", text: "#aab4c8", scaleLine: "#1d2a45", crossColor: "#5f7194",
+      upColor: "#26c6da", downColor: "#ff5277", wickUp: "#26c6da", wickDown: "#ff5277", borderUp: "#26c6da", borderDown: "#ff5277" },
   };
   const SETTINGS_KEY = "tickreplay.chartSettings";
   let cfg = { ...DEFAULTS };
@@ -176,20 +191,28 @@
         borderVisible: cfg.border || t === "hollow", borderUpColor: t === "hollow" ? cfg.upColor : cfg.borderUp, borderDownColor: cfg.borderDown,
       });
     }
+    main.applyOptions({ priceLineVisible: !!cfg.lastLine });
     main.setData(bars.map(mainPoint));
     refreshMarkers();
+    shownQuote = null;   // bid/ask price lines belonged to the old series
   }
 
   function applySettings() {
-    const g = cfg.grid;
+    const g = cfg.grid, style = +cfg.gridStyle || 0;
+    const background = cfg.bgType === "gradient"
+      ? { type: LightweightCharts.ColorType.VerticalGradient, topColor: cfg.bg, bottomColor: cfg.bg2 }
+      : { type: LightweightCharts.ColorType.Solid, color: cfg.bg };
     chart.applyOptions({
-      layout: { background: { color: cfg.bg }, textColor: cfg.text, fontSize: +cfg.fontSize },
-      grid: { vertLines: { visible: g === "both" || g === "vert", color: cfg.gridColor }, horzLines: { visible: g === "both" || g === "horz", color: cfg.gridColor } },
+      layout: { background, textColor: cfg.text, fontSize: +cfg.fontSize },
+      grid: {
+        vertLines: { visible: g === "both" || g === "vert", color: cfg.gridColor, style },
+        horzLines: { visible: g === "both" || g === "horz", color: cfg.gridColorH || cfg.gridColor, style },
+      },
       crosshair: {
         mode: cfg.crosshair === "magnet" ? LightweightCharts.CrosshairMode.Magnet : LightweightCharts.CrosshairMode.Normal,
         vertLine: { color: cfg.crossColor, labelBackgroundColor: "#2a2e39" }, horzLine: { color: cfg.crossColor, labelBackgroundColor: "#2a2e39" },
       },
-      rightPriceScale: { borderColor: cfg.scaleLine },
+      rightPriceScale: { borderColor: cfg.scaleLine, mode: +cfg.scaleMode || 0 },
       timeScale: { borderColor: cfg.scaleLine, rightOffset: +cfg.rightOffset },
       watermark: {
         visible: cfg.watermark === "symbol", color: "rgba(255,255,255,.06)", fontSize: 64,
@@ -618,10 +641,12 @@
     const up = b.close >= b.open, c = up ? cfg.upColor : cfg.downColor;
     const chg = i > 0 ? b.close - bars[i - 1].close : 0;
     const v = (x) => `<b style="color:${c}">${x.toFixed(2)}</b>`;
-    let html = `<div class="l1"><span class="name">${S.sym.symbol} · ${tfLabel(S.tf)}</span>
-      <span>O ${v(b.open)}</span><span>H ${v(b.high)}</span><span>L ${v(b.low)}</span><span>C ${v(b.close)}</span>
-      <span style="color:${c}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}</span><span>Vol <b>${b.volume.toLocaleString("en-US")}</b></span></div>`;
-    const ind = Object.keys(indSeries).map((id) => {
+    // what shows is chosen in Settings → Status line
+    let html = `<div class="l1">${cfg.slSymbol ? `<span class="name">${S.sym.symbol} · ${tfLabel(S.tf)}</span>` : ""}
+      ${cfg.slOhlc ? `<span>O ${v(b.open)}</span><span>H ${v(b.high)}</span><span>L ${v(b.low)}</span><span>C ${v(b.close)}</span>` : ""}
+      ${cfg.slChange ? `<span style="color:${c}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}</span>` : ""}
+      ${cfg.slVolume ? `<span>Vol <b>${b.volume.toLocaleString("en-US")}</b></span>` : ""}</div>`;
+    const ind = !cfg.slInd ? "" : Object.keys(indSeries).map((id) => {
       const val = id === "vwap" ? (indVals[id][i] && indVals[id][i].v ? indVals[id][i].pv / indVals[id][i].v : null) : indVals[id][i];
       return val == null ? "" : `<span style="color:${INDICATORS[id].color}">${INDICATORS[id].label} <b>${val.toFixed(2)}</b></span>`;
     }).join("");
@@ -1195,6 +1220,18 @@
       fill({ ...DEFAULTS, chartType: cfg.chartType, indicators: cfg.indicators });
       preview();
     });
+    $("presets").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-preset]");
+      if (!b) return;
+      fill({ ...cfg, ...THEMES[b.dataset.preset] });
+      preview();
+    });
+    // the dialog can also be opened from the chart's right-click menu
+    window.openChartSettings = () => $("settingsBtn").click();
+    // the two background colours only matter for a gradient
+    const syncBg = () => { dlg.querySelector('[data-set="bg2"]').style.display = dlg.querySelector('[data-set="bgType"]').value === "gradient" ? "" : "none"; };
+    dlg.addEventListener("change", syncBg);
+    $("settingsBtn").addEventListener("click", syncBg);
     $("setTabs").addEventListener("click", (e) => {
       const t = e.target.dataset.tab;
       if (!t) return;
@@ -1356,13 +1393,15 @@
       const buyType = p <= refPx(1) ? "Limit" : "Stop", sellType = p >= refPx(-1) ? "Limit" : "Stop";
       menu.innerHTML = `<button data-om="1"><span class="b">Buy ${buyType} ${q}</span><span class="px">@ ${px}</span></button>
         <button data-om="-1"><span class="s">Sell ${sellType} ${q}</span><span class="px">@ ${px}</span></button>
-        ${S.pos.qty ? `<button data-om="exit"><span>${(p - S.pos.avg) * Math.sign(S.pos.qty) > 0 ? "Take profit" : "Stop loss"} for position</span><span class="px">@ ${px}</span></button>` : ""}`;
+        ${S.pos.qty ? `<button data-om="exit"><span>${(p - S.pos.avg) * Math.sign(S.pos.qty) > 0 ? "Take profit" : "Stop loss"} for position</span><span class="px">@ ${px}</span></button>` : ""}
+        <div class="sepl"></div><button data-om="settings"><span>⚙ Chart settings…</span><span class="px">colours · grid</span></button>`;
       menu.hidden = false;
       menu.style.top = plus.offsetTop + 14 + "px";
       menu.style.left = Math.max(8, plus.offsetLeft - 150) + "px";
       menu.onclick = (ev) => {
         const b = ev.target.closest("[data-om]");
         if (!b) return;
+        if (b.dataset.om === "settings") { menu.hidden = true; return window.openChartSettings(); }
         if (b.dataset.om === "exit") {
           const side = Math.sign(S.pos.qty), profit = (p - S.pos.avg) * side > 0;
           addOrder({ side: -side, type: profit ? "limit" : "stop", price: p, qty: Math.abs(S.pos.qty), role: profit ? "tp" : "sl" });
