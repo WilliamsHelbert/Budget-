@@ -8,6 +8,21 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- ============ loading screen (hidden once the first chart and ticks are ready) ============ -->
+  <div class="boot" id="boot" role="status" aria-live="polite">
+    <div class="boot-inner">
+      <div class="boot-logo"><img src="favicon.png" alt="" width="34" height="34"><span>tick<b>replay</b></span></div>
+      <div class="boot-candles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="boot-title" id="bootTitle">Starting replay</div>
+      <div class="boot-bar"><span id="bootBar"></span></div>
+      <div class="boot-step" id="bootStep">Connecting to the replay engine…</div>
+      <div class="boot-err" id="bootErr" hidden>
+        <p id="bootErrMsg"></p>
+        <a class="boot-btn" href="./">Back to dashboard</a>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ account strip ============ -->
   <header class="acct">
     <a href="./" class="brand"><img src="favicon.png" alt="" width="22" height="22"><span>tick<b>replay</b></span></a>
@@ -117,6 +132,7 @@
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg><span id="axisPlusPx"></span>
           </button>
           <div class="order-menu" id="orderMenu" hidden></div>
+          <div class="cload" id="cload" hidden><span class="spin"></span><span id="cloadTxt">Loading…</span></div>
 
           <div class="text-edit" id="textEdit" hidden>
             <input id="textInput" maxlength="120" placeholder="Text…">

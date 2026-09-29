@@ -381,14 +381,57 @@
 
   // ---- load / seek ----------------------------------------------------------
 
+  // ---- loading screen (first load) and a small chart spinner (later loads) -----
+
+  const boot = {
+    on: true,
+    step(pct, text, title) {
+      if (!this.on) return;
+      $("bootBar").style.width = pct + "%";
+      if (text) $("bootStep").textContent = text;
+      if (title) $("bootTitle").textContent = title;
+    },
+    done() {
+      if (!this.on) return;
+      this.on = false;
+      this.step(100, "Ready");
+      setTimeout(() => $("boot").classList.add("hide"), 180);
+    },
+    fail(msg) {
+      $("boot").classList.remove("hide");
+      $("boot").classList.add("failed");
+      $("bootTitle").textContent = "Could not open the chart";
+      $("bootStep").textContent = "";
+      $("bootErrMsg").textContent = msg;
+      $("bootErr").hidden = false;
+      this.on = false;
+    },
+  };
+  let cloadT = null;
+  const chartLoading = (on, text = "Loading…") => {
+    clearTimeout(cloadT);
+    if (!on) { $("cload").hidden = true; return; }
+    $("cloadTxt").textContent = text;
+    cloadT = setTimeout(() => { $("cload").hidden = false; }, 150);   // only for loads you would notice
+  };
+
   async function load(t) {
     S.playing = false;
     S.t = t;
     S.buf = newBuffer(t);
     S.dispOffset = nyOffsetSec(t);
     const buf = S.buf;
-    const hist = await api(`/api/candles?symbol=${encodeURIComponent(S.sym.symbol)}&tf=${S.tf}&end=${t}&count=${HISTORY_CANDLES}`);
+    const what = `${S.sym.symbol} · ${tfLabel(S.tf)}`;
+    boot.step(55, `Loading ${what} history…`);
+    if (!boot.on) chartLoading(true, `Loading ${what}…`);
+    let hist;
+    try {
+      hist = await api(`/api/candles?symbol=${encodeURIComponent(S.sym.symbol)}&tf=${S.tf}&end=${t}&count=${HISTORY_CANDLES}`);
+    } finally {
+      if (buf === S.buf) chartLoading(false);
+    }
     if (buf !== S.buf) return;
+    boot.step(78, `${hist.length} candles loaded · preparing ticks…`);
     bars.length = 0;
     barTimes.length = 0;
     for (const c of hist) {
@@ -411,8 +454,9 @@
     domCenterPx = null;
     refreshMarkers();
     chart.timeScale().scrollToRealTime();
-    fetchMore();
+    const first = fetchMore();
     render(true);
+    if (boot.on) { await first; boot.done(); }
   }
 
   // ---- trading engine ---------------------------------------------------------
@@ -951,7 +995,11 @@
   /** Jump to just before the open of `day` (YYYY-MM-DD, New York) and play live, tick by tick. */
   async function marketOpen(day) {
     const t = parseNY(`${day}T${PRE_OPEN}`);
-    if (t < S.sym.first_ts || t > S.sym.last_ts) return status(`No ${S.sym.symbol} data around the open on ${day}`, 4000);
+    if (t < S.sym.first_ts || t > S.sym.last_ts) {
+      const msg = `No ${S.sym.symbol} data around the open on ${day}`;
+      return boot.on ? boot.fail(msg + ". Pick another day on the dashboard.") : status(msg, 4000);
+    }
+    boot.step(45, `09:25 New York · plays live at 1x`, `${S.sym.symbol} · ${day} open`);
     $("start").value = toInputNY(t);
     setSpeed(1);
     await load(t);
@@ -1049,17 +1097,17 @@
       else if (e.key === "Escape") { $("orderMenu").hidden = true; }
     });
 
+    boot.step(12, "Connecting to the replay engine…");
     S.symbols = await api("/api/symbols");
-    if (!S.symbols.length) {
-      status("No tick data yet. Go to the start page (Home) to import your tick files.", 0);
-      return;
-    }
+    if (!S.symbols.length) return boot.fail("No tick data yet. Import your tick files on the Data page first.");
     // URL options: ?bt=<session id> or ?symbol=NQ&date=2024-03-05&open=1&tf=60&t=<ms>
     const q = new URLSearchParams(location.search);
+    boot.step(28, `${S.symbols.length} symbol${S.symbols.length === 1 ? "" : "s"} available`, q.get("open") ? "Market Open practice" : "Free replay");
     if (q.get("bt")) {
       S.bt = await api(`/api/backtests/${encodeURIComponent(q.get("bt"))}`);
+      boot.step(40, `Session loaded · ${S.bt.trades.length} trades so far`, S.bt.name);
       S.symbols = S.symbols.filter((s) => S.bt.symbols.includes(s.symbol));
-      if (!S.symbols.length) return status("The data for this session's symbols was deleted.", 0);
+      if (!S.symbols.length) return boot.fail("The data for this session's symbols was deleted. Import it again on the Data page.");
       S.pos.realized = S.bt.trades.reduce((a, t) => a + t.pnl, 0);
       $("acctName").textContent = S.bt.name;
       document.title = `${S.bt.name} · Tick Replay`;
@@ -1422,5 +1470,5 @@
   ping();
   setInterval(ping, 20000);
 
-  init().catch((e) => status("Startup failed: " + e.message, 0));
+  init().catch((e) => boot.on ? boot.fail(/session not found/.test(e.message) ? "This session no longer exists. It may have been deleted." : e.message) : status("Startup failed: " + e.message, 0));
 })();

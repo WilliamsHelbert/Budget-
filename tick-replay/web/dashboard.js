@@ -148,6 +148,11 @@
   }
 
   /** Vertical bars. items: [{label, value, tip}] ; opts.color or opts.polarity. */
+  function fmtMin(m) {
+    if (!m) return "0";
+    return m >= 60 ? `${+(m / 60).toFixed(1)}h` : `${+m.toFixed(m < 10 ? 1 : 0)}m`;
+  }
+
   function barChart(el, items, opts = {}) {
     const draw = () => {
       const W = el.clientWidth, H = el.clientHeight;
@@ -289,7 +294,7 @@
         <div class="bar"><span style="width:${(done * 100).toFixed(1)}%"></span></div>
         <div class="lbl"><span>${(done * 100).toFixed(0)}%</span><span>Remaining days: ${remainingDays(b)}</span></div>
       </div>
-      <div style="display:flex;align-items:center;gap:14px">
+      <div class="srow-end">
         <div class="eq"><div class="v">${money(eq)}</div><div class="d ${cls(d)}">${signedMoney(d)}</div></div>
         <div class="acts">
           <button class="icon-btn" data-act="edit" data-id="${b.id}" title="Edit">${ICON.edit}</button>
@@ -319,45 +324,174 @@
     data: { title: "Data", render: renderData },
   };
 
+  function greeting() {
+    const h = new Date().getHours();
+    return h < 5 ? "Late session" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  }
+
+  /** The most recently played session, shown big at the top. */
+  function continueCard() {
+    const b = backtests[0];
+    if (!b) {
+      const hasReal = symbols.some((s) => !/-DEMO$/i.test(s.symbol));
+      return `<div class="hero-card empty-hero">
+        <div class="eyebrow">Get started</div>
+        <h2>Create your first backtest session</h2>
+        <p class="muted">A session has its own date range, balance and trade log. Everything is saved as you replay.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-lg" data-act="new">+ New session</button>
+          ${hasReal ? "" : '<a class="btn btn-ghost btn-lg" href="#data">Import tick data</a>'}
+        </div>
+      </div>`;
+    }
+    const eq = equity(b), d = eq - b.balance;
+    const done = Math.min(1, Math.max(0, (b.current_ts - b.start_ts) / (b.end_ts - b.start_ts)));
+    const played = b.updated ? new Date(b.updated) : null;
+    const ago = played ? Math.round((Date.now() - played) / 60000) : null;
+    const agoTxt = ago === null ? "" : ago < 1 ? "just now" : ago < 60 ? `${ago} min ago` : ago < 1440 ? `${Math.round(ago / 60)} h ago` : `${Math.round(ago / 1440)} d ago`;
+    return `<div class="hero-card">
+      <div class="eyebrow">Continue where you left off <span class="muted">· played ${agoTxt}</span></div>
+      <div class="hero-main">
+        <div class="hero-info">
+          <h2>${esc(b.name)}</h2>
+          <div class="hero-meta">
+            <span>${ICON.cal}${shortDate(nyDate(b.start_ts))} – ${shortDate(nyDate(b.end_ts))}</span>
+            <span>${ICON.clock}at ${nyDate(b.current_ts)} ${nyClock(b.current_ts).slice(0, 5)} NY</span>
+            <span class="chips">${b.symbols.map((s) => `<span class="chip">${esc(s)}</span>`).join("")}</span>
+          </div>
+          <div class="hero-prog">
+            <div class="bar"><span style="width:${(done * 100).toFixed(1)}%"></span></div>
+            <div class="lbl"><span>${(done * 100).toFixed(0)}% replayed</span><span>${remainingDays(b)} trading days left</span></div>
+          </div>
+        </div>
+        <div class="hero-eq">
+          <div class="muted small">Balance</div>
+          <div class="big">${money(eq)}</div>
+          <div class="${cls(d)} mono">${signedMoney(d)} · ${b.trades.length} trade${b.trades.length === 1 ? "" : "s"}</div>
+        </div>
+      </div>
+      <div class="hero-actions">
+        <a class="btn btn-primary btn-lg" href="chart.html?bt=${b.id}">${ICON.play} Continue replay</a>
+        <a class="btn btn-ghost btn-lg" href="#analytics/${b.id}">Session stats</a>
+        ${backtests.length > 1 ? `<a class="btn btn-ghost btn-lg" href="#sessions">All sessions (${backtests.length})</a>` : ""}
+      </div>
+    </div>`;
+  }
+
+  /** Pick a symbol and day and jump into the open, live at 1x. */
+  function practiceCard() {
+    const opts = symbols.map((s) => `<option value="${esc(s.symbol)}">${esc(s.symbol)}</option>`).join("");
+    return `<div class="practice-card">
+      <div class="eyebrow">🔔 Practice the open</div>
+      <p class="muted small">Starts 09:25 New York and plays live at 1x, tick by tick. No session, nothing saved.</p>
+      <div class="practice-form">
+        <label class="field">Symbol<select class="input" id="pSym">${opts}</select></label>
+        <label class="field">Day<select class="input" id="pDay"><option>Loading…</option></select></label>
+      </div>
+      <a class="btn btn-gold btn-lg practice-go" id="pGo" href="chart.html">Market Open</a>
+    </div>`;
+  }
+
+  async function wirePractice() {
+    const sym = $("pSym"), day = $("pDay"), go = $("pGo");
+    if (!sym) return;
+    const pref = previewSymbol();
+    if (pref) sym.value = pref;
+    const fill = async () => {
+      const list = await days(sym.value).catch(() => []);
+      if (!document.body.contains(day)) return;
+      day.innerHTML = list.length ? list.slice(0, 40).map((s) => `<option value="${s.date}">${DAY_NAMES[new Date(s.date + "T12:00:00Z").getUTCDay()]} ${shortDate(s.date)}</option>`).join("")
+        : "<option value=''>No regular sessions</option>";
+      update();
+    };
+    const update = () => {
+      go.href = day.value ? `chart.html?${new URLSearchParams({ symbol: sym.value, date: day.value, open: 1, tf: 60 })}` : "chart.html";
+      go.classList.toggle("disabled", !day.value);
+    };
+    sym.addEventListener("change", fill);
+    day.addEventListener("change", update);
+    fill();
+  }
+
+  /** Shown until the user has data, a session and a trade. */
+  function checklist(st) {
+    const hasReal = symbols.some((s) => !/-DEMO$/i.test(s.symbol));
+    const steps = [
+      [hasReal, "Import your tick data", "Databento TBBO/trades, NinjaTrader or CSV", "#data", "Import"],
+      [backtests.length > 0, "Create a backtest session", "Date range, balance and commission", "new", "New session"],
+      [st.n > 0, "Take your first trade", "B / S on the chart, or orders from the DOM", backtests[0] ? `chart.html?bt=${backtests[0].id}` : "new", "Open chart"],
+    ];
+    if (steps.every((s) => s[0])) return "";
+    return `<div class="panel checklist"><h3>Getting started <span class="muted">${steps.filter((s) => s[0]).length} of 3 done</span></h3>
+      ${steps.map(([ok, t, sub, href, cta]) => `<div class="step-row ${ok ? "done" : ""}">
+        <span class="tick">${ok ? "✓" : ""}</span><div><div class="t">${t}</div><div class="muted small">${sub}</div></div>
+        ${ok ? "" : href === "new" ? `<button class="btn btn-ghost btn-sm" data-act="new">${cta}</button>` : `<a class="btn btn-ghost btn-sm" href="${href}">${cta}</a>`}
+      </div>`).join("")}</div>`;
+  }
+
+  /** Win-rate ring + the numbers that matter next to it. */
+  function winPanel(st) {
+    const r = 46, c = 2 * Math.PI * r, wr = isFinite(st.winRate) ? st.winRate : 0;
+    return `<div class="panel win-panel"><h3>Win / loss</h3>
+      <div class="win-body">
+        <svg class="ring" viewBox="0 0 120 120" aria-label="Win rate ${pct(st.winRate)}">
+          <circle cx="60" cy="60" r="${r}" fill="none" stroke="var(--down)" stroke-opacity="${st.n ? 0.85 : 0.15}" stroke-width="12"/>
+          <circle cx="60" cy="60" r="${r}" fill="none" stroke="var(--up)" stroke-width="12" stroke-linecap="round"
+            stroke-dasharray="${(c * wr).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 60 60)" ${st.n ? "" : 'stroke-opacity="0"'}/>
+          <text x="60" y="58" text-anchor="middle" class="ring-v">${st.n ? (wr * 100).toFixed(0) + "%" : "–"}</text>
+          <text x="60" y="76" text-anchor="middle" class="ring-l">win rate</text>
+        </svg>
+        <dl class="kv">
+          <dt>Avg win</dt><dd class="pos">${signedMoney(st.avgWin)}</dd>
+          <dt>Avg loss</dt><dd class="neg">${signedMoney(st.avgLoss)}</dd>
+          <dt>Expectancy</dt><dd class="${cls(st.expectancy)}">${signedMoney(st.expectancy)}</dd>
+          <dt>Best / worst</dt><dd><span class="pos">${signedMoney(st.best)}</span> / <span class="neg">${signedMoney(st.worst)}</span></dd>
+          <dt>Max drawdown</dt><dd class="neg">${money(st.maxDD)}</dd>
+        </dl>
+      </div></div>`;
+  }
+
   function renderDashboard(v) {
     const trades = allTrades(), st = stats(trades);
     const spent = backtests.reduce((a, b) => a + b.time_spent_ms, 0);
     const replayed = backtests.reduce((a, b) => a + b.replayed_ms, 0);
     const longPct = st.n ? (st.longs / st.n) * 100 : 50;
+    $("title").textContent = greeting();
 
     v.innerHTML = `
+      <div class="hero-row">${continueCard()}${practiceCard()}</div>
+      ${checklist(st)}
+
       <div class="grid tiles">
-        ${tile("clock", "Time invested", duration(spent, ["d", "h", "m"]))}
-        ${tile("hist", "Historical time replayed", duration(replayed, ["y", "d", "h", "m"]))}
-        ${tile("trades", "Trades taken", st.n, st.n ? `<span class="pos">${longPct.toFixed(0)}% long</span> · <span class="neg">${(100 - longPct).toFixed(0)}% short</span>` : "",
+        ${tile("dollar", "Net P&amp;L", `<span class="${cls(st.net)}">${signedMoney(st.net)}</span>`, st.fees ? `after ${money(st.fees)} commission` : "all sessions")}
+        ${tile("target", "Win rate", pct(st.winRate), st.n ? `${trades.filter((t) => t.pnl > 0).length} of ${st.n} trades` : "no trades yet")}
+        ${tile("scale", "Profit factor", isFinite(st.pf) ? st.pf.toFixed(2) : st.pf === Infinity ? "∞" : "–", "gross win ÷ gross loss")}
+        ${tile("trades", "Trades", st.n, st.n ? `<span class="pos">${longPct.toFixed(0)}% long</span> · <span class="neg">${(100 - longPct).toFixed(0)}% short</span>` : "long vs short",
           `<div class="split"><span style="flex:${st.longs || 1};background:var(--up)"></span><span style="flex:${st.shorts || 1};background:var(--down)"></span></div>`)}
-        ${tile("target", "Win rate", pct(st.winRate))}
-        ${tile("dollar", "Net P&amp;L", `<span class="${cls(st.net)}">${signedMoney(st.net)}</span>`)}
-        ${tile("scale", "Profit factor", isFinite(st.pf) ? st.pf.toFixed(2) : st.pf === Infinity ? "∞" : "–")}
+        ${tile("clock", "Time invested", duration(spent, ["d", "h", "m"]), "real time in replay")}
+        ${tile("hist", "Market time replayed", duration(replayed, ["y", "d", "h", "m"]), "historical time covered")}
       </div>
 
-      <div class="grid row2" style="margin-top:16px">
-        <div class="panel"><h3>Time invested <span class="muted">last 12 months</span></h3><div class="chart" id="cTime"></div></div>
-        <div class="panel" id="liveCard">
-          <div class="live-head">
-            <div><div class="live-sym" id="liveSym">Next open</div><div class="live-date" id="liveDate">Loading…</div></div>
-            <div class="live-badge" id="liveBadge"><span class="dot"></span> REPLAY 1x</div>
-          </div>
-          <div class="live-price-row">
-            <div class="live-price" id="livePrice">–</div><div class="live-chg" id="liveChg"></div><div class="live-clock" id="liveClock"></div>
-          </div>
-          <div class="live-chart" id="liveChart"></div>
-        </div>
+      <div class="grid row2">
+        <div class="panel"><h3>Cumulative P&amp;L <span class="muted">all sessions, trade by trade</span></h3><div class="chart tall" id="cEq"></div></div>
+        ${winPanel(st)}
       </div>
 
-      <div class="grid row3" style="margin-top:16px">
-        <div class="panel"><h3>Win rate <span class="muted">by month</span></h3><div class="chart" id="cWin"></div></div>
+      <div class="grid row3">
         <div class="panel"><h3>Net P&amp;L <span class="muted">by month</span></h3><div class="chart" id="cPnl"></div></div>
+        <div class="panel"><h3>Time invested <span class="muted">last 12 months</span></h3><div class="chart" id="cTime"></div></div>
         <div class="panel"><h3>Trades by symbol</h3><div class="chart" id="cSym"></div></div>
       </div>
 
       <div class="section-title"><h2>Recent sessions</h2><span class="spacer"></span><a class="btn btn-ghost btn-sm" href="#sessions">View all</a></div>
-      <div class="sessions">${backtests.length ? backtests.slice(0, 5).map(sessionRow).join("") : noSessions()}</div>`;
+      <div class="sessions">${backtests.length ? backtests.slice(0, 4).map(sessionRow).join("") : noSessions()}</div>`;
+
+    let eqv = 0;
+    lineChart($("cEq"), [{ v: 0, tip: "Start: <b>$0.00</b>" }].concat(trades.map((t, k) => {
+      eqv += t.pnl;
+      return { v: eqv, tip: `#${k + 1} ${esc(t.symbol)} ${signedMoney(t.pnl)} · ${esc(t.session)}<br>Total: <b>${signedMoney(eqv)}</b>` };
+    })), { base: 0, axis: (t) => (Math.abs(t) >= 10000 ? `${(t / 1000).toFixed(0)}k` : t), empty: "Your equity curve appears after the first closed trade" });
+    wirePractice();
 
     // time invested per month (last 12)
     const byMonth = new Map();
@@ -371,8 +505,8 @@
       if (byMonth.has(key)) byMonth.set(key, byMonth.get(key) + ms);
     }
     barChart($("cTime"), [...byMonth].map(([k, ms]) => ({
-      label: monthLabel(k), value: ms / 3600000, tip: `${monthLabel(k)}: <b>${(ms / 3600000).toFixed(1)} h</b>`,
-    })), { axis: (t) => `${+t.toFixed(2)}h`, empty: "Replay a session to start tracking time" });
+      label: monthLabel(k), value: ms / 60000, tip: `${monthLabel(k)}: <b>${fmtMin(ms / 60000)}</b>`,
+    })), { axis: (t) => fmtMin(t), empty: "Replay a session to start tracking time" });
 
     // by market month of the trade
     const tm = new Map();
@@ -383,19 +517,14 @@
       tm.set(key, e);
     }
     const months = [...tm].sort(([a], [b]) => a.localeCompare(b)).slice(-12);
-    barChart($("cWin"), months.map(([k, e]) => ({
-      label: monthLabel(k), value: (e.w / e.n) * 100, tip: `${monthLabel(k)}: <b>${((e.w / e.n) * 100).toFixed(1)}%</b> of ${e.n}`,
-    })), { color: "var(--accent)", axis: (t) => `${t}%`, empty: "No trades yet" });
     barChart($("cPnl"), months.map(([k, e]) => ({
-      label: monthLabel(k), value: e.pnl, tip: `${monthLabel(k)}: <b>${signedMoney(e.pnl)}</b>`,
+      label: monthLabel(k), value: e.pnl, tip: `${monthLabel(k)}: <b>${signedMoney(e.pnl)}</b> · ${((e.w / e.n) * 100).toFixed(0)}% of ${e.n} won`,
     })), { polarity: true, axis: (t) => (Math.abs(t) >= 1000 ? `${t / 1000}k` : t), empty: "No trades yet" });
 
     const bySym = new Map();
     for (const t of trades) bySym.set(t.symbol, (bySym.get(t.symbol) || 0) + 1);
     hbarChart($("cSym"), [...bySym].sort((a, b) => b[1] - a[1]).map(([s, n]) => ({ label: s, value: n, tip: `${esc(s)}: <b>${n}</b> trades` })),
       { color: "var(--accent)", empty: "No trades yet" });
-
-    startLive();
   }
 
   let page = 0;
@@ -645,9 +774,9 @@
     });
   }
 
-  // ---- live preview of the latest open --------------------------------------
+  // ---- practice-the-open helpers --------------------------------------------
 
-  const live = { gen: 0, chart: null, series: null };
+  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   function previewSymbol() {
     const real = symbols.filter((s) => !/-DEMO$/i.test(s.symbol));
     return (real.find((s) => s.symbol === "NQ") || real[0] || symbols.find((s) => s.symbol === "NQ-DEMO") || symbols[0] || {}).symbol;
@@ -657,72 +786,8 @@
     return daysCache.get(sym);
   }
 
-  async function startLive() {
-    const gen = ++live.gen;
-    const el = $("liveChart");
-    live.chart = null;
-    const sym = previewSymbol();
-    if (!sym) { $("liveDate").textContent = "Import data to see a preview"; return; }
-    const session = (await days(sym))[0];
-    if (gen !== live.gen || !session) { if (session === undefined && $("liveDate")) $("liveDate").textContent = "No regular sessions yet"; return; }
-    const chart = LightweightCharts.createChart(el, {
-      autoSize: true, localization: { locale: "en-US" },
-      layout: { background: { color: "transparent" }, textColor: "#8a91a3", fontSize: 11, attributionLogo: false },
-      grid: { vertLines: { visible: false }, horzLines: { color: "rgba(255,255,255,.04)" } },
-      rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false, timeVisible: true, secondsVisible: true, rightOffset: 4 },
-      crosshair: { vertLine: { visible: false }, horzLine: { visible: false } },
-      handleScroll: false, handleScale: false,
-    });
-    const series = chart.addCandlestickSeries({ upColor: "#26a69a", downColor: "#ef5350", borderVisible: false, wickUpColor: "#26a69a", wickDownColor: "#ef5350" });
-    const TF = 5, start = session.open_ts - 20000, end = start + 150000, q = encodeURIComponent(sym);
-    const [hist, tk] = await Promise.all([
-      api(`/api/candles?symbol=${q}&tf=${TF}&end=${start}&count=70`),
-      api(`/api/ticks?symbol=${q}&after=${start}&until=${end}&limit=200000`),
-    ]);
-    if (gen !== live.gen) { chart.remove(); return; }
-    const off = nyOffsetSec(start);
-    series.setData(hist.map((c) => ({ time: c.time + off, open: c.open, high: c.high, low: c.low, close: c.close })));
-    $("liveSym").textContent = sym;
-    $("liveDate").textContent = `${shortDate(session.date)} · the open, 1x`;
-    let bar = hist.length ? { ...hist[hist.length - 1] } : null, last = bar ? bar.close : session.open, shown = last;
-    let t = start, i = 0, prev = performance.now();
-    const frame = (now) => {
-      if (gen !== live.gen || !document.body.contains(el)) { chart.remove(); return; }
-      t += Math.min(now - prev, 250); prev = now;
-      let moved = false;
-      while (i < tk.ts.length && tk.ts[i] <= t) {
-        const px = tk.price[i], b = Math.floor(tk.ts[i] / 1000 / TF) * TF;
-        if (!bar || b > bar.time) { if (bar) series.update({ ...bar, time: bar.time + off }); bar = { time: b, open: px, high: px, low: px, close: px }; }
-        else { bar.high = Math.max(bar.high, px); bar.low = Math.min(bar.low, px); bar.close = px; }
-        last = px; i++; moved = true;
-      }
-      if (moved) series.update({ ...bar, time: bar.time + off });
-      const pe = $("livePrice");
-      if (last !== shown) { pe.className = "live-price " + (last > shown ? "up" : "down"); shown = last; }
-      pe.textContent = last.toLocaleString("en-US", { minimumFractionDigits: 2 });
-      const chg = last - session.pre_open;
-      $("liveChg").innerHTML = `<span class="${cls(chg)}">${chg > 0 ? "+" : ""}${chg.toFixed(2)}</span>`;
-      $("liveClock").textContent = nyClock(t);
-      const badge = $("liveBadge"), left = session.open_ts - t;
-      if (left > 0) { badge.className = "live-badge"; badge.innerHTML = `<span class="dot"></span> OPENS IN 0:${String(Math.ceil(left / 1000)).padStart(2, "0")}`; }
-      else if (!badge.classList.contains("open")) { badge.className = "live-badge open"; badge.innerHTML = `<span class="dot"></span> MARKET OPEN`; }
-      if (t >= end) { setTimeout(() => { if (gen === live.gen && document.body.contains(el)) { chart.remove(); startLive(); } }, 1500); return; }
-      requestAnimationFrame(frame);
-    };
-    requestAnimationFrame(frame);
-  }
-
-  async function updateQuick() {
-    const sym = previewSymbol();
-    if (!sym) return;
-    try {
-      const s = (await days(sym))[0];
-      if (!s) return;
-      $("quickBtn").href = `chart.html?${new URLSearchParams({ symbol: sym, date: s.date, open: 1, tf: 60 })}`;
-      $("quickSub").textContent = `${sym} · ${shortDate(s.date)} open, live at 1x.`;
-    } catch { /* keep default */ }
-  }
+  // after an import: new days may exist for the practice picker
+  function updateQuick() { daysCache.clear(); if ($("pSym")) route(); }
 
   // ---- new / edit session dialog --------------------------------------------
 
@@ -829,7 +894,6 @@
       ? `${symbols.length} symbol${symbols.length === 1 ? "" : "s"} on this PC`
       : `${n} session${n === 1 ? "" : "s"} · ${allTrades().length} trades`;
     charts.length = 0;
-    live.gen++;
     hideTip();
     view.render($("view"), arg);
     scrollTo(0, 0);
