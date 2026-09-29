@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tick Replay</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="toolbar">
+    <select id="symbol" title="Symbol"></select>
+    <div class="group" id="tfs"></div>
+    <div class="sep"></div>
+    <input type="datetime-local" id="start" step="1" title="Start time (New York)">
+    <button id="go" title="Jump to this time">Go</button>
+    <div class="sep"></div>
+    <button id="play" class="primary" title="Play / pause (Space)">▶</button>
+    <button id="stepTick" title="Next tick (→)">+1 tick</button>
+    <button id="stepBar" title="Next candle (Shift+→)">+1 bar</button>
+    <select id="speed" title="Replay speed"></select>
+    <label class="check" title="Jump over closed market / quiet periods"><input type="checkbox" id="skipGaps" checked> skip gaps</label>
+    <div class="spacer"></div>
+    <div id="clock" class="clock" title="Replay time, New York">--</div>
+  </header>
+
+  <main>
+    <div id="chart"></div>
+    <aside>
+      <section class="panel">
+        <h2>Trade</h2>
+        <div class="row">
+          <label>Qty <input type="number" id="qty" value="1" min="1" max="100"></label>
+          <span id="last" class="last">--</span>
+        </div>
+        <div class="row buttons">
+          <button id="buy" class="buy" title="Buy market (B)">Buy</button>
+          <button id="sell" class="sell" title="Sell market (S)">Sell</button>
+          <button id="flat" title="Close position (F)">Flat</button>
+        </div>
+        <dl class="stats">
+          <dt>Position</dt><dd id="posQty">0</dd>
+          <dt>Avg price</dt><dd id="posAvg">--</dd>
+          <dt>Open P&amp;L</dt><dd id="pnlOpen">$0</dd>
+          <dt>Closed P&amp;L</dt><dd id="pnlClosed">$0</dd>
+          <dt>Fills</dt><dd id="fills">0</dd>
+        </dl>
+        <p class="hint">Market orders fill at the last traded price.</p>
+      </section>
+      <section class="panel tape">
+        <h2>Time &amp; Sales</h2>
+        <table>
+          <thead><tr><th>Time (NY)</th><th>Price</th><th>Size</th></tr></thead>
+          <tbody id="tape"></tbody>
+        </table>
+      </section>
+    </aside>
+  </main>
+
+  <div id="status" class="status"></div>
+
+  <script src="vendor/lightweight-charts.standalone.production.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
