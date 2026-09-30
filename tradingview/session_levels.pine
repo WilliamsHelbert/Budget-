@@ -11,7 +11,8 @@
 //      "hopper op" laengere.
 //    - Et 15m-niveau der er lig NY PRE's high/low skjules, saa laenge
 //      det er det (den lilla linje viser det allerede).
-//    - Valg: vis taget 15m-niveauer som stoppet linje, eller slet dem.
+//    - Taget 15m-niveauer SLETTES, saa kun de aktive staar tilbage.
+//      (Kan slaas om til stoppet linje under "Vis taget 15m-niveauer".)
 //
 //  NYT I v4
 //    - Tykkere linjer (default 2) og stoerre, fed tekst ved linjerne.
@@ -77,8 +78,8 @@ nyCol    = input.color(color.purple, "", group = g3, inline = "n")
 g5 = "NY PRE - 15m niveauer (market open)"
 showM15 = input.bool(true, "Vis 15m highs/lows fra NY PRE", group = g5,
      tooltip = "Tegnes live under NY PRE, naar hver 15m-candle lukker. NY PRE's eget high og low skjules - de er allerede tegnet i lilla.")
-keepDead = input.bool(true, "Vis taget 15m-niveauer (stoppet linje)", group = g5,
-     tooltip = "Til: et niveau der bliver taget under NY PRE bliver staaende som en stoppet linje, ligesom sessionerne. Fra: det slettes.")
+keepDead = input.bool(false, "Vis taget 15m-niveauer (stoppet linje)", group = g5,
+     tooltip = "Fra (standard): et niveau der bliver taget under NY PRE slettes, saa kun de aktive staar tilbage. Til: det bliver staaende som en stoppet linje.")
 m15Col  = input.color(color.orange, "Farve", group = g5)
 m15TF   = input.timeframe("15", "Timeframe for niveauerne", group = g5)
 cmpSym  = input.symbol("CME_MINI:ES1!", "Sammenlign med (gyldighed)", group = g5,
