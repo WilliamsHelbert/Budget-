@@ -34,7 +34,7 @@
 //    Short: entry i toppen -> 0.75.  Long: entry i bunden -> 0.25.
 //    Naermeste der ligger mindst beMin (10) points fra entry og foer TP.
 // =====================================================================
-indicator("SMT - Session Sweep + Trade", overlay = true,
+indicator("Helbert's Hjælpe Indikator (SMT)", overlay = true,
      max_labels_count = 500, max_boxes_count = 500, max_lines_count = 500)
 
 // ─────────────────────────── INPUTS ───────────────────────────
