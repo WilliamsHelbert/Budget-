@@ -61,7 +61,8 @@ bullCol  = input.color(color.lime, "Bullish SMT", group = g4)
 
 g6 = "NY PRE - intraday niveauer"
 useLv      = input.bool(true, "Led efter SMT paa 15m/5m-niveauer", group = g6)
-showLvLine = input.bool(true, "Tegn niveauerne", group = g6)
+showLvLine = input.bool(false, "Tegn niveauerne", group = g6,
+     tooltip = "Fra (standard): Session Levels tegner 15m-niveauerne. Slaa kun til hvis du vil se SMT'ens egne 15m/5m-niveauer.")
 lvCol      = input.color(color.orange, "Farve", group = g6)
 tf15       = input.timeframe("15", "Timeframe A", group = g6)
 tf05       = input.timeframe("5",  "Timeframe B", group = g6)
