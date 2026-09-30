@@ -1,7 +1,15 @@
 //@version=6
 // =====================================================================
-//  Session Levels  (v5)
+//  Session Levels  (v6)
 //  ---------------------------------------------------------------
+//  NYT I v6
+//    - 5m highs/lows fra NY PRE vises nu OGSAA her (orange), paa samme
+//      maade som 15m: live under NY PRE, slettes naar de bliver taget.
+//      SMT-indikatoren tegner ikke laengere sine egne niveauer.
+//    - 15m-niveauerne er RODE som standard.
+//    - Et 5m-niveau paa samme pris som et 15m-niveau vises ikke - saa
+//      staar der kun 15m, aldrig 5m og 15m oven i hinanden.
+//
 //  NYT I v5
 //    - De orange 15m-niveauer vises LIVE under NY PRE, ligesom Asia,
 //      London og NY PRE. Saa snart en 15m-candle i NY PRE lukker,
@@ -75,13 +83,17 @@ lonCol   = input.color(color.green,  "", group = g3, inline = "l")
 showNy   = input.bool(true, "NY PRE", group = g3, inline = "n")
 nyCol    = input.color(color.purple, "", group = g3, inline = "n")
 
-g5 = "NY PRE - 15m niveauer (market open)"
+g5 = "NY PRE - 15m / 5m niveauer (market open)"
 showM15 = input.bool(true, "Vis 15m highs/lows fra NY PRE", group = g5,
      tooltip = "Tegnes live under NY PRE, naar hver 15m-candle lukker. NY PRE's eget high og low skjules - de er allerede tegnet i lilla.")
-keepDead = input.bool(false, "Vis taget 15m-niveauer (stoppet linje)", group = g5,
+showM05 = input.bool(true, "Vis 5m highs/lows fra NY PRE", group = g5,
+     tooltip = "Som 15m. Et 5m-niveau paa samme pris som et 15m-niveau vises ikke.")
+keepDead = input.bool(false, "Vis taget 15m/5m-niveauer (stoppet linje)", group = g5,
      tooltip = "Fra (standard): et niveau der bliver taget under NY PRE slettes, saa kun de aktive staar tilbage. Til: det bliver staaende som en stoppet linje.")
-m15Col  = input.color(color.red, "Farve", group = g5)
-m15TF   = input.timeframe("15", "Timeframe for niveauerne", group = g5)
+m15Col  = input.color(color.red,    "Farve 15m", group = g5)
+m05Col  = input.color(color.orange, "Farve 5m",  group = g5)
+m15TF   = input.timeframe("15", "Timeframe A (15m)", group = g5)
+m05TF   = input.timeframe("5",  "Timeframe B (5m)",  group = g5)
 cmpSym  = input.symbol("CME_MINI:ES1!", "Sammenlign med (gyldighed)", group = g5,
      tooltip = "Et niveau er kun gyldigt hvis det er uroert paa BEGGE symboler. Ligger du paa NQ, skal denne staa paa ES - og omvendt.")
 nyFromH = input.int(14, "NY PRE start - time",  minval = 0, maxval = 23, group = g5)
@@ -115,6 +127,7 @@ type M15
     int   t    = na
     bool  isHi = false
     bool  dead = false  // taget mens NY PRE koerte -> ugyldigt
+    bool  is15 = true   // 15m (true) eller 5m (false)
     line  ln   = na
     label lb   = na
 
@@ -247,12 +260,14 @@ if showNy and not nOn and not na(nCur.hi) and time <= nCur.endT
     if checkHit(nCur, high, low, time)
         paint(nCur, nyCol, "NY PRE")
 
-// ═════════════ NY PRE: 15m HIGHS OG LOWS (orange) ═════════════
+// ═════════════ NY PRE: 15m + 5m HIGHS OG LOWS ═════════════
 m15Bar() =>
     [high[1], low[1], time[1]]
 
 [qH, qL, qT] = request.security(syminfo.tickerid, m15TF, m15Bar(), lookahead = barmerge.lookahead_on)
 [eH, eL, eT] = request.security(cmpSym,           m15TF, m15Bar(), lookahead = barmerge.lookahead_on)
+[fH, fL, fT] = request.security(syminfo.tickerid, m05TF, m15Bar(), lookahead = barmerge.lookahead_on)
+[gH, gL, gT] = request.security(cmpSym,           m05TF, m15Bar(), lookahead = barmerge.lookahead_on)
 
 [cBarH, cBarL] = request.security(cmpSym, timeframe.period, [high, low],
      gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)
@@ -271,46 +286,86 @@ bool isOpenBar = tMin >= nyTo and nz(lastOpenDay, -1) != dNow
 if isOpenBar
     lastOpenDay := dNow
 
-// Reager kun een gang pr. 15m-candle.
+// Reager kun een gang pr. 15m- og pr. 5m-candle.
 var int lastQt = na
 bool newM15 = not na(qT) and qT != nz(lastQt, -1)
 if newM15
     lastQt := qT
 
-// Laa den lukkede 15m-candle inde i NY PRE-vinduet?
-int  qMin  = na(qT) ? na : hour(qT, tz) * 60 + minute(qT, tz)
-bool qInNy = not na(qMin) and qMin >= nyFrom and qMin < nyTo
+var int lastFt = na
+bool newM05 = not na(fT) and fT != nz(lastFt, -1)
+if newM05
+    lastFt := fT
+
+// Laa den lukkede candle inde i NY PRE-vinduet?
+inNyAt(int t) =>
+    int m = na(t) ? na : hour(t, tz) * 60 + minute(t, tz)
+    not na(m) and m >= nyFrom and m < nyTo
 
 float tickHalf = syminfo.mintick / 2
 
 var array<M15> m15s = array.new<M15>()
 
 // ── Ny dag: ryd rester ──
-if showM15 and nyBegin and array.size(m15s) > 0
+if nyBegin and array.size(m15s) > 0
     while array.size(m15s) > 0
         M15 m = array.pop(m15s)
         line.delete(m.ln)
         label.delete(m.lb)
 
-// Tegn eet 15m-niveau med det samme, fra candlens start til linjernes slut.
-newLvl(float aL, float bL, int t, bool isHi, int toT) =>
+// Tegn eet niveau med det samme, fra candlens start til linjernes slut.
+newLvl(float aL, float bL, int t, bool isHi, bool is15, int toT) =>
+    color  c   = is15 ? m15Col : m05Col
     M15 m = M15.new()
     m.aLvl := aL
     m.bLvl := bL
     m.t    := t
     m.isHi := isHi
-    m.ln   := line.new(t, aL, toT, aL, xloc = xloc.bar_time, color = m15Col, width = lineW)
-    m.lb   := label.new(toT, aL, showLbl ? "15m" : "", xloc = xloc.bar_time, style = label.style_none, textcolor = m15Col, size = lblSize, text_formatting = lblFmt)
+    m.is15 := is15
+    m.ln   := line.new(t, aL, toT, aL, xloc = xloc.bar_time, color = c, width = lineW)
+    m.lb   := label.new(toT, aL, showLbl ? (is15 ? "15m" : "5m") : "", xloc = xloc.bar_time, style = label.style_none, textcolor = c, size = lblSize, text_formatting = lblFmt)
     m
 
+killLvl(M15 m) =>
+    m.dead := true
+    line.delete(m.ln)
+    label.delete(m.lb)
+
+// Findes der allerede et levende niveau paa samme pris og side?
+hasLive(array<M15> arr, float px, bool isHi, bool is15) =>
+    bool found = false
+    if array.size(arr) > 0
+        for i = 0 to array.size(arr) - 1
+            M15 m = array.get(arr, i)
+            if not m.dead and m.isHi == isHi and m.is15 == is15 and math.abs(m.aLvl - px) < tickHalf
+                found := true
+    found
+
+// Et nyt 15m-niveau fjerner et 5m-niveau paa samme pris (det er det samme high/low).
+dropSame5m(array<M15> arr, float px, bool isHi) =>
+    if array.size(arr) > 0
+        for i = 0 to array.size(arr) - 1
+            M15 m = array.get(arr, i)
+            if not m.dead and not m.is15 and m.isHi == isHi and math.abs(m.aLvl - px) < tickHalf
+                killLvl(m)
+
 // ── Ny 15m-candle inde i NY PRE: gem dens high og low og tegn dem ──
-if showM15 and newM15 and qInNy and not na(qH) and not na(eH)
-    array.push(m15s, newLvl(qH, eH, qT, true,  endT))
-    array.push(m15s, newLvl(qL, eL, qT, false, endT))
+if showM15 and newM15 and inNyAt(qT) and not na(qH) and not na(eH)
+    dropSame5m(m15s, qH, true)
+    dropSame5m(m15s, qL, false)
+    array.push(m15s, newLvl(qH, eH, qT, true,  true, endT))
+    array.push(m15s, newLvl(qL, eL, qT, false, true, endT))
+
+// ── Ny 5m-candle inde i NY PRE (springes over hvis et 15m staar paa samme pris) ──
+if showM05 and newM05 and inNyAt(fT) and not na(fH) and not na(gH)
+    if not hasLive(m15s, fH, true, true)
+        array.push(m15s, newLvl(fH, gH, fT, true,  false, endT))
+    if not hasLive(m15s, fL, false, true)
+        array.push(m15s, newLvl(fL, gL, fT, false, false, endT))
 
 // ── Mens NY PRE koerer: taget paa ET af symbolerne = ugyldigt ──
-// Linjen stopper dér (eller slettes), ligesom sessionslinjerne.
-if showM15 and inNy and array.size(m15s) > 0
+// Linjen stopper dér (eller slettes).
+if inNy and array.size(m15s) > 0
     for i = 0 to array.size(m15s) - 1
         M15 m = array.get(m15s, i)
         bool aHit = m.isHi ? high >= m.aLvl : low <= m.aLvl
@@ -324,20 +379,21 @@ if showM15 and inNy and array.size(m15s) > 0
                 line.delete(m.ln)
                 label.delete(m.lb)
 
-// ── Skjul det 15m-niveau der ER NY PRE's high/low (den lilla linje) ──
-if showM15 and (inNy or isOpenBar) and array.size(m15s) > 0
+// ── Skjul det niveau der ER NY PRE's high/low (den lilla linje) ──
+if (inNy or isOpenBar) and array.size(m15s) > 0
     for i = 0 to array.size(m15s) - 1
         M15 m = array.get(m15s, i)
         if not m.dead
             bool isExtreme = m.isHi
                  ? (not na(nCur.hi) and math.abs(m.aLvl - nCur.hi) < tickHalf)
                  : (not na(nCur.lo) and math.abs(m.aLvl - nCur.lo) < tickHalf)
-            color c = isExtreme ? color.new(m15Col, 100) : m15Col
+            color base = m.is15 ? m15Col : m05Col
+            color c    = isExtreme ? color.new(base, 100) : base
             line.set_color(m.ln, c)
             label.set_textcolor(m.lb, c)
 
 // ── 15:31: vaek med dem igen. Det er kun en market open-ting. ──
-if showM15 and m15Gone and array.size(m15s) > 0
+if m15Gone and array.size(m15s) > 0
     while array.size(m15s) > 0
         M15 m = array.pop(m15s)
         line.delete(m.ln)
