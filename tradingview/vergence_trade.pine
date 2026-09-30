@@ -358,7 +358,7 @@ dbgRow(int r, string nm, float aL, int aM, float bL, int bM) =>
     table.cell(dbg, 4, r, fmtM(bM), text_color = c, text_size = size.small)
 
 if showDbg and barstate.islast
-    string cmpName = syminfo.ticker(cmpSym)
+    string cmpName = cmpSym
     table.cell(dbg, 0, 0, "Niveau",                         text_color = color.gray, text_size = size.small)
     table.cell(dbg, 1, 0, syminfo.ticker,                   text_color = color.gray, text_size = size.small)
     table.cell(dbg, 2, 0, "taget",                          text_color = color.gray, text_size = size.small)
