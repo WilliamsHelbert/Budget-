@@ -1,7 +1,12 @@
 //@version=6
 // =====================================================================
-//  Vergence - Session Sweep + Trade  (v1)
+//  Vergence - Session Sweep + Trade  (v1.1)
 //  ---------------------------------------------------------------
+//  NYT I v1.1
+//    - DEBUG-tabel nederst til hoejre: viser hvert session-niveau paa
+//      begge indeks, og hvornaar hvert indeks tog det. Viser ogsaa om
+//      ES-data overhovedet kommer igennem, og chartets timeframe.
+//
 //  MODELLEN
 //    BEGGE indeks (chartets symbol + sammenligningssymbolet) skal tage
 //    SAMME session liq (Asia, London eller NY PRE high/low). Hvert indeks
@@ -71,6 +76,8 @@ showBad   = input.bool(true, "Vis ugyldige Vergence (graa labels)", group = g4)
 boxMins   = input.int(15, "Trade-boksens bredde (minutter)", minval = 1, group = g4)
 keepTrades = input.int(20, "Antal trades beholdt", minval = 1, maxval = 100, group = g4)
 warn15s   = input.bool(true, "Advar hvis chartet ikke er 15s", group = g4)
+showDbg   = input.bool(true, "Vis debug-tabel", group = g4,
+     tooltip = "Viser niveauerne paa begge indeks og hvornaar de blev taget. Slaa fra naar alt virker.")
 
 g5 = "Farver"
 bearCol = input.color(color.red,    "Bearish Vergence", group = g5)
@@ -332,6 +339,46 @@ while array.size(trades) > keepTrades
     line.delete(t.ln)
     line.delete(t.mx)
     label.delete(t.lb)
+
+// ─────────────────── DEBUG-TABEL ───────────────────
+fmtM(int m) =>
+    na(m) ? "-" : str.format_time(m * 60000, "HH:mm", tz)
+
+fmtP(float p) =>
+    na(p) ? "na" : str.tostring(p, format.mintick)
+
+var table dbg = table.new(position.bottom_right, 5, 10, bgcolor = color.new(color.black, 15), border_width = 1)
+
+dbgRow(int r, string nm, float aL, int aM, float bL, int bM) =>
+    color c = not na(aM) and not na(bM) ? color.lime : (not na(aM) or not na(bM) ? color.orange : color.white)
+    table.cell(dbg, 0, r, nm,       text_color = c, text_size = size.small)
+    table.cell(dbg, 1, r, fmtP(aL), text_color = c, text_size = size.small)
+    table.cell(dbg, 2, r, fmtM(aM), text_color = c, text_size = size.small)
+    table.cell(dbg, 3, r, fmtP(bL), text_color = c, text_size = size.small)
+    table.cell(dbg, 4, r, fmtM(bM), text_color = c, text_size = size.small)
+
+if showDbg and barstate.islast
+    string cmpName = syminfo.ticker(cmpSym)
+    table.cell(dbg, 0, 0, "Niveau",                         text_color = color.gray, text_size = size.small)
+    table.cell(dbg, 1, 0, syminfo.ticker,                   text_color = color.gray, text_size = size.small)
+    table.cell(dbg, 2, 0, "taget",                          text_color = color.gray, text_size = size.small)
+    table.cell(dbg, 3, 0, cmpName,                          text_color = color.gray, text_size = size.small)
+    table.cell(dbg, 4, 0, "taget",                          text_color = color.gray, text_size = size.small)
+    dbgRow(1, "Asia high",   asia.aHi, asia.aHiM, asia.bHi, asia.bHiM)
+    dbgRow(2, "Asia low",    asia.aLo, asia.aLoM, asia.bLo, asia.bLoM)
+    dbgRow(3, "London high", lon.aHi,  lon.aHiM,  lon.bHi,  lon.bHiM)
+    dbgRow(4, "London low",  lon.aLo,  lon.aLoM,  lon.bLo,  lon.bLoM)
+    dbgRow(5, "NY PRE high", ny.aHi,   ny.aHiM,   ny.bHi,   ny.bHiM)
+    dbgRow(6, "NY PRE low",  ny.aLo,   ny.aLoM,   ny.bLo,   ny.bLoM)
+    table.cell(dbg, 0, 7, cmpName + "-data", text_color = color.gray, text_size = size.small)
+    table.cell(dbg, 1, 7, na(cmpCl) ? "MANGLER" : "OK  " + fmtP(cmpCl),
+         text_color = na(cmpCl) ? color.red : color.lime, text_size = size.small)
+    table.cell(dbg, 0, 8, "Chart TF", text_color = color.gray, text_size = size.small)
+    table.cell(dbg, 1, 8, str.tostring(timeframe.in_seconds()) + "s",
+         text_color = timeframe.in_seconds() == 15 ? color.lime : color.red, text_size = size.small)
+    table.cell(dbg, 0, 9, "Blokeret", text_color = color.gray, text_size = size.small)
+    table.cell(dbg, 1, 9, sig.hiSide and sig.loSide ? "JA (begge sider)" : "nej",
+         text_color = sig.hiSide and sig.loSide ? color.red : color.lime, text_size = size.small)
 
 var label tfWarn = na
 if warn15s and barstate.islast
