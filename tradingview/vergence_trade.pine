@@ -1,0 +1,351 @@
+//@version=6
+// =====================================================================
+//  Vergence - Session Sweep + Trade  (v1)
+//  ---------------------------------------------------------------
+//  MODELLEN
+//    BEGGE indeks (chartets symbol + sammenligningssymbolet) skal tage
+//    SAMME session liq (Asia, London eller NY PRE high/low). Hvert indeks
+//    tager sit EGET niveau. Et sweep kraever at prisen koerer mindst
+//    1 tick forbi niveauet.
+//
+//  5-MINUTTERS REGLEN
+//    Det andet sweep skal ske senest 5 minutter efter det foerste.
+//      NQ tager NY PRE high 15:31 -> ES skal tage det senest 15:36.
+//      ES tager det foerst 15:37 -> ugyldigt ("> 5 min").
+//
+//  ENTRY (samme minut som det sweep der fuldender Vergence)
+//    Det FOERSTE 15s-candle hvor begge indeks lukker i rigtig retning
+//    (short: begge bearish, long: begge bullish) afgoer tradet:
+//      * lukker chartets symbol tilbage forbi niveauet -> ENTRY
+//      * ellers                                        -> ugyldigt
+//    Sker det ikke inden minuttet er slut (fx sweep 15:30:15 -> sidste
+//    chance er 15:30:45-candlen), er der intet trade.
+//
+//  SL / 30-POINTS-STREGEN
+//    SL = minuttets high (short) / low (long), mindst minSL points.
+//    Stregen tegnes 30 points under toppen (short) / over bunden (long)
+//    af minut-candlen. Lukker entry-candlen paa forkert side af stregen,
+//    er SL over 3R, og tradet er ugyldigt ("SL > 30").
+//
+//  VINDUE: 15:30 til og med 15:59. Ingen 3-6-9-regel. Ingen graense
+//  paa antal trades - indikatoren markerer bare op.
+//
+//  Laeg den paa et 15s-chart.
+// =====================================================================
+indicator("Vergence - Session Sweep + Trade", overlay = true,
+     max_labels_count = 500, max_boxes_count = 500, max_lines_count = 500)
+
+// ─────────────────────────── INPUTS ───────────────────────────
+g1 = "Symboler"
+cmpSym = input.symbol("CME_MINI:ES1!", "Sammenlign med", group = g1,
+     tooltip = "Ligger du paa NQ, skal denne staa paa ES - og omvendt.")
+
+g2 = "Sessioner"
+tz       = input.string("Europe/Copenhagen", "Tidszone", group = g2)
+asiaSess = input.session("0200-0800", "Asia",   group = g2)
+lonSess  = input.session("0800-1400", "London", group = g2)
+nySess   = input.session("1400-1530", "NY PRE", group = g2)
+useAsia  = input.bool(true, "Asia",   group = g2, inline = "s")
+useLon   = input.bool(true, "London", group = g2, inline = "s")
+useNy    = input.bool(true, "NY PRE", group = g2, inline = "s")
+
+g3 = "Vindue"
+openHour = input.int(15, "Start - time",  minval = 0, maxval = 23, group = g3)
+openMin  = input.int(30, "Start - minut", minval = 0, maxval = 59, group = g3)
+endHour  = input.int(16, "Slut - time (til, ikke med)",  minval = 0, maxval = 23, group = g3)
+endMin   = input.int(0,  "Slut - minut (til, ikke med)", minval = 0, maxval = 59, group = g3,
+     tooltip = "16:00 betyder at 15:59 er det sidste minut med.")
+maxGap   = input.int(5, "Max minutter mellem de to sweeps", minval = 0, maxval = 60, group = g3,
+     tooltip = "NQ 15:31 og 5 -> ES skal tage niveauet senest 15:36.")
+
+g4 = "Trade"
+needBack      = input.bool(true, "Kraev luk tilbage forbi niveauet", group = g4)
+bothSideBlock = input.bool(true, "Bloker naar BEGGE sider er ramt", group = g4,
+     tooltip = "Er der siden market open taget baade en session-high og en session-low (paa et af indeksene), er retningen ikke ren, og nye setups blokeres.")
+minSL     = input.float(10, "Minimum SL (points) - 1R", minval = 0, group = g4)
+maxSL     = input.float(30, "Max SL (points) - 3R", minval = 1, group = g4,
+     tooltip = "Maales fra bunden (long) eller toppen (short) af det minut-candle entry ligger i.")
+showMaxLn = input.bool(true, "Tegn max SL-stregen", group = g4)
+blockMax  = input.bool(true, "Ugyldigt trade hvis SL > max", group = g4)
+showBad   = input.bool(true, "Vis ugyldige Vergence (graa labels)", group = g4)
+boxMins   = input.int(15, "Trade-boksens bredde (minutter)", minval = 1, group = g4)
+keepTrades = input.int(20, "Antal trades beholdt", minval = 1, maxval = 100, group = g4)
+warn15s   = input.bool(true, "Advar hvis chartet ikke er 15s", group = g4)
+
+g5 = "Farver"
+bearCol = input.color(color.red,    "Bearish Vergence", group = g5)
+bullCol = input.color(color.lime,   "Bullish Vergence", group = g5)
+slCol   = input.color(color.red,    "SL",               group = g5)
+mxCol   = input.color(color.yellow, "Max SL-streg",     group = g5)
+badCol  = input.color(color.gray,   "Ugyldig",          group = g5)
+
+// ───────── SAMMENLIGNINGSSYMBOLET ─────────
+[cmpHi, cmpLo, cmpOp, cmpCl] = request.security(cmpSym, timeframe.period, [high, low, open, close],
+     gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)
+
+bool bothBear = close < open and not na(cmpCl) and not na(cmpOp) and cmpCl < cmpOp
+bool bothBull = close > open and not na(cmpCl) and not na(cmpOp) and cmpCl > cmpOp
+
+float tick = syminfo.mintick
+int   minB = int(time / 60000)
+
+// ─────────────────── VINDUE + TID ───────────────────
+int  tMin  = hour(time, tz) * 60 + minute(time, tz)
+int  winS  = openHour * 60 + openMin
+int  winE  = endHour  * 60 + endMin
+bool inWin = tMin >= winS and tMin < winE
+int  dNow  = dayofmonth(time, tz)
+
+int  mn = minute(time, tz)
+var float m1Hi = na
+var float m1Lo = na
+bool newMin = mn != mn[1]
+m1Hi := newMin ? high : math.max(nz(m1Hi, high), high)
+m1Lo := newMin ? low  : math.min(nz(m1Lo, low),  low)
+
+int  aT = time(timeframe.period, asiaSess, tz)
+int  lT = time(timeframe.period, lonSess,  tz)
+int  nT = time(timeframe.period, nySess,   tz)
+
+bool aOn = not na(aT)
+bool lOn = not na(lT)
+bool nOn = not na(nT)
+
+bool aStart = aOn and na(aT[1])
+bool lStart = lOn and na(lT[1])
+bool nStart = nOn and na(nT[1])
+
+// ─────────────────────────── TYPER ───────────────────────────
+// a = chartets symbol, b = sammenligningssymbolet.
+// *M = minuttet (minB) hvor niveauet blev taget. na = uroert.
+type Lvl
+    float aHi    = na
+    float aLo    = na
+    float bHi    = na
+    float bLo    = na
+    int   aHiM   = na
+    int   aLoM   = na
+    int   bHiM   = na
+    int   bLoM   = na
+    bool  hiDone = false
+    bool  loDone = false
+
+// hiSide/loSide: er der taget en session-high/-low siden market open?
+type Sig
+    bool  fired   = false
+    bool  isShort = false
+    float lvl     = na
+    string src    = ""
+    bool  hiSide  = false
+    bool  loSide  = false
+
+type Trade
+    box   slB = na
+    line  ln  = na
+    line  mx  = na
+    label lb  = na
+
+// ─────────────────────────── FUNKTIONER ───────────────────────────
+build(Lvl s, bool isStart) =>
+    s.aHi    := isStart ? high  : math.max(s.aHi, high)
+    s.aLo    := isStart ? low   : math.min(s.aLo, low)
+    s.bHi    := isStart ? cmpHi : (na(cmpHi) ? s.bHi : math.max(s.bHi, cmpHi))
+    s.bLo    := isStart ? cmpLo : (na(cmpLo) ? s.bLo : math.min(s.bLo, cmpLo))
+    if isStart
+        s.aHiM   := na
+        s.aLoM   := na
+        s.bHiM   := na
+        s.bLoM   := na
+        s.hiDone := false
+        s.loDone := false
+
+badLabel(float y, bool isHi, string txt, string tip) =>
+    if showBad
+        label lb = label.new(time, y, txt, xloc = xloc.bar_time,
+             style = isHi ? label.style_label_down : label.style_label_up,
+             color = color.new(badCol, 30), textcolor = color.white, size = size.small)
+        label.set_tooltip(lb, tip)
+
+// High-siden: begge indeks skal tage deres eget high, max maxGap min imellem.
+checkHi(Lvl s, Sig g, string nm, bool ok) =>
+    if ok and not s.hiDone and not na(s.aHi) and not na(s.bHi)
+        if na(s.aHiM) and high >= s.aHi + tick
+            s.aHiM := minB
+            g.hiSide := g.hiSide or tMin >= winS
+        if na(s.bHiM) and not na(cmpHi) and cmpHi >= s.bHi + tick
+            s.bHiM := minB
+            g.hiSide := g.hiSide or tMin >= winS
+        if not na(s.aHiM) and not na(s.bHiM)
+            s.hiDone := true
+            int gap = math.abs(s.aHiM - s.bHiM)
+            if inWin and gap <= maxGap
+                g.fired   := true
+                g.isShort := true
+                g.lvl     := s.aHi
+                g.src     := nm
+                label lb = label.new(time, s.aHi, "VRG", xloc = xloc.bar_time,
+                     style = label.style_label_down, color = color.new(bearCol, 15),
+                     textcolor = color.white, size = size.small)
+                label.set_tooltip(lb, nm + "-high taget af begge indeks (" + str.tostring(gap) + " min imellem)")
+            else if inWin
+                badLabel(s.aHi, true, "VRG > " + str.tostring(maxGap) + " min",
+                     nm + "-high: " + str.tostring(gap) + " min mellem de to sweeps")
+
+// Low-siden: spejlvendt.
+checkLo(Lvl s, Sig g, string nm, bool ok) =>
+    if ok and not s.loDone and not na(s.aLo) and not na(s.bLo)
+        if na(s.aLoM) and low <= s.aLo - tick
+            s.aLoM := minB
+            g.loSide := g.loSide or tMin >= winS
+        if na(s.bLoM) and not na(cmpLo) and cmpLo <= s.bLo - tick
+            s.bLoM := minB
+            g.loSide := g.loSide or tMin >= winS
+        if not na(s.aLoM) and not na(s.bLoM)
+            s.loDone := true
+            int gap = math.abs(s.aLoM - s.bLoM)
+            if inWin and gap <= maxGap
+                g.fired   := true
+                g.isShort := false
+                g.lvl     := s.aLo
+                g.src     := nm
+                label lb = label.new(time, s.aLo, "VRG", xloc = xloc.bar_time,
+                     style = label.style_label_up, color = color.new(bullCol, 15),
+                     textcolor = color.black, size = size.small)
+                label.set_tooltip(lb, nm + "-low taget af begge indeks (" + str.tostring(gap) + " min imellem)")
+            else if inWin
+                badLabel(s.aLo, false, "VRG > " + str.tostring(maxGap) + " min",
+                     nm + "-low: " + str.tostring(gap) + " min mellem de to sweeps")
+
+// ─────────────────── STATE ───────────────────
+var Lvl asia = Lvl.new()
+var Lvl lon  = Lvl.new()
+var Lvl ny   = Lvl.new()
+var Sig sig  = Sig.new()
+
+sig.fired := false
+
+var int lastOpenDay = na
+bool isOpenBar = tMin >= winS and nz(lastOpenDay, -1) != dNow
+if isOpenBar
+    lastOpenDay := dNow
+    sig.hiSide  := false
+    sig.loSide  := false
+
+if aOn
+    build(asia, aStart)
+if lOn
+    build(lon, lStart)
+if nOn
+    build(ny, nStart)
+
+// Et niveau kan foerst sweepes naar dets session er slut.
+checkHi(asia, sig, "Asia",   useAsia and not aOn)
+checkLo(asia, sig, "Asia",   useAsia and not aOn)
+checkHi(lon,  sig, "London", useLon  and not lOn)
+checkLo(lon,  sig, "London", useLon  and not lOn)
+checkHi(ny,   sig, "NY PRE", useNy   and not nOn)
+checkLo(ny,   sig, "NY PRE", useNy   and not nOn)
+
+bool vrgBear = sig.fired and sig.isShort
+bool vrgBull = sig.fired and not sig.isShort
+
+// ═════════════════════ TRADES ═════════════════════
+var bool   armed    = false
+var bool   armShort = false
+var float  armLvl   = na
+var string armSrc   = ""
+var int    armMinB  = na
+var line   mxLn     = na
+
+var array<Trade> trades = array.new<Trade>()
+
+bool entLong  = false
+bool entShort = false
+
+bool sidesOK = not bothSideBlock or not (sig.hiSide and sig.loSide)
+
+if sig.fired and not armed
+    if sidesOK
+        armed    := true
+        armShort := sig.isShort
+        armLvl   := sig.lvl
+        armSrc   := sig.src
+        armMinB  := minB
+    else
+        badLabel(sig.lvl, sig.isShort, "VRG blokeret", "Baade en high- og en low-side er taget siden market open")
+
+bool sameMin = minB == armMinB
+bool dirOK   = armShort ? bothBear : bothBull
+bool backOK  = not needBack or (armShort ? close < armLvl : close > armLvl)
+
+// ── MAX SL-STREGEN: 30 points fra minut-candlens top/bund ──
+float mxLvl = armShort ? m1Hi - maxSL : m1Lo + maxSL
+bool  slOK  = not blockMax or (armShort ? close >= mxLvl : close <= mxLvl)
+if armed and sameMin and showMaxLn
+    int mS = armMinB * 60000
+    if na(mxLn)
+        mxLn := line.new(mS, mxLvl, mS + 60000, mxLvl, xloc = xloc.bar_time, color = mxCol, width = 2)
+    else
+        line.set_y1(mxLn, mxLvl)
+        line.set_y2(mxLn, mxLvl)
+
+// ── FOERSTE 15s-luk i rigtig retning afgoer tradet ──
+if armed and barstate.isconfirmed and sameMin and dirOK
+    armed := false
+    if not backOK
+        badLabel(close, armShort, "Ingen luk tilbage", "Foerste luk i rigtig retning lukkede ikke tilbage forbi " + armSrc)
+    else if not slOK
+        mxLn := na     // stregen bliver staaende, saa man kan se hvorfor
+        badLabel(close, armShort, "SL > " + str.tostring(maxSL, "#"), "SL over " + str.tostring(maxSL, "#") + " points fra minuttets top/bund")
+    else
+        entShort := armShort
+        entLong  := not armShort
+        float sl   = armShort ? math.max(m1Hi, close + minSL) : math.min(m1Lo, close - minSL)
+        int   rEnd = time + boxMins * 60000
+        Trade t = Trade.new()
+        t.slB := box.new(time, close, rEnd, sl, xloc = xloc.bar_time,
+             border_color = slCol, border_width = 2, bgcolor = color.new(slCol, 72))
+        t.ln  := line.new(time, close, rEnd, close, xloc = xloc.bar_time,
+             color = color.white, width = 2, style = line.style_dashed)
+        t.mx  := mxLn
+        mxLn  := na
+        t.lb  := label.new(rEnd, close,
+             "VRG " + (armShort ? "SHORT" : "LONG") + " (" + armSrc + ")   SL "
+             + str.tostring(math.abs(close - sl), "#.##") + "p",
+             xloc = xloc.bar_time, style = label.style_label_left,
+             color = color.new(armShort ? bearCol : bullCol, 10),
+             textcolor = armShort ? color.white : color.black, size = size.normal)
+        array.push(trades, t)
+
+// Minuttet er gaaet uden et luk i rigtig retning -> intet trade
+if armed and not sameMin
+    armed := false
+if armed and bothSideBlock and sig.hiSide and sig.loSide
+    armed := false
+if not armed and not na(mxLn)
+    line.delete(mxLn)
+    mxLn := na
+
+while array.size(trades) > keepTrades
+    Trade t = array.shift(trades)
+    box.delete(t.slB)
+    line.delete(t.ln)
+    line.delete(t.mx)
+    label.delete(t.lb)
+
+var label tfWarn = na
+if warn15s and barstate.islast
+    label.delete(tfWarn)
+    tfWarn := timeframe.in_seconds() != 15 ? label.new(bar_index, high,
+         "Laeg chartet paa 15s - entry laeses paa 15s-candles",
+         color = color.orange, textcolor = color.black, style = label.style_label_down, size = size.small) : na
+
+plotshape(entLong,  "Vergence LONG",  style = shape.triangleup,
+     location = location.belowbar, color = bullCol, size = size.normal)
+plotshape(entShort, "Vergence SHORT", style = shape.triangledown,
+     location = location.abovebar, color = bearCol, size = size.normal)
+
+alertcondition(vrgBear,  "Bearish Vergence", "Bearish Vergence - begge indeks tog session-high")
+alertcondition(vrgBull,  "Bullish Vergence", "Bullish Vergence - begge indeks tog session-low")
+alertcondition(entLong,  "Vergence LONG",    "Vergence long entry")
+alertcondition(entShort, "Vergence SHORT",   "Vergence short entry")
