@@ -4,8 +4,7 @@
 //  ---------------------------------------------------------------
 //  NYT I v2.2
 //    - Stoerre boks (tekststoerrelse kan vaelges).
-//    - "SMT"-labelen sidder paa det niveau der blev swept, ikke paa
-//      entry-candlens high/low.
+//    - "SMT"-labelen sidder oven paa entry-candlen (short) / under (long).
 //    - BE i boksen viser kun HVILKET niveau (fx "0.75" eller "NY PRE low").
 //
 //  NYT I v2.1
@@ -564,7 +563,7 @@ if ok
 
     // ── Lille markering paa chartet ──
     color c = sh ? shortCol : longCol
-    label lb = label.new(time, hit.lvl, "SMT", xloc = xloc.bar_time,
+    label lb = label.new(time, sh ? high : low, "SMT", xloc = xloc.bar_time,
          style = sh ? label.style_label_down : label.style_label_up,
          color = color.new(c, 10), textcolor = sh ? color.white : color.black, size = size.small)
     label.set_tooltip(lb, (sh ? "SHORT - " : "LONG - ") + hit.src + " swept (" + hit.who + ")")
