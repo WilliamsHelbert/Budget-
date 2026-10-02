@@ -1,7 +1,13 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v2.1)
+//  Sweep Trade (SMT)  (v2.2)
 //  ---------------------------------------------------------------
+//  NYT I v2.2
+//    - Stoerre boks (tekststoerrelse kan vaelges).
+//    - "SMT"-labelen sidder paa det niveau der blev swept, ikke paa
+//      entry-candlens high/low.
+//    - BE i boksen viser kun HVILKET niveau (fx "0.75" eller "NY PRE low").
+//
 //  NYT I v2.1
 //    - "Bloker resten af dagen" er SLAAET FRA som standard. Kun samme
 //      minut goer et trade ugyldigt.
@@ -86,7 +92,13 @@ beCol    = input.color(color.orange, "BE-linje", group = g5)
 beMins   = input.int(15, "BE-linjens laengde (minutter)", minval = 1, group = g5)
 boxPosS  = input.string("Nederst hoejre", "Boksens placering",
      options = ["Nederst hoejre", "Nederst venstre", "Oeverst hoejre", "Oeverst venstre"], group = g5)
+boxSizeS = input.string("Normal", "Boksens tekststoerrelse", options = ["Lille", "Normal", "Stor"], group = g5)
 warn15s  = input.bool(true, "Advar hvis chartet ikke er 15s", group = g5)
+
+boxSize = switch boxSizeS
+    "Lille" => size.small
+    "Stor"  => size.large
+    => size.normal
 
 boxPos = switch boxPosS
     "Nederst venstre" => position.bottom_left
@@ -552,7 +564,7 @@ if ok
 
     // ── Lille markering paa chartet ──
     color c = sh ? shortCol : longCol
-    label lb = label.new(time, sh ? high : low, "SMT", xloc = xloc.bar_time,
+    label lb = label.new(time, hit.lvl, "SMT", xloc = xloc.bar_time,
          style = sh ? label.style_label_down : label.style_label_up,
          color = color.new(c, 10), textcolor = sh ? color.white : color.black, size = size.small)
     label.set_tooltip(lb, (sh ? "SHORT - " : "LONG - ") + hit.src + " swept (" + hit.who + ")")
@@ -565,8 +577,7 @@ if ok
     bxStatus := sh ? "SHORT" : "LONG"
     bxCol    := c
     bxLvl    := hit.src + " (" + hit.who + ")"
-    bxBE     := not showBE ? "" : (na(be) ? "-" : beSrc + "  " + str.tostring(be, format.mintick)
-                 + "  (" + str.tostring(math.abs(px - be), "#.##") + "p)")
+    bxBE     := not showBE ? "" : (na(be) ? "-" : beSrc)
     bxTime   := str.format_time(time, "HH:mm:ss", tz)
     tStatus  := bxStatus
     tCol     := bxCol
@@ -580,14 +591,14 @@ var table bx = table.new(boxPos, 2, 4, bgcolor = color.new(color.black, 20), bor
 if barstate.islast
     table.clear(bx, 0, 0, 1, 3)
     if bxStatus != ""
-        table.cell(bx, 0, 0, bxStatus, text_color = bxCol, text_size = size.small)
-        table.cell(bx, 1, 0, bxTime,   text_color = color.gray, text_size = size.small)
+        table.cell(bx, 0, 0, bxStatus, text_color = bxCol, text_size = boxSize)
+        table.cell(bx, 1, 0, bxTime,   text_color = color.gray, text_size = boxSize)
         if bxLvl != ""
-            table.cell(bx, 0, 1, "Swept", text_color = color.gray,  text_size = size.small)
-            table.cell(bx, 1, 1, bxLvl,   text_color = color.white, text_size = size.small)
+            table.cell(bx, 0, 1, "Swept", text_color = color.gray,  text_size = boxSize)
+            table.cell(bx, 1, 1, bxLvl,   text_color = color.white, text_size = boxSize)
         if bxBE != ""
-            table.cell(bx, 0, 2, "BE",  text_color = color.gray,  text_size = size.small)
-            table.cell(bx, 1, 2, bxBE,  text_color = beCol,       text_size = size.small)
+            table.cell(bx, 0, 2, "BE",  text_color = color.gray,  text_size = boxSize)
+            table.cell(bx, 1, 2, bxBE,  text_color = beCol,       text_size = boxSize)
 
 bool anySweep = inWin and hit.swTxt != "" and not mBad and not dayBad
 alertcondition(anySweep, "Mulighed for SMT", "Mulighed for SMT - et niveau er swept")
