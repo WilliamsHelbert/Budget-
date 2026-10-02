@@ -1,7 +1,13 @@
 //@version=6
 // =====================================================================
-//  EQ - Equilibrium Tracker  (v15)
+//  EQ - Equilibrium Tracker  (v16)
 //  ---------------------------------------------------------------
+//  NYT I v16
+//    - En BRUGT (frossen) EQ fjernes, naar prisen har closet helt
+//      igennem den - altsaa et close over boksens top eller under dens
+//      bund. Den forsvinder 1 minut efter det close (kan aendres).
+//      Saa sidder der ikke gamle smaa EQ'er inde mellem candlesne.
+//
 //  NYT I v15
 //    - Kun det kvarter der ligger LAENGST fra ankeret er lysere:
 //        Bullish EQ (anker i bunden, vokser op): 0.75-1 (toppen) lys groen
@@ -78,6 +84,9 @@ useBear   = input.bool(true, "Vis bearish EQ (vokser nedad)", group = g2)
 useBull   = input.bool(true, "Vis bullish EQ (vokser opad)",  group = g2)
 keepLast  = input.bool(true, "Vis sidste brugte EQ naar ingen er live", group = g2,
      tooltip = "Gaelder hver retning for sig. Er der en live EQ i samme retning, vises den brugte ikke. Slaa fra for aldrig at vise brugte EQ'er.")
+killThru  = input.bool(true, "Fjern brugt EQ naar prisen har closet igennem den", group = g2,
+     tooltip = "Et close over toppen eller under bunden af en brugt EQ-boks. Den fjernes efter ventetiden nedenfor.")
+killMins  = input.int(1, "Ventetid foer den fjernes (minutter)", minval = 0, maxval = 30, group = g2)
 warnTF    = input.bool(true, "Advar hvis chartet er groevere end oprettelses-TF", group = g2)
 
 g4 = "Market open"
@@ -233,6 +242,9 @@ var float bLow     = na     // nyeste laveste low
 var EqDraw bCur    = na     // den live EQ
 var EqDraw bLast   = na     // den senest brugte (frosne) EQ
 var bool  bActive  = false
+var float bLHi     = na     // den brugtes top
+var float bLLo     = na     // den brugtes bund
+var int   bKillT   = na     // fjernes fra dette tidspunkt
 
 // ═══════════════════════ STATE: BULLISH ═══════════════════════
 var float lAnchor  = na     // 1m-candlens low (fast)
@@ -241,6 +253,9 @@ var float lHigh    = na     // nyeste hoejeste high
 var EqDraw lCur    = na
 var EqDraw lLast   = na
 var bool  lActive  = false
+var float lLHi     = na
+var float lLLo     = na
+var int   lKillT   = na
 
 // ═══════════════ NULSTILLING VED MARKET OPEN ═══════════════
 // Koeres foerst, saa dagens foerste oprettelses-candle tegner paa et
@@ -280,7 +295,10 @@ if bActive
     if barstate.isconfirmed and high >= eq
         delDraw(bLast)
         if keepLast
-            bLast := bCur
+            bLast  := bCur
+            bLHi   := bAnchor
+            bLLo   := bLow
+            bKillT := na
         else
             delDraw(bCur)
             bLast := na
@@ -308,7 +326,10 @@ if lActive
     if barstate.isconfirmed and low <= eq
         delDraw(lLast)
         if keepLast
-            lLast := lCur
+            lLast  := lCur
+            lLHi   := lHigh
+            lLLo   := lAnchor
+            lKillT := na
         else
             delDraw(lCur)
             lLast := na
@@ -324,6 +345,22 @@ if useBull and bullTrig and not lActive
     delDraw(lLast)
     lLast    := na
     lCur     := newDraw(lAnchorT, time, lHigh, lAnchor, true)
+
+// ═══════════ BRUGT EQ: FJERN NAAR PRISEN HAR CLOSET IGENNEM ═══════════
+if killThru and not na(bLast)
+    if na(bKillT) and barstate.isconfirmed and (close > bLHi or close < bLLo)
+        bKillT := time + killMins * 60000
+    if not na(bKillT) and time >= bKillT
+        delDraw(bLast)
+        bLast  := na
+        bKillT := na
+if killThru and not na(lLast)
+    if na(lKillT) and barstate.isconfirmed and (close > lLHi or close < lLLo)
+        lKillT := time + killMins * 60000
+    if not na(lKillT) and time >= lKillT
+        delDraw(lLast)
+        lLast  := na
+        lKillT := na
 
 // ──────── Advarsel hvis chartet er groevere end oprettelses-TF ────────
 var label tfLabel = na
