@@ -115,6 +115,8 @@ g5 = "Visning"
 bearCol  = input.color(color.red,    "Short", group = g5)
 bullCol  = input.color(color.lime,   "Long",  group = g5)
 mxCol    = input.color(color.red, "Max SL-streg", group = g5)
+mxKeepS  = input.int(15, "Max SL-stregen bliver staaende efter entry (sekunder)", minval = 0, maxval = 300, group = g5,
+     tooltip = "Regnet fra entry-candlens close. 15 = hele den foelgende 15s-candle.")
 mxAhead  = input.int(2, "Max SL-stregen raekker frem (minutter)", minval = 0, maxval = 15, group = g5,
      tooltip = "Stregen starter ved signalet og raekker saa mange minutter frem fra den aktuelle candle, saa den er let at se.")
 beCol    = input.color(color.orange, "BE-linje", group = g5)
@@ -614,7 +616,7 @@ var line   mxLn     = na
 // Stregen slettes 1 candle efter entry
 var line   mxDel    = na
 var int    mxDelT   = na
-if not na(mxDel) and time > mxDelT
+if not na(mxDel) and (barstate.isrealtime ? timenow : time) >= mxDelT
     line.delete(mxDel)
     mxDel := na
 
@@ -786,7 +788,7 @@ if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
             array.push(minBoxes, oTpF)
         oTime  := str.format_time(time, "HH:mm:ss", tz)
         mxDel  := mxLn     // slettes paa naeste candle
-        mxDelT := time
+        mxDelT := time_close + mxKeepS * 1000
         mxLn   := na
 
         // ── Boksen ──

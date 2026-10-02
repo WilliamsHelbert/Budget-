@@ -109,6 +109,8 @@ maxSL     = input.float(30, "Max SL (points) - 3R", minval = 1, group = g7,
 blockMax  = input.bool(true, "Ugyldigt trade hvis SL > max", group = g7)
 showMaxLn = input.bool(true, "Tegn max SL-stregen", group = g7)
 mxCol     = input.color(color.red, "Max SL-streg", group = g7)
+mxKeepS  = input.int(15, "Max SL-stregen bliver staaende efter entry (sekunder)", minval = 0, maxval = 300, group = g7,
+     tooltip = "Regnet fra entry-candlens close. 15 = hele den foelgende 15s-candle.")
 mxAhead  = input.int(2, "Max SL-stregen raekker frem (minutter)", minval = 0, maxval = 15, group = g7,
      tooltip = "Stregen starter ved signalet og raekker saa mange minutter frem fra den aktuelle candle, saa den er let at se.")
 tpMin  = input.float(35, "TP mindst (points)", minval = 0, group = g7)
@@ -572,12 +574,12 @@ if not na(smx) and smxM == minB
 // Trade: stregen slettes 1 candle efter entry. SL > max: den bliver staaende.
 var line smxDel  = na
 var int  smxDelT = na
-if not na(smxDel) and time > smxDelT
+if not na(smxDel) and (barstate.isrealtime ? timenow : time) >= smxDelT
     line.delete(smxDel)
     smxDel := na
 if not na(smx) and smxM == minB and hit.fired and not mBad and not dayBad
     smxDel  := smx
-    smxDelT := time
+    smxDelT := time_close + mxKeepS * 1000
     smx     := na
 if not na(smx) and smxM == minB and hit.slBad
     array.push(minLines, smx)
