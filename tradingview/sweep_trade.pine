@@ -1,6 +1,13 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v2.3)
+//  Sweep Trade (SMT)  (v2.4)
+//  ---------------------------------------------------------------
+//  NYT I v2.4
+//    - TP: det naermeste af EQ og session liq mellem 35 og 75 points.
+//      Ligger intet inden for, er TP 75 points. TP-linjen tegnes kun paa NQ.
+//    - SL = toppen (short) / bunden (long) af 1m-candlen ved entry - fast.
+//    - Gul max SL-streg (30 points) som paa Vergence. Lukker 15s-candlen
+//      paa forkert side af den, er SL over 30 og der er intet trade.
 //  ---------------------------------------------------------------
 //  NYT I v2.3
 //    - SL (minuttets high/low, min 10p) og TP (naermeste session liq
@@ -90,9 +97,15 @@ beMax   = input.float(50, "BE hoejst (points) fra entry", minval = 1, group = g4
 
 g7 = "SL / TP"
 minSL  = input.float(10, "Minimum SL (points)", minval = 0, group = g7)
-tpMinR = input.float(3.5, "TP mindst (R)", minval = 0, group = g7)
-tpMaxR = input.float(7.5, "TP hoejst / fallback (R)", minval = 0.5, group = g7,
-     tooltip = "TP = naermeste session liq (som chartet ikke har taget) mellem TP mindst og TP hoejst. Findes ingen, bruges TP hoejst. SL = minuttets high (short) / low (long), mindst Minimum SL.")
+maxSL     = input.float(30, "Max SL (points) - 3R", minval = 1, group = g7,
+     tooltip = "Maales fra toppen (short) / bunden (long) af det 1m-candle entry sker i. Er SL stoerre, er tradet ugyldigt.")
+blockMax  = input.bool(true, "Ugyldigt trade hvis SL > max", group = g7)
+showMaxLn = input.bool(true, "Tegn max SL-stregen", group = g7)
+mxCol     = input.color(color.yellow, "Max SL-streg", group = g7)
+tpMin  = input.float(35, "TP mindst (points)", minval = 0, group = g7)
+tpMax  = input.float(75, "TP max / fallback (points)", minval = 1, group = g7,
+     tooltip = "TP = det naermeste af EQ og session liq, der ligger mellem TP mindst og TP max fra entry. Ligger intet inden for, bruges TP max. SL = toppen (short) / bunden (long) af det 1m-candle entry sker i - fast, kun flyttet til entry ved BE.")
+tpCol  = input.color(color.teal, "TP-linje", group = g7)
 beEq    = input.bool(true, "EQ og 0.25 / 0.75",        group = g4)
 beSess  = input.bool(true, "Session liq",              group = g4)
 be15    = input.bool(true, "15m-niveauer",             group = g4)
@@ -126,7 +139,7 @@ boxPos = switch boxPosS
 
 string aName  = syminfo.ticker
 string bName  = str.contains(cmpSym, ":") ? array.get(str.split(cmpSym, ":"), 1) : cmpSym
-bool   showBE = str.contains(syminfo.ticker, beSym)
+bool   showBE = str.contains(syminfo.ticker, beSym)   // BE / TP tegnes kun paa NQ
 
 float tick     = syminfo.mintick
 float tickHalf = tick / 2
@@ -195,6 +208,7 @@ type Hit
     string src     = ""
     string who     = ""
     bool   noDir   = false   // close tilbage, men ikke begge samme vej
+    bool   slBad   = false   // close tilbage, men SL > max
     bool   swHi    = false   // et high-niveau blev swept i vinduet
     bool   swLo    = false   // et low-niveau blev swept i vinduet
     string swTxt   = ""
@@ -254,7 +268,12 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h) =>
                 bool bBack = not st.bDone and st.bM == minB and not na(bClose) and (isHi ? bClose < bL : bClose > bL)
                 if not dirOK and (aBack or bBack)
                     h.noDir := true
-                if dirOK and (aBack or bBack)
+                bool slOK = not blockMax or (isHi ? m1Hi - close <= maxSL : close - m1Lo <= maxSL)
+                if dirOK and (aBack or bBack) and not slOK
+                    h.slBad  := true
+                    st.aDone := true
+                    st.bDone := true
+                if dirOK and (aBack or bBack) and slOK
                     h.fired   := true
                     h.isShort := isHi
                     h.lvl     := aL
@@ -508,6 +527,37 @@ if not na(pendM) and pendM == minB and hit.noDir and not hit.fired
     bxStatus := "Close tilbage - men ikke begge samme vej"
     bxCol    := color.orange
 
+// Close tilbage, men SL ville vaere over max -> ugyldigt
+if not na(pendM) and pendM == minB and hit.slBad and not hit.fired
+    pendM    := na
+    bxStatus := "Ingen SMT - SL > " + str.tostring(maxSL, "#")
+    bxCol    := color.gray
+    bxBE     := ""
+
+// ── MAX SL-STREGEN: 30 points fra 1m-candlens top (short) / bund (long) ──
+var line smx   = na
+var bool smxSh = false
+var int  smxM  = na
+if inWin and hit.swTxt != "" and not mBad and not dayBad and hit.swHi != hit.swLo and showMaxLn
+    if na(smx) or smxM != minB
+        line.delete(smx)
+        smxSh := hit.swHi
+        smxM  := minB
+        float y0 = smxSh ? m1Hi - maxSL : m1Lo + maxSL
+        smx := line.new(minB * 60000, y0, minB * 60000 + 60000, y0, xloc = xloc.bar_time, color = mxCol, width = 2)
+if not na(smx) and smxM == minB
+    float y1 = smxSh ? m1Hi - maxSL : m1Lo + maxSL
+    line.set_y1(smx, y1)
+    line.set_y2(smx, y1)
+// Trade eller SL > max: stregen bliver staaende (slettes kun hvis minuttet bliver ugyldigt)
+if not na(smx) and smxM == minB and ((hit.fired and not mBad and not dayBad) or hit.slBad)
+    array.push(minLines, smx)
+    smx := na
+// Minuttet gik uden trade -> stregen vaek
+if not na(smx) and smxM != minB
+    line.delete(smx)
+    smx := na
+
 // Sweep mens dags-reglen blokerer -> vis det
 if inWin and hit.swTxt != "" and dayBad and not mBad
     bxStatus := "Blokeret - begge sider taget i dag"
@@ -549,6 +599,7 @@ var int    oT     = na
 var int    oM     = na
 var int    oBars  = 0
 var line   oBeLn  = na
+var line   oTpLn  = na
 var string oTime  = ""
 
 // Tradet blev slettet fordi minuttet blev ugyldigt
@@ -561,6 +612,7 @@ if oLive
     if hitSL or hitTP
         oLive := false
         line.set_x2(oBeLn, time)
+        line.set_x2(oTpLn, time)
         // Viser boksen stadig dette trade -> fjern den
         if bxTime == oTime and (bxStatus == "SHORT" or bxStatus == "LONG")
             bxStatus := ""
@@ -573,6 +625,7 @@ if oLive
             oSL    := oEntry
         // Linjen vokser 1 minut for hvert minut tradet er aabent
         line.set_x2(oBeLn, oT + (beMins + (minB - oM)) * 60000)
+        line.set_x2(oTpLn, oT + (beMins + (minB - oM)) * 60000)
         if barstate.isconfirmed
             oBars += 1
 
@@ -639,22 +692,43 @@ if ok
 
     // ── SL / TP ──
     float slX = sh ? math.max(m1Hi, px + minSL) : math.min(m1Lo, px - minSL)
-    float rsk = math.abs(px - slX)
     float tpX = na
+    string tpS = "75p"
+    // Kandidater: EQ (begge live EQ'er) og session liq som chartet ikke har taget
+    array<float>  tc = array.new<float>()
+    array<string> tn = array.new<string>()
+    if uAct
+        array.push(tc, (uBot + uTop) / 2)
+        array.push(tn, "EQ")
+    if dAct
+        array.push(tc, (dBot + dTop) / 2)
+        array.push(tn, "EQ")
     for i = 0 to 2
         Sess s  = i == 0 ? asia : (i == 1 ? lon : ny)
         St   st = sh ? s.lo : s.hi
-        float lv = sh ? s.aLo : s.aHi
-        float d  = na(lv) ? na : (sh ? px - lv : lv - px)
-        if not na(st) and not na(d) and not st.aTook and d >= tpMinR * rsk and d <= tpMaxR * rsk
-            if na(tpX) or d < math.abs(px - tpX)
-                tpX := lv
+        if not na(st) and not st.aTook
+            array.push(tc, sh ? s.aLo : s.aHi)
+            array.push(tn, (i == 0 ? "Asia" : (i == 1 ? "London" : "NY PRE")) + (sh ? " low" : " high"))
+    if array.size(tc) > 0
+        for i = 0 to array.size(tc) - 1
+            float cx = array.get(tc, i)
+            float d  = na(cx) ? na : (sh ? px - cx : cx - px)
+            if not na(d) and d >= tpMin and d <= tpMax and (na(tpX) or d < math.abs(px - tpX))
+                tpX := cx
+                tpS := array.get(tn, i)
     if na(tpX)
-        tpX := sh ? px - tpMaxR * rsk : px + tpMaxR * rsk
+        tpX := sh ? px - tpMax : px + tpMax
+
+    line tpL = na
+    if showBE
+        tpL := line.new(time, tpX, time + beMins * 60000, tpX, xloc = xloc.bar_time,
+             color = tpCol, width = 2, style = line.style_dashed)
+        array.push(minLines, tpL)
 
     // Nyt trade afloeser et evt. aabent
     if oLive
         line.set_x2(oBeLn, time)
+        line.set_x2(oTpLn, time)
     oLive  := true
     oShort := sh
     oEntry := px
@@ -666,13 +740,14 @@ if ok
     oM     := minB
     oBars  := 0
     oBeLn  := beL
+    oTpLn  := tpL
     oTime  := str.format_time(time, "HH:mm:ss", tz)
 
     // ── Boksen ──
     bxStatus := sh ? "SHORT" : "LONG"
     bxCol    := c
     bxLvl    := hit.src + " (" + hit.who + ")"
-    bxBE     := not showBE ? "" : (na(be) ? "-" : beSrc)
+    bxBE     := not showBE ? "" : (na(be) ? "-" : beSrc) + "    TP: " + tpS
     bxTime   := str.format_time(time, "HH:mm:ss", tz)
     tStatus  := bxStatus
     tCol     := bxCol
@@ -692,7 +767,7 @@ if barstate.islast
             table.cell(bx, 0, 1, "Swept", text_color = color.gray,  text_size = boxSize)
             table.cell(bx, 1, 1, bxLvl,   text_color = color.white, text_size = boxSize)
         if bxBE != ""
-            table.cell(bx, 0, 2, "BE",  text_color = color.gray,  text_size = boxSize)
+            table.cell(bx, 0, 2, "BE / TP",  text_color = color.gray,  text_size = boxSize)
             table.cell(bx, 1, 2, bxBE,  text_color = beCol,       text_size = boxSize)
 
 bool anySweep = inWin and hit.swTxt != "" and not mBad and not dayBad
