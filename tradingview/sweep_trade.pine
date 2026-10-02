@@ -109,6 +109,8 @@ maxSL     = input.float(30, "Max SL (points) - 3R", minval = 1, group = g7,
 blockMax  = input.bool(true, "Ugyldigt trade hvis SL > max", group = g7)
 showMaxLn = input.bool(true, "Tegn max SL-stregen", group = g7)
 mxCol     = input.color(color.yellow, "Max SL-streg", group = g7)
+mxAhead  = input.int(2, "Max SL-stregen raekker frem (minutter)", minval = 0, maxval = 15, group = g7,
+     tooltip = "Stregen starter ved signalet og raekker saa mange minutter frem fra den aktuelle candle, saa den er let at se.")
 tpMin  = input.float(35, "TP mindst (points)", minval = 0, group = g7)
 tpMax  = input.float(75, "TP max / fallback (points)", minval = 1, group = g7,
      tooltip = "TP = det naermeste af EQ og session liq, der ligger mellem TP mindst og TP max fra entry. Ligger intet inden for, bruges TP max. SL = toppen (short) / bunden (long) af det 1m-candle entry sker i - fast, kun flyttet til entry ved BE.")
@@ -561,12 +563,12 @@ if inWin and hit.swTxt != "" and not mBad and not dayBad and hit.swHi != hit.swL
         smxSh := hit.swHi
         smxM  := minB
         float y0 = smxSh ? m1Hi - maxSL : m1Lo + maxSL
-        smx := line.new(time, y0, time + timeframe.in_seconds() * 1000, y0, xloc = xloc.bar_time, color = mxCol, width = 2)
+        smx := line.new(time, y0, time + mxAhead * 60000, y0, xloc = xloc.bar_time, color = mxCol, width = 3)
 if not na(smx) and smxM == minB
     float y1 = smxSh ? m1Hi - maxSL : m1Lo + maxSL
     line.set_y1(smx, y1)
     line.set_y2(smx, y1)
-    line.set_x2(smx, time + timeframe.in_seconds() * 1000)
+    line.set_x2(smx, time + mxAhead * 60000)
 // Trade eller SL > max: stregen bliver staaende (slettes kun hvis minuttet bliver ugyldigt)
 if not na(smx) and smxM == minB and ((hit.fired and not mBad and not dayBad) or hit.slBad)
     array.push(minLines, smx)

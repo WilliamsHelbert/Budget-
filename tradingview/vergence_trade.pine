@@ -115,6 +115,8 @@ g5 = "Visning"
 bearCol  = input.color(color.red,    "Short", group = g5)
 bullCol  = input.color(color.lime,   "Long",  group = g5)
 mxCol    = input.color(color.yellow, "Max SL-streg", group = g5)
+mxAhead  = input.int(2, "Max SL-stregen raekker frem (minutter)", minval = 0, maxval = 15, group = g5,
+     tooltip = "Stregen starter ved signalet og raekker saa mange minutter frem fra den aktuelle candle, saa den er let at se.")
 beCol    = input.color(color.orange, "BE-linje", group = g5)
 beMins   = input.int(5, "BE-linjens start-laengde (minutter)", minval = 1, group = g5,
      tooltip = "Linjen vokser 1 minut for hvert minut tradet er aabent, og stopper der hvor SL eller TP bliver ramt.")
@@ -638,12 +640,12 @@ bool  slOK  = not blockMax or (armShort ? close >= mxLvl : close <= mxLvl)
 if armed and sameMin and showMaxLn
     int mS = armMinB * 60000
     if na(mxLn)
-        mxLn := line.new(time, mxLvl, time + timeframe.in_seconds() * 1000, mxLvl, xloc = xloc.bar_time, color = mxCol, width = 2)
+        mxLn := line.new(time, mxLvl, time + mxAhead * 60000, mxLvl, xloc = xloc.bar_time, color = mxCol, width = 3)
         array.push(minLines, mxLn)
     else
         line.set_y1(mxLn, mxLvl)
         line.set_y2(mxLn, mxLvl)
-        line.set_x2(mxLn, time + timeframe.in_seconds() * 1000)
+        line.set_x2(mxLn, time + mxAhead * 60000)
 
 // ── FOERSTE 15s-close i rigtig retning afgoer tradet ──
 if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
