@@ -1,6 +1,14 @@
 //@version=6
 // =====================================================================
-//  Vergence  (v2)
+//  Vergence  (v2.1)
+//  ---------------------------------------------------------------
+//  NYT I v2.1
+//    - SL (minuttets high/low, min 10p) og TP (naermeste session liq
+//      mellem 3.5R og 7.5R, ellers 7.5R) foelges efter entry.
+//    - Naar SL eller TP rammes, forsvinder boksen, og BE-linjen stopper
+//      paa den candle hvor det skete.
+//    - BE-linjen starter 5 min frem og vokser 1 min pr. minut tradet
+//      er aabent. BE flytter SL til entry (tidligst efter 2 15s-closes).
 //  ---------------------------------------------------------------
 //  NYT I v2 (samme stil som Sweep Trade / SMT)
 //    - Ingen store labels, ingen SL-boks og ingen debug-tabel.
@@ -74,6 +82,11 @@ g4 = "BE"
 beSym   = input.string("NQ", "Vis BE kun paa symbol der indeholder", group = g4)
 beMin   = input.float(2,  "BE mindst (points) fra entry", minval = 0, group = g4)
 beMax   = input.float(50, "BE hoejst (points) fra entry", minval = 1, group = g4)
+
+g7 = "SL / TP"
+tpMinR = input.float(3.5, "TP mindst (R)", minval = 0, group = g7)
+tpMaxR = input.float(7.5, "TP hoejst / fallback (R)", minval = 0.5, group = g7,
+     tooltip = "TP = naermeste session liq (som chartet ikke har taget) mellem TP mindst og TP hoejst. Findes ingen, bruges TP hoejst. SL = minuttets high (short) / low (long), mindst Minimum SL.")
 beEq    = input.bool(true, "EQ og 0.25 / 0.75",        group = g4)
 beSess  = input.bool(true, "Session liq",              group = g4)
 be15    = input.bool(true, "15m-niveauer",             group = g4)
@@ -84,7 +97,8 @@ bearCol  = input.color(color.red,    "Short", group = g5)
 bullCol  = input.color(color.lime,   "Long",  group = g5)
 mxCol    = input.color(color.yellow, "Max SL-streg", group = g5)
 beCol    = input.color(color.orange, "BE-linje", group = g5)
-beMins   = input.int(15, "BE-linjens laengde (minutter)", minval = 1, group = g5)
+beMins   = input.int(5, "BE-linjens start-laengde (minutter)", minval = 1, group = g5,
+     tooltip = "Linjen vokser 1 minut for hvert minut tradet er aabent, og stopper der hvor SL eller TP bliver ramt.")
 boxPosS  = input.string("Nederst midt", "Boksens placering",
      options = ["Nederst midt", "Nederst hoejre", "Nederst venstre", "Oeverst midt", "Oeverst hoejre", "Oeverst venstre"], group = g5,
      tooltip = "Sweep Trade-boksen ligger nederst til hoejre - saa ligger de ikke oven i hinanden.")
@@ -494,6 +508,46 @@ if not na(pendEnd) and minB > pendEnd
     bxBE     := tBE
     bxTime   := tTime
 
+// ═════════════════════ AABENT TRADE: BE / SL / TP ═════════════════════
+// Naar SL eller TP rammes: BE-linjen stopper dér, og boksen fjernes.
+var bool   oLive  = false
+var bool   oShort = false
+var float  oEntry = na
+var float  oSL    = na
+var float  oTP    = na
+var float  oBE    = na
+var bool   oBeHit = false
+var int    oT     = na
+var int    oM     = na
+var int    oBars  = 0
+var line   oBeLn  = na
+var string oTime  = ""
+
+// Tradet blev slettet fordi minuttet blev ugyldigt
+if oLive and mBad and oM == minB
+    oLive := false
+
+if oLive
+    bool hitSL = oShort ? high >= oSL : low  <= oSL
+    bool hitTP = oShort ? low  <= oTP : high >= oTP
+    if hitSL or hitTP
+        oLive := false
+        line.set_x2(oBeLn, time)
+        // Viser boksen stadig dette trade -> fjern den
+        if bxTime == oTime and (bxStatus == "SHORT" or bxStatus == "LONG")
+            bxStatus := ""
+        if tTime == oTime
+            tStatus := ""
+    else
+        // BE foerst efter at 2 15s-candles er lukket efter entry
+        if not oBeHit and not na(oBE) and oBars >= 2 and (oShort ? low <= oBE : high >= oBE)
+            oBeHit := true
+            oSL    := oEntry
+        // Linjen vokser 1 minut for hvert minut tradet er aabent
+        line.set_x2(oBeLn, oT + (beMins + (minB - oM)) * 60000)
+        if barstate.isconfirmed
+            oBars += 1
+
 // ═════════════════════ TRADE ═════════════════════
 var bool   armed    = false
 var bool   armShort = false
@@ -590,9 +644,42 @@ if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
              color = color.new(c, 10), textcolor = sh ? color.white : color.black, size = size.small)
         label.set_tooltip(lb, (sh ? "SHORT - " : "LONG - ") + armTxt)
         array.push(minLbls, lb)
+        line beL = na
         if showBE and not na(bc.v)
-            array.push(minLines, line.new(time, bc.v, time + beMins * 60000, bc.v, xloc = xloc.bar_time,
-                 color = beCol, width = 2, style = line.style_dashed))
+            beL := line.new(time, bc.v, time + beMins * 60000, bc.v, xloc = xloc.bar_time,
+                 color = beCol, width = 2, style = line.style_dashed)
+            array.push(minLines, beL)
+
+        // ── SL / TP ──
+        float slX = sh ? math.max(m1Hi, px + minSL) : math.min(m1Lo, px - minSL)
+        float rsk = math.abs(px - slX)
+        float tpX = na
+        for i = 0 to 2
+            Sess s  = i == 0 ? asia : (i == 1 ? lon : ny)
+            St   st = sh ? s.lo : s.hi
+            float lv = sh ? s.aLo : s.aHi
+            float d  = na(lv) ? na : (sh ? px - lv : lv - px)
+            if not na(st) and not na(d) and not st.aTook and d >= tpMinR * rsk and d <= tpMaxR * rsk
+                if na(tpX) or d < math.abs(px - tpX)
+                    tpX := lv
+        if na(tpX)
+            tpX := sh ? px - tpMaxR * rsk : px + tpMaxR * rsk
+
+        // Nyt trade afloeser et evt. aabent
+        if oLive
+            line.set_x2(oBeLn, time)
+        oLive  := true
+        oShort := sh
+        oEntry := px
+        oSL    := slX
+        oTP    := tpX
+        oBE    := bc.v
+        oBeHit := false
+        oT     := time
+        oM     := minB
+        oBars  := 0
+        oBeLn  := beL
+        oTime  := str.format_time(time, "HH:mm:ss", tz)
         mxLn := na     // stregen hoerer til tradet
 
         // ── Boksen ──
