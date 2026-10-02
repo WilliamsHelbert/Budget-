@@ -1,7 +1,13 @@
 //@version=6
 // =====================================================================
-//  EQ - Equilibrium Tracker  (v11)
+//  EQ - Equilibrium Tracker  (v12)
 //  ---------------------------------------------------------------
+//  NYT I v12
+//    - 0.25- og 0.75-linjerne er nu FULDE (ikke stiplede) og tykke.
+//      Farverne er modsat zonen de ligger i:
+//        0.75 (i premium, den groenne halvdel)  -> ROED
+//        0.25 (i discount, den roede halvdel)   -> GROEN
+//
 //  NYT I v11 (ift. v10):
 //    - 0.25- og 0.75-linjer i hver EQ-boks (stiplede). Kan slaas fra.
 //    - KUN DEN SIDSTE brugte EQ vises, og kun naar der IKKE er en live
@@ -49,7 +55,7 @@
 //  Laeg den paa 15s (finest oploesning) eller 1m. Groevere end 1m giver
 //  advarsel, for saa bliver vaekst og frysning for grovkornet.
 // =====================================================================
-indicator("EQ - Equilibrium Tracker", overlay = true, max_boxes_count = 500,
+indicator("Helbert Hjælpe Indikator (EQ)", overlay = true, max_boxes_count = 500,
      max_lines_count = 500, max_labels_count = 50)
 
 // ─────────────────────────── INPUTS ───────────────────────────
@@ -82,7 +88,9 @@ discountCol = input.color(color.new(color.red,   82), "Discount (nedre halvdel)"
 eqLineCol   = input.color(color.orange,               "EQ-linje (halvlinjen)",    group = g3)
 borderCol   = input.color(color.new(color.gray, 40),  "Kant",                     group = g3)
 showQt      = input.bool(true, "Vis 0.25- og 0.75-linjer", group = g3)
-qtLineCol   = input.color(color.new(color.orange, 30),  "0.25 / 0.75-linjer",      group = g3)
+q75Col      = input.color(color.red,   "0.75-linje (i premium)",  group = g3)
+q25Col      = input.color(color.green, "0.25-linje (i discount)", group = g3)
+qtWidth     = input.int(2, "Tykkelse 0.25 / 0.75", minval = 1, maxval = 4, group = g3)
 
 // ───────── OPRETTELSES-CANDLEN (repainter ikke) ─────────
 // Paa et FINERE chart end creationTF hentes den 1m-candle der lige er
@@ -149,8 +157,8 @@ newDraw(int x1, int x2, float hi, float lo) =>
     d.bot := box.new(x1, eq, x2, lo, xloc = xloc.bar_time, border_color = borderCol, bgcolor = discountCol)
     d.eq  := line.new(x1, eq, x2, eq, xloc = xloc.bar_time, color = eqLineCol, width = 2)
     if showQt
-        d.q25 := line.new(x1, lo + 0.25 * rg, x2, lo + 0.25 * rg, xloc = xloc.bar_time, color = qtLineCol, width = 1, style = line.style_dashed)
-        d.q75 := line.new(x1, lo + 0.75 * rg, x2, lo + 0.75 * rg, xloc = xloc.bar_time, color = qtLineCol, width = 1, style = line.style_dashed)
+        d.q25 := line.new(x1, lo + 0.25 * rg, x2, lo + 0.25 * rg, xloc = xloc.bar_time, color = q25Col, width = qtWidth, style = line.style_solid)
+        d.q75 := line.new(x1, lo + 0.75 * rg, x2, lo + 0.75 * rg, xloc = xloc.bar_time, color = q75Col, width = qtWidth, style = line.style_solid)
     d
 
 updDraw(EqDraw d, int x1, int x2, float hi, float lo) =>
