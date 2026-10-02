@@ -1,7 +1,15 @@
 //@version=6
 // =====================================================================
-//  EQ - Equilibrium Tracker  (v13)
+//  EQ - Equilibrium Tracker  (v14)
 //  ---------------------------------------------------------------
+//  NYT I v14
+//    - Boksen er delt i 4 kvarter. De to yderste (0-0.25 og 0.75-1)
+//      er lysere, de to inderste (0.25-0.5 og 0.5-0.75) er kraftigere.
+//      Oevre halvdel groen, nedre halvdel roed - ens for bullish og
+//      bearish EQ.
+//    - Fede linjer hele vejen paa 0, 0.25, 0.5 (EQ), 0.75 og 1.
+//      0 og 0.25 er roede, 0.75 og 1 er groenne, 0.5 er EQ-linjen.
+//
 //  NYT I v13
 //    - Kraftigere boks-farver (premium groen, discount roed).
 //    - 0.25- og 0.75-linjerne er fulde linjer i SAMME farve som zonen
@@ -84,14 +92,15 @@ sessTz         = input.string("Europe/Copenhagen", "Tidszone", group = g4,
      tooltip = "Tidszonen som klokkeslettet ovenfor laeses i. Europe/Copenhagen 15:30 = dansk aabning. Vaelg America/New_York 09:30 hvis du vil vaere immun over for at DST skifter paa forskellige datoer i EU og USA.")
 
 g3 = "Udseende"
-premiumCol  = input.color(color.new(color.green, 55), "Premium (oevre halvdel)",  group = g3)
-discountCol = input.color(color.new(color.red,   55), "Discount (nedre halvdel)", group = g3)
-eqLineCol   = input.color(color.orange,               "EQ-linje (halvlinjen)",    group = g3)
-borderCol   = input.color(color.new(color.gray, 40),  "Kant",                     group = g3)
-showQt      = input.bool(true, "Vis 0.25- og 0.75-linjer", group = g3)
-q75Col      = input.color(color.green, "0.75-linje (i premium)",  group = g3)
-q25Col      = input.color(color.red,   "0.25-linje (i discount)", group = g3)
-qtWidth     = input.int(1, "Tykkelse 0.25 / 0.75", minval = 1, maxval = 4, group = g3)
+upStrong   = input.color(color.new(color.green, 45), "Groen 0.5 - 0.75 (kraftig)", group = g3)
+upLight    = input.color(color.new(color.green, 70), "Groen 0.75 - 1 (lys)",       group = g3)
+dnStrong   = input.color(color.new(color.red,   45), "Roed 0.25 - 0.5 (kraftig)",  group = g3)
+dnLight    = input.color(color.new(color.red,   70), "Roed 0 - 0.25 (lys)",        group = g3)
+eqLineCol  = input.color(color.orange, "EQ-linje (0.5)",       group = g3)
+upLineCol  = input.color(color.green,  "Linjer 0.75 og 1",     group = g3)
+dnLineCol  = input.color(color.red,    "Linjer 0 og 0.25",     group = g3)
+showQt     = input.bool(true, "Vis linjerne 0 / 0.25 / 0.75 / 1", group = g3)
+qtWidth    = input.int(2, "Tykkelse linjer", minval = 1, maxval = 4, group = g3)
 
 // ───────── OPRETTELSES-CANDLEN (repainter ikke) ─────────
 // Paa et FINERE chart end creationTF hentes den 1m-candle der lige er
@@ -144,49 +153,76 @@ bgcolor(showOpenMarker and resetOnOpen and isOpenBar ? color.new(color.blue, 65)
 // hi/lo er boksens top og bund. For bearish: hi = anker, lo = nyeste low.
 // For bullish: hi = nyeste high, lo = anker.
 type EqDraw
-    box  top = na
-    box  bot = na
+    box  b1  = na    // 0    - 0.25  (roed, lys)
+    box  b2  = na    // 0.25 - 0.5   (roed, kraftig)
+    box  b3  = na    // 0.5  - 0.75  (groen, kraftig)
+    box  b4  = na    // 0.75 - 1     (groen, lys)
+    line l0  = na
+    line l25 = na
     line eq  = na
-    line q25 = na
-    line q75 = na
+    line l75 = na
+    line l1  = na
+
+mkBox(int x1, int x2, float top, float bot, color c) =>
+    box.new(x1, top, x2, bot, xloc = xloc.bar_time, border_color = color.new(c, 100), bgcolor = c)
+
+mkLine(int x1, int x2, float y, color c, int w) =>
+    line.new(x1, y, x2, y, xloc = xloc.bar_time, color = c, width = w)
+
+setBox(box b, int x2, float top, float bot) =>
+    box.set_top(b, top)
+    box.set_bottom(b, bot)
+    box.set_right(b, x2)
+
+setLine(line l, int x1, int x2, float y) =>
+    if not na(l)
+        line.set_xy1(l, x1, y)
+        line.set_xy2(l, x2, y)
 
 newDraw(int x1, int x2, float hi, float lo) =>
-    float eq = (hi + lo) / 2
-    float rg = hi - lo
+    float rg  = hi - lo
+    float p25 = lo + 0.25 * rg
+    float p50 = lo + 0.50 * rg
+    float p75 = lo + 0.75 * rg
     EqDraw d = EqDraw.new()
-    d.top := box.new(x1, hi, x2, eq, xloc = xloc.bar_time, border_color = borderCol, bgcolor = premiumCol)
-    d.bot := box.new(x1, eq, x2, lo, xloc = xloc.bar_time, border_color = borderCol, bgcolor = discountCol)
-    d.eq  := line.new(x1, eq, x2, eq, xloc = xloc.bar_time, color = eqLineCol, width = 2)
+    d.b1 := mkBox(x1, x2, p25, lo,  dnLight)
+    d.b2 := mkBox(x1, x2, p50, p25, dnStrong)
+    d.b3 := mkBox(x1, x2, p75, p50, upStrong)
+    d.b4 := mkBox(x1, x2, hi,  p75, upLight)
+    d.eq := mkLine(x1, x2, p50, eqLineCol, 2)
     if showQt
-        d.q25 := line.new(x1, lo + 0.25 * rg, x2, lo + 0.25 * rg, xloc = xloc.bar_time, color = q25Col, width = qtWidth, style = line.style_solid)
-        d.q75 := line.new(x1, lo + 0.75 * rg, x2, lo + 0.75 * rg, xloc = xloc.bar_time, color = q75Col, width = qtWidth, style = line.style_solid)
+        d.l0  := mkLine(x1, x2, lo,  dnLineCol, qtWidth)
+        d.l25 := mkLine(x1, x2, p25, dnLineCol, qtWidth)
+        d.l75 := mkLine(x1, x2, p75, upLineCol, qtWidth)
+        d.l1  := mkLine(x1, x2, hi,  upLineCol, qtWidth)
     d
 
 updDraw(EqDraw d, int x1, int x2, float hi, float lo) =>
-    float eq = (hi + lo) / 2
-    float rg = hi - lo
-    box.set_top(d.top, hi)
-    box.set_bottom(d.top, eq)
-    box.set_right(d.top, x2)
-    box.set_top(d.bot, eq)
-    box.set_bottom(d.bot, lo)
-    box.set_right(d.bot, x2)
-    line.set_xy1(d.eq, x1, eq)
-    line.set_xy2(d.eq, x2, eq)
-    if not na(d.q25)
-        line.set_xy1(d.q25, x1, lo + 0.25 * rg)
-        line.set_xy2(d.q25, x2, lo + 0.25 * rg)
-    if not na(d.q75)
-        line.set_xy1(d.q75, x1, lo + 0.75 * rg)
-        line.set_xy2(d.q75, x2, lo + 0.75 * rg)
+    float rg  = hi - lo
+    float p25 = lo + 0.25 * rg
+    float p50 = lo + 0.50 * rg
+    float p75 = lo + 0.75 * rg
+    setBox(d.b1, x2, p25, lo)
+    setBox(d.b2, x2, p50, p25)
+    setBox(d.b3, x2, p75, p50)
+    setBox(d.b4, x2, hi,  p75)
+    setLine(d.eq,  x1, x2, p50)
+    setLine(d.l0,  x1, x2, lo)
+    setLine(d.l25, x1, x2, p25)
+    setLine(d.l75, x1, x2, p75)
+    setLine(d.l1,  x1, x2, hi)
 
 delDraw(EqDraw d) =>
     if not na(d)
-        box.delete(d.top)
-        box.delete(d.bot)
+        box.delete(d.b1)
+        box.delete(d.b2)
+        box.delete(d.b3)
+        box.delete(d.b4)
+        line.delete(d.l0)
+        line.delete(d.l25)
         line.delete(d.eq)
-        line.delete(d.q25)
-        line.delete(d.q75)
+        line.delete(d.l75)
+        line.delete(d.l1)
 
 // ═══════════════════════ STATE: BEARISH ═══════════════════════
 var float bAnchor  = na     // 1m-candlens high (fast)
