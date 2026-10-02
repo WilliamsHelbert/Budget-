@@ -1,0 +1,353 @@
+//@version=6
+// =====================================================================
+//  Sweep Trade  (v1)
+//  ---------------------------------------------------------------
+//  Finder trades paa de niveauer Session Levels tegner:
+//      Asia / London / NY PRE high og low
+//      NY PRE 15m highs og lows (de der stadig er uroerte ved open)
+//
+//  REGLEN (simpel)
+//    1) Et af de to indeks (chartets symbol ELLER sammenlignings-
+//       symbolet) sweeper et niveau: koerer mindst 1 tick forbi det.
+//    2) I SAMME MINUT kommer et 15s-close tilbage paa den anden side
+//       af niveauet paa det indeks der sweepede:
+//         high swept + close UNDER  -> SHORT
+//         low  swept + close OVER   -> LONG
+//    Hvert niveau kan kun give eet trade. Er minuttet gaaet uden close
+//    tilbage, er det sweep brugt op.
+//    Et niveau der allerede er taget foer vinduet starter, taeller ikke
+//    (det er heller ikke tegnet paa Session Levels laengere).
+//
+//  BE (break even)
+//    Short: den live BULLISH EQ (bevaegelsen op i sweepet).
+//           BE = 0.75 eller EQ (0.5) - den naermeste under entry.
+//    Long : den live BEARISH EQ (bevaegelsen ned i sweepet).
+//           BE = 0.25 eller EQ (0.5) - den naermeste over entry.
+//    BE skal ligge mellem beMin og beMax points fra entry.
+//
+//  Alle trades bliver staaende paa chartet, saa du kan se dem bagud.
+//  Laeg den paa et 15s-chart.
+// =====================================================================
+indicator("Helbert's Hjælpe Indikator (Sweep Trade)", overlay = true,
+     max_labels_count = 500, max_lines_count = 500)
+
+// ─────────────────────────── INPUTS ───────────────────────────
+g1 = "Symboler"
+cmpSym = input.symbol("CME_MINI:ES1!", "Sammenlign med", group = g1,
+     tooltip = "Ligger du paa NQ, skal denne staa paa ES - og omvendt.")
+
+g2 = "Sessioner (samme som Session Levels)"
+tz       = input.string("Europe/Copenhagen", "Tidszone", group = g2)
+asiaSess = input.session("0200-0800", "Asia",   group = g2)
+lonSess  = input.session("0800-1400", "London", group = g2)
+nySess   = input.session("1400-1530", "NY PRE", group = g2)
+useAsia  = input.bool(true, "Asia",   group = g2, inline = "s")
+useLon   = input.bool(true, "London", group = g2, inline = "s")
+useNy    = input.bool(true, "NY PRE", group = g2, inline = "s")
+use15    = input.bool(true, "15m",    group = g2, inline = "s")
+
+g3 = "Vindue"
+openHour = input.int(15, "Start - time",  minval = 0, maxval = 23, group = g3)
+openMin  = input.int(30, "Start - minut", minval = 0, maxval = 59, group = g3)
+endHour  = input.int(16, "Slut - time (til, ikke med)",  minval = 0, maxval = 23, group = g3)
+endMin   = input.int(0,  "Slut - minut (til, ikke med)", minval = 0, maxval = 59, group = g3)
+m15H     = input.int(15, "15m-niveauer gaelder til - time",  minval = 0, maxval = 23, group = g3)
+m15M     = input.int(31, "15m-niveauer gaelder til - minut", minval = 0, maxval = 59, group = g3,
+     tooltip = "Samme som 'Fjern igen' paa Session Levels. Default 15:31.")
+
+g4 = "BE"
+beMin = input.float(2,  "BE mindst (points) fra entry", minval = 0, group = g4)
+beMax = input.float(50, "BE hoejst (points) fra entry", minval = 1, group = g4)
+
+g5 = "Visning"
+shortCol = input.color(color.red,    "Short", group = g5)
+longCol  = input.color(color.lime,   "Long",  group = g5)
+beCol    = input.color(color.orange, "BE-linje", group = g5)
+beMins   = input.int(15, "BE-linjens laengde (minutter)", minval = 1, group = g5)
+warn15s  = input.bool(true, "Advar hvis chartet ikke er 15s", group = g5)
+
+// ───────── SAMMENLIGNINGSSYMBOLET ─────────
+[bHigh, bLow, bClose] = request.security(cmpSym, timeframe.period, [high, low, close],
+     gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)
+
+string aName = syminfo.ticker
+string bName = str.contains(cmpSym, ":") ? array.get(str.split(cmpSym, ":"), 1) : cmpSym
+
+float tick = syminfo.mintick
+int   minB = int(time / 60000)
+
+// ─────────────────── TID ───────────────────
+int  tMin  = hour(time, tz) * 60 + minute(time, tz)
+int  winS  = openHour * 60 + openMin
+int  winE  = endHour  * 60 + endMin
+bool inWin = tMin >= winS and tMin < winE
+int  m15E  = m15H * 60 + m15M
+
+int  aT = time(timeframe.period, asiaSess, tz)
+int  lT = time(timeframe.period, lonSess,  tz)
+int  nT = time(timeframe.period, nySess,   tz)
+bool aOn = not na(aT)
+bool lOn = not na(lT)
+bool nOn = not na(nT)
+bool aStart = aOn and na(aT[1])
+bool lStart = lOn and na(lT[1])
+bool nStart = nOn and na(nT[1])
+
+// ─────────────────────────── TYPER ───────────────────────────
+// Status for EEN side (high eller low) af eet niveau paa begge indeks.
+// aM/bM = minuttet hvor indekset sweepede. aDone/bDone = brugt op.
+type St
+    int  aM    = na
+    int  bM    = na
+    bool aDone = false
+    bool bDone = false
+
+type Sess
+    float aHi = na
+    float aLo = na
+    float bHi = na
+    float bLo = na
+    St    hi  = na
+    St    lo  = na
+
+// Eet NY PRE 15m-niveau. a = chartets symbol, b = det andet.
+type Lv
+    float a    = na
+    float b    = na
+    bool  isHi = false
+    bool  dead = false
+    St    st   = na
+
+// Resultat af et tjek: er der trade, og paa hvilket indeks?
+type Hit
+    bool   fired   = false
+    bool   isShort = false
+    float  lvl     = na
+    string src     = ""
+    string who     = ""
+
+// ─────────────────────────── FUNKTIONER ───────────────────────────
+build(Sess s, bool isStart) =>
+    if isStart
+        s.aHi := high
+        s.aLo := low
+        s.bHi := bHigh
+        s.bLo := bLow
+        s.hi  := St.new()
+        s.lo  := St.new()
+    else
+        s.aHi := math.max(s.aHi, high)
+        s.aLo := math.min(s.aLo, low)
+        s.bHi := na(bHigh) ? s.bHi : math.max(nz(s.bHi, bHigh), bHigh)
+        s.bLo := na(bLow)  ? s.bLo : math.min(nz(s.bLo, bLow),  bLow)
+    true
+
+// Tjek een side af eet niveau. aL/bL = niveauet paa hvert indeks.
+check(St st, float aL, float bL, bool isHi, string nm, Hit h) =>
+    if not na(st) and not na(aL) and not na(bL)
+        bool aSweep = isHi ? high >= aL + tick : low <= aL - tick
+        bool bSweep = isHi ? (not na(bHigh) and bHigh >= bL + tick) : (not na(bLow) and bLow <= bL - tick)
+        // Foer vinduet: et taget niveau er brugt op (ingen trade).
+        if not inWin
+            if aSweep
+                st.aDone := true
+            if bSweep
+                st.bDone := true
+        else
+            if not st.aDone and na(st.aM) and aSweep
+                st.aM := minB
+            if not st.bDone and na(st.bM) and bSweep
+                st.bM := minB
+            // Minuttet er gaaet uden close tilbage -> brugt op
+            if not st.aDone and not na(st.aM) and st.aM != minB
+                st.aDone := true
+            if not st.bDone and not na(st.bM) and st.bM != minB
+                st.bDone := true
+            // 15s-close tilbage paa den anden side i samme minut
+            if barstate.isconfirmed and not h.fired
+                bool aBack = not st.aDone and st.aM == minB and (isHi ? close < aL : close > aL)
+                bool bBack = not st.bDone and st.bM == minB and not na(bClose) and (isHi ? bClose < bL : bClose > bL)
+                if aBack or bBack
+                    h.fired   := true
+                    h.isShort := isHi
+                    h.lvl     := aL
+                    h.src     := nm + (isHi ? " high" : " low")
+                    h.who     := aBack and bBack ? aName + " + " + bName : (aBack ? aName : bName)
+                    st.aDone  := true
+                    st.bDone  := true
+    h.fired
+
+// ─────────────────── SESSIONER ───────────────────
+var Sess asia = Sess.new()
+var Sess lon  = Sess.new()
+var Sess ny   = Sess.new()
+
+if aOn
+    build(asia, aStart)
+if lOn
+    build(lon, lStart)
+if nOn
+    build(ny, nStart)
+
+// ─────────────────── NY PRE 15m-NIVEAUER ───────────────────
+m15Bar() =>
+    [high[1], low[1], time[1]]
+
+[qH, qL, qT] = request.security(syminfo.tickerid, "15", m15Bar(), lookahead = barmerge.lookahead_on)
+[eH, eL, eT] = request.security(cmpSym,           "15", m15Bar(), lookahead = barmerge.lookahead_on)
+
+var int lastQt = na
+bool newM15 = not na(qT) and qT != nz(lastQt, -1)
+if newM15
+    lastQt := qT
+
+int  nyFrom = int(str.tonumber(str.substring(nySess, 0, 2))) * 60 + int(str.tonumber(str.substring(nySess, 2, 4)))
+bool inNy   = nOn
+bool nyBeg  = nStart
+int  qMin   = na(qT) ? na : hour(qT, tz) * 60 + minute(qT, tz)
+bool qInNy  = not na(qMin) and qMin >= nyFrom and qMin < winS
+
+var array<Lv> lvs = array.new<Lv>()
+if nyBeg
+    array.clear(lvs)
+
+if use15 and newM15 and qInNy and not na(qH) and not na(eH)
+    Lv h = Lv.new()
+    h.a    := qH
+    h.b    := eH
+    h.isHi := true
+    h.st   := St.new()
+    array.push(lvs, h)
+    Lv l = Lv.new()
+    l.a    := qL
+    l.b    := eL
+    l.isHi := false
+    l.st   := St.new()
+    array.push(lvs, l)
+
+// Taget under NY PRE (paa et af indeksene) -> ugyldigt, ligesom Session Levels
+if inNy and array.size(lvs) > 0
+    for i = 0 to array.size(lvs) - 1
+        Lv m = array.get(lvs, i)
+        bool aHit = m.isHi ? high >= m.a : low <= m.a
+        bool bHit = m.isHi ? (not na(bHigh) and bHigh >= m.b) : (not na(bLow) and bLow <= m.b)
+        if aHit or bHit
+            m.dead := true
+
+// ─────────────────── TJEK ALLE NIVEAUER ───────────────────
+Hit hit = Hit.new()
+float tickHalf = tick / 2
+
+if useNy and not nOn
+    check(ny.hi, ny.aHi, ny.bHi, true,  "NY PRE", hit)
+    check(ny.lo, ny.aLo, ny.bLo, false, "NY PRE", hit)
+if useLon and not lOn
+    check(lon.hi, lon.aHi, lon.bHi, true,  "London", hit)
+    check(lon.lo, lon.aLo, lon.bLo, false, "London", hit)
+if useAsia and not aOn
+    check(asia.hi, asia.aHi, asia.bHi, true,  "Asia", hit)
+    check(asia.lo, asia.aLo, asia.bLo, false, "Asia", hit)
+if use15 and not nOn and tMin < m15E and array.size(lvs) > 0
+    for i = 0 to array.size(lvs) - 1
+        Lv m = array.get(lvs, i)
+        // NY PRE's eget high/low er allerede tjekket ovenfor
+        bool isExt = m.isHi ? math.abs(m.a - nz(ny.aHi)) < tickHalf : math.abs(m.a - nz(ny.aLo)) < tickHalf
+        if not m.dead and not isExt
+            check(m.st, m.a, m.b, m.isHi, "15m", hit)
+
+// ═════════════ EQ (til BE) - samme regler som EQ-indikatoren ═════════════
+eqBar() =>
+    [open[1], high[1], low[1], close[1], time[1]]
+
+[oS, hS, lS, cS, tS] = request.security(syminfo.tickerid, "1", eqBar(), lookahead = barmerge.lookahead_on)
+bool  sameTF = timeframe.in_seconds() == 60
+float o1 = sameTF ? open  : oS
+float h1 = sameTF ? high  : hS
+float l1 = sameTF ? low   : lS
+float c1 = sameTF ? close : cS
+int   t1 = sameTF ? time  : tS
+
+var int lastT1 = na
+bool t1Chg = not na(t1) and t1 != nz(lastT1, -1)
+if t1Chg
+    lastT1 := t1
+bool new1m = sameTF ? barstate.isconfirmed : t1Chg
+
+float own   = na(h1) or na(l1) ? na : (h1 + l1) / 2
+bool  bearE = new1m and not na(c1) and c1 < o1 and c1 < own
+bool  bullE = new1m and not na(c1) and c1 > o1 and c1 > own
+
+// Bearish EQ: anker = high, vokser ned
+var float dTop = na
+var float dBot = na
+var bool  dAct = false
+if dAct
+    dBot := math.min(dBot, low)
+    if barstate.isconfirmed and high >= (dTop + dBot) / 2
+        dAct := false
+if bearE and not dAct
+    dTop := h1
+    dBot := math.min(l1, low)
+    dAct := true
+
+// Bullish EQ: anker = low, vokser op
+var float uBot = na
+var float uTop = na
+var bool  uAct = false
+if uAct
+    uTop := math.max(uTop, high)
+    if barstate.isconfirmed and low <= (uBot + uTop) / 2
+        uAct := false
+if bullE and not uAct
+    uBot := l1
+    uTop := math.max(h1, high)
+    uAct := true
+
+// Vaelg BE: naermeste kandidat i profit-retningen, mellem beMin og beMax.
+pickBE(float px, bool isShort, float c1x, float c2x) =>
+    float best = na
+    for c in array.from(c1x, c2x)
+        bool dir  = not na(c) and (isShort ? c < px : c > px)
+        float d   = na(c) ? na : math.abs(px - c)
+        bool rng  = not na(d) and d >= beMin and d <= beMax
+        bool near = na(best) or math.abs(px - c) < math.abs(px - best)
+        if dir and rng and near
+            best := c
+    best
+
+// ═════════════════════ TRADE ═════════════════════
+bool goShort = hit.fired and hit.isShort
+bool goLong  = hit.fired and not hit.isShort
+
+if hit.fired
+    float px  = close
+    // Short: bullish EQ'en (bevaegelsen op). Long: bearish EQ'en (bevaegelsen ned).
+    float lo  = hit.isShort ? (uAct ? uBot : na) : (dAct ? dBot : na)
+    float hi  = hit.isShort ? (uAct ? uTop : na) : (dAct ? dTop : na)
+    float mid = na(lo) or na(hi) ? na : (lo + hi) / 2
+    float qt  = na(lo) or na(hi) ? na : lo + (hit.isShort ? 0.75 : 0.25) * (hi - lo)
+    float be  = pickBE(px, hit.isShort, qt, mid)
+    string beTxt = na(be) ? "BE: -"
+         : "BE: " + (math.abs(be - qt) < tickHalf ? (hit.isShort ? "0.75" : "0.25") : "EQ")
+           + " " + str.tostring(be, format.mintick) + " (" + str.tostring(math.abs(px - be), "#.##") + "p)"
+    color c = hit.isShort ? shortCol : longCol
+    label.new(time, hit.isShort ? high : low,
+         (hit.isShort ? "SHORT" : "LONG") + "\n" + hit.src + " swept (" + hit.who + ")\n" + beTxt,
+         xloc = xloc.bar_time,
+         style = hit.isShort ? label.style_label_down : label.style_label_up,
+         color = color.new(c, 10), textcolor = hit.isShort ? color.white : color.black, size = size.normal)
+    if not na(be)
+        line.new(time, be, time + beMins * 60000, be, xloc = xloc.bar_time, color = beCol, width = 2, style = line.style_dashed)
+
+plotshape(goLong,  "Sweep LONG",  style = shape.triangleup,   location = location.belowbar, color = longCol,  size = size.small)
+plotshape(goShort, "Sweep SHORT", style = shape.triangledown, location = location.abovebar, color = shortCol, size = size.small)
+
+alertcondition(goShort, "Sweep SHORT", "Sweep SHORT - liq taget og 15s close tilbage under")
+alertcondition(goLong,  "Sweep LONG",  "Sweep LONG - liq taget og 15s close tilbage over")
+
+var label tfWarn = na
+if warn15s and barstate.islast
+    label.delete(tfWarn)
+    tfWarn := timeframe.in_seconds() != 15 ? label.new(bar_index, high,
+         "Laeg chartet paa 15s - entry laeses paa 15s-candles",
+         color = color.orange, textcolor = color.black, style = label.style_label_down, size = size.small) : na
