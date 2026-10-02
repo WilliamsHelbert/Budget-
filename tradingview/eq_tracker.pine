@@ -1,12 +1,13 @@
 //@version=6
 // =====================================================================
-//  EQ - Equilibrium Tracker  (v14)
+//  EQ - Equilibrium Tracker  (v15)
 //  ---------------------------------------------------------------
-//  NYT I v14
-//    - Boksen er delt i 4 kvarter. De to yderste (0-0.25 og 0.75-1)
-//      er lysere, de to inderste (0.25-0.5 og 0.5-0.75) er kraftigere.
-//      Oevre halvdel groen, nedre halvdel roed - ens for bullish og
-//      bearish EQ.
+//  NYT I v15
+//    - Kun det kvarter der ligger LAENGST fra ankeret er lysere:
+//        Bullish EQ (anker i bunden, vokser op): 0.75-1 (toppen) lys groen
+//        Bearish EQ (anker i toppen, vokser ned): 0-0.25 (bunden) lys roed
+//      De tre andre kvarter har fuld styrke. Oevre halvdel groen,
+//      nedre halvdel roed.
 //    - Fede linjer hele vejen paa 0, 0.25, 0.5 (EQ), 0.75 og 1.
 //      0 og 0.25 er roede, 0.75 og 1 er groenne, 0.5 er EQ-linjen.
 //
@@ -92,10 +93,10 @@ sessTz         = input.string("Europe/Copenhagen", "Tidszone", group = g4,
      tooltip = "Tidszonen som klokkeslettet ovenfor laeses i. Europe/Copenhagen 15:30 = dansk aabning. Vaelg America/New_York 09:30 hvis du vil vaere immun over for at DST skifter paa forskellige datoer i EU og USA.")
 
 g3 = "Udseende"
-upStrong   = input.color(color.new(color.green, 45), "Groen 0.5 - 0.75 (kraftig)", group = g3)
-upLight    = input.color(color.new(color.green, 70), "Groen 0.75 - 1 (lys)",       group = g3)
-dnStrong   = input.color(color.new(color.red,   45), "Roed 0.25 - 0.5 (kraftig)",  group = g3)
-dnLight    = input.color(color.new(color.red,   70), "Roed 0 - 0.25 (lys)",        group = g3)
+upStrong   = input.color(color.new(color.green, 45), "Groen (oevre halvdel)",            group = g3)
+upLight    = input.color(color.new(color.green, 70), "Lys groen (toppen, bullish EQ)",   group = g3)
+dnStrong   = input.color(color.new(color.red,   45), "Roed (nedre halvdel)",             group = g3)
+dnLight    = input.color(color.new(color.red,   70), "Lys roed (bunden, bearish EQ)",    group = g3)
 eqLineCol  = input.color(color.orange, "EQ-linje (0.5)",       group = g3)
 upLineCol  = input.color(color.green,  "Linjer 0.75 og 1",     group = g3)
 dnLineCol  = input.color(color.red,    "Linjer 0 og 0.25",     group = g3)
@@ -153,10 +154,10 @@ bgcolor(showOpenMarker and resetOnOpen and isOpenBar ? color.new(color.blue, 65)
 // hi/lo er boksens top og bund. For bearish: hi = anker, lo = nyeste low.
 // For bullish: hi = nyeste high, lo = anker.
 type EqDraw
-    box  b1  = na    // 0    - 0.25  (roed, lys)
-    box  b2  = na    // 0.25 - 0.5   (roed, kraftig)
-    box  b3  = na    // 0.5  - 0.75  (groen, kraftig)
-    box  b4  = na    // 0.75 - 1     (groen, lys)
+    box  b1  = na    // 0    - 0.25  (roed - lys hvis bearish)
+    box  b2  = na    // 0.25 - 0.5   (roed)
+    box  b3  = na    // 0.5  - 0.75  (groen)
+    box  b4  = na    // 0.75 - 1     (groen - lys hvis bullish)
     line l0  = na
     line l25 = na
     line eq  = na
@@ -179,16 +180,17 @@ setLine(line l, int x1, int x2, float y) =>
         line.set_xy1(l, x1, y)
         line.set_xy2(l, x2, y)
 
-newDraw(int x1, int x2, float hi, float lo) =>
+// isBull: bullish EQ -> toppen er lys. Bearish -> bunden er lys.
+newDraw(int x1, int x2, float hi, float lo, bool isBull) =>
     float rg  = hi - lo
     float p25 = lo + 0.25 * rg
     float p50 = lo + 0.50 * rg
     float p75 = lo + 0.75 * rg
     EqDraw d = EqDraw.new()
-    d.b1 := mkBox(x1, x2, p25, lo,  dnLight)
+    d.b1 := mkBox(x1, x2, p25, lo,  isBull ? dnStrong : dnLight)
     d.b2 := mkBox(x1, x2, p50, p25, dnStrong)
     d.b3 := mkBox(x1, x2, p75, p50, upStrong)
-    d.b4 := mkBox(x1, x2, hi,  p75, upLight)
+    d.b4 := mkBox(x1, x2, hi,  p75, isBull ? upLight : upStrong)
     d.eq := mkLine(x1, x2, p50, eqLineCol, 2)
     if showQt
         d.l0  := mkLine(x1, x2, lo,  dnLineCol, qtWidth)
@@ -294,7 +296,7 @@ if useBear and bearTrig and not bActive
     bActive  := true
     delDraw(bLast)
     bLast    := na
-    bCur     := newDraw(bAnchorT, time, bAnchor, bLow)
+    bCur     := newDraw(bAnchorT, time, bAnchor, bLow, false)
 
 // ════════════════════════ BULLISH EQ ══════════════════════════
 // ── VAEKST + FRYS ──
@@ -321,7 +323,7 @@ if useBull and bullTrig and not lActive
     lActive  := true
     delDraw(lLast)
     lLast    := na
-    lCur     := newDraw(lAnchorT, time, lHigh, lAnchor)
+    lCur     := newDraw(lAnchorT, time, lHigh, lAnchor, true)
 
 // ──────── Advarsel hvis chartet er groevere end oprettelses-TF ────────
 var label tfLabel = na
