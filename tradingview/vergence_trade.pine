@@ -1,6 +1,10 @@
 //@version=6
 // =====================================================================
-//  Vergence  (v2.3)
+//  Vergence  (v2.4)
+//  ---------------------------------------------------------------
+//  NYT I v2.4
+//    - NY PRE 15m-niveauerne (som Session Levels tegner) er nu ogsaa med
+//      i Vergence - gaelder til 15:31 ligesom paa Session Levels.
 //  ---------------------------------------------------------------
 //  NYT I v2.3
 //    - Position tegnes paa NQ: SL-felt (roed) og TP-felt (groen), som
@@ -70,6 +74,7 @@ nySess   = input.session("1400-1530", "NY PRE", group = g2)
 useAsia  = input.bool(true, "Asia",   group = g2, inline = "s")
 useLon   = input.bool(true, "London", group = g2, inline = "s")
 useNy    = input.bool(true, "NY PRE", group = g2, inline = "s")
+use15    = input.bool(true, "15m",    group = g2, inline = "s")
 
 g3 = "Vindue"
 openHour = input.int(15, "Start - time",  minval = 0, maxval = 23, group = g3)
@@ -77,6 +82,9 @@ openMin  = input.int(30, "Start - minut", minval = 0, maxval = 59, group = g3)
 endHour  = input.int(16, "Slut - time (til, ikke med)",  minval = 0, maxval = 23, group = g3)
 endMin   = input.int(0,  "Slut - minut (til, ikke med)", minval = 0, maxval = 59, group = g3,
      tooltip = "16:00 betyder at 15:59 er det sidste minut med.")
+m15H     = input.int(15, "15m-niveauer gaelder til - time",  minval = 0, maxval = 23, group = g3)
+m15M     = input.int(31, "15m-niveauer gaelder til - minut", minval = 0, maxval = 59, group = g3,
+     tooltip = "Samme som 'Fjern igen' paa Session Levels. Default 15:31.")
 maxGap   = input.int(5, "Max minutter mellem de to sweeps", minval = 0, maxval = 60, group = g3,
      tooltip = "NQ 15:31 og 5 -> ES skal tage niveauet senest 15:36.")
 
@@ -212,6 +220,7 @@ type Lv
     bool  isHi  = false
     bool  dead  = false
     bool  aTook = false
+    St    st    = na      // Vergence-status (bruges for 15m-niveauerne)
 
 // Hvad skete der paa denne bar?
 type Hit
@@ -290,11 +299,13 @@ pushLv(array<Lv> arr, float ah, float al, float bh, float bl) =>
     h.a    := ah
     h.b    := bh
     h.isHi := true
+    h.st   := St.new()
     array.push(arr, h)
     Lv l = Lv.new()
     l.a    := al
     l.b    := bl
     l.isHi := false
+    l.st   := St.new()
     array.push(arr, l)
 
 // Taget mens NY PRE koerer (paa et af indeksene) -> ugyldigt
@@ -388,6 +399,14 @@ if useLon and not lOn
 if useAsia and not aOn
     check(asia.hi, asia.aHi, asia.bHi, true,  "Asia", hit)
     check(asia.lo, asia.aLo, asia.bLo, false, "Asia", hit)
+// NY PRE 15m-niveauer (de der var uroerte paa begge ved open), til 15:31
+if use15 and not nOn and tMin < m15H * 60 + m15M and array.size(lv15) > 0
+    for i = 0 to array.size(lv15) - 1
+        Lv m = array.get(lv15, i)
+        // NY PRE's eget high/low er allerede tjekket ovenfor
+        bool isExt = m.isHi ? math.abs(m.a - nz(ny.aHi)) < tickHalf : math.abs(m.a - nz(ny.aLo)) < tickHalf
+        if not m.dead and not isExt
+            check(m.st, m.a, m.b, m.isHi, "15m", hit)
 
 // ═════════════ EQ (til BE) - samme regler som EQ-indikatoren ═════════════
 eqBar() =>

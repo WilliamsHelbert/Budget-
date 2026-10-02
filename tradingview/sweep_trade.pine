@@ -1,6 +1,11 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v2.5)
+//  Sweep Trade (SMT)  (v2.6)
+//  ---------------------------------------------------------------
+//  NYT I v2.6
+//    - SMT kraever DIVERGENS: kun det ene indeks maa have taget niveauet.
+//      Har begge taget det, er det ikke SMT (det er Vergence) - boksen
+//      viser "Ingen SMT - begge har taget ... (Vergence)".
 //  ---------------------------------------------------------------
 //  NYT I v2.5
 //    - Position tegnes paa NQ: SL-felt (roed) og TP-felt (groen), som
@@ -202,6 +207,7 @@ type St
     bool aDone = false
     bool bDone = false
     bool aTook = false
+    bool bTook = false   // sammenligningssymbolet har taget niveauet
 
 type Sess
     float aHi = na
@@ -231,6 +237,8 @@ type Hit
     bool   swHi    = false   // et high-niveau blev swept i vinduet
     bool   swLo    = false   // et low-niveau blev swept i vinduet
     string swTxt   = ""
+    bool   both    = false   // begge indeks har taget niveauet -> ikke SMT
+    string bothTxt = ""
 
 // ─────────────────────────── FUNKTIONER ───────────────────────────
 build(Sess s, bool isStart) =>
@@ -256,6 +264,8 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h) =>
         string lvlNm = nm + (isHi ? " high" : " low")
         if aSweep
             st.aTook := true
+        if bSweep
+            st.bTook := true
         // Foer vinduet: et taget niveau er brugt op (ingen trade).
         if not inWin
             if aSweep
@@ -272,7 +282,15 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h) =>
             if newA or newB
                 h.swHi  := h.swHi or isHi
                 h.swLo  := h.swLo or not isHi
-                h.swTxt := lvlNm + " (" + (newA and newB ? aName + " + " + bName : (newA ? aName : bName)) + ")"
+            // Begge indeks har taget niveauet -> ingen divergens = ikke SMT (det er Vergence)
+            if (newA or newB) and st.aTook and st.bTook and not (st.aDone and st.bDone)
+                h.both    := true
+                h.bothTxt := lvlNm
+                st.aDone  := true
+                st.bDone  := true
+            // Kun det ene indeks har taget det -> mulighed for SMT
+            else if (newA and not st.bTook) or (newB and not st.aTook)
+                h.swTxt := lvlNm + " (" + (newA ? aName : bName) + ")"
             // Minuttet er gaaet uden close tilbage -> brugt op
             if not st.aDone and not na(st.aM) and st.aM != minB
                 st.aDone := true
@@ -283,8 +301,8 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h) =>
                 bool dirOK = not needBoth or (isHi
                      ? (close < open and not na(bClose) and bClose < bOpen)
                      : (close > open and not na(bClose) and bClose > bOpen))
-                bool aBack = not st.aDone and st.aM == minB and (isHi ? close < aL : close > aL)
-                bool bBack = not st.bDone and st.bM == minB and not na(bClose) and (isHi ? bClose < bL : bClose > bL)
+                bool aBack = not st.aDone and not st.bTook and st.aM == minB and (isHi ? close < aL : close > aL)
+                bool bBack = not st.bDone and not st.aTook and st.bM == minB and not na(bClose) and (isHi ? bClose < bL : bClose > bL)
                 if not dirOK and (aBack or bBack)
                     h.noDir := true
                 bool slOK = not blockMax or (isHi ? m1Hi - close <= maxSL : close - m1Lo <= maxSL)
@@ -550,6 +568,15 @@ if not na(pendM) and pendM == minB and hit.noDir and not hit.fired
     bxStatus := "Close tilbage - men ikke begge samme vej"
     bxCol    := color.orange
 
+// Det andet indeks tog ogsaa niveauet -> ingen SMT (det er Vergence)
+if inWin and hit.both and not hit.fired and not mBad
+    pendM    := na
+    bxStatus := "Ingen SMT - begge har taget " + hit.bothTxt + " (Vergence)"
+    bxCol    := color.gray
+    bxLvl    := ""
+    bxBE     := ""
+    bxTime   := str.format_time(time, "HH:mm:ss", tz)
+
 // Close tilbage, men SL ville vaere over max -> ugyldigt
 if not na(pendM) and pendM == minB and hit.slBad and not hit.fired
     pendM    := na
@@ -586,8 +613,8 @@ if not na(smx) and smxM == minB and hit.fired and not mBad and not dayBad
 if not na(smx) and smxM == minB and hit.slBad
     array.push(minLines, smx)
     smx := na
-// Minuttet gik uden trade -> stregen vaek
-if not na(smx) and smxM != minB
+// Minuttet gik uden trade, eller begge tog niveauet -> stregen vaek
+if not na(smx) and (smxM != minB or (hit.both and not hit.fired))
     line.delete(smx)
     smx := na
 
