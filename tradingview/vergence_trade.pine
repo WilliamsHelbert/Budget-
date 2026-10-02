@@ -1,6 +1,13 @@
 //@version=6
 // =====================================================================
-//  Vergence  (v2.2)
+//  Vergence  (v2.3)
+//  ---------------------------------------------------------------
+//  NYT I v2.3
+//    - Position tegnes paa NQ: SL-felt (roed) og TP-felt (groen), som
+//      TradingViews position-vaerktoej. Den del af feltet prisen har
+//      vaeret i, bliver moerkere. Felterne vokser med tiden og stopper
+//      ved SL / TP.
+//    - Max SL-stregen (30p) gaar fra Vergence og frem til tradet.
 //  ---------------------------------------------------------------
 //  NYT I v2.2
 //    - TP: det naermeste af EQ og session liq mellem 35 og 75 points.
@@ -48,7 +55,7 @@
 //  VINDUE: 15:30 til og med 15:59. Laeg den paa et 15s-chart.
 // =====================================================================
 indicator("Helbert's Hjælpe Indikator (Vergence)", overlay = true,
-     max_labels_count = 500, max_lines_count = 500)
+     max_labels_count = 500, max_lines_count = 500, max_boxes_count = 500)
 
 // ─────────────────────────── INPUTS ───────────────────────────
 g1 = "Symboler"
@@ -93,6 +100,12 @@ tpMin  = input.float(35, "TP mindst (points)", minval = 0, group = g7)
 tpMax  = input.float(75, "TP max / fallback (points)", minval = 1, group = g7,
      tooltip = "TP = det naermeste af EQ og session liq, der ligger mellem TP mindst og TP max fra entry. Ligger intet inden for, bruges TP max. SL = toppen (short) / bunden (long) af det 1m-candle entry sker i - fast, kun flyttet til entry ved BE.")
 tpCol  = input.color(color.teal, "TP-linje", group = g7)
+g8 = "Position (kun NQ)"
+showPos  = input.bool(true, "Tegn position (SL + TP)", group = g8)
+posSlCol = input.color(color.new(#F23645, 78), "SL-felt",            group = g8)
+posSlHit = input.color(color.new(#F23645, 55), "SL-felt (prisen har vaeret der)", group = g8)
+posTpCol = input.color(color.new(#089981, 78), "TP-felt",            group = g8)
+posTpHit = input.color(color.new(#089981, 55), "TP-felt (prisen har vaeret der)", group = g8)
 beEq    = input.bool(true, "EQ og 0.25 / 0.75",        group = g4)
 beSess  = input.bool(true, "Session liq",              group = g4)
 be15    = input.bool(true, "15m-niveauer",             group = g4)
@@ -434,6 +447,7 @@ if newDay
 // Tegninger fra det aktuelle minut - slettes hvis minuttet bliver ugyldigt
 var array<label> minLbls  = array.new<label>()
 var array<line>  minLines = array.new<line>()
+var array<box>   minBoxes = array.new<box>()
 
 if minB != nz(curM, -1)
     curM := minB
@@ -442,6 +456,7 @@ if minB != nz(curM, -1)
     mBad := false
     array.clear(minLbls)
     array.clear(minLines)
+    array.clear(minBoxes)
 
 if inWin
     mHi   := mHi   or hit.swHi
@@ -459,6 +474,8 @@ if justBad
         label.delete(array.pop(minLbls))
     while array.size(minLines) > 0
         line.delete(array.pop(minLines))
+    while array.size(minBoxes) > 0
+        box.delete(array.pop(minBoxes))
 
 // ═════════════════════ BOKS-STATUS ═════════════════════
 // Boksen viser altid kun EEN ting: den nyeste haendelse.
@@ -528,6 +545,13 @@ var int    oM     = na
 var int    oBars  = 0
 var line   oBeLn  = na
 var line   oTpLn  = na
+var box    oSlB   = na     // SL-felt
+var box    oTpB   = na     // TP-felt
+var box    oSlF   = na     // moerkere del af SL-feltet (hvor prisen har vaeret)
+var box    oTpF   = na     // moerkere del af TP-feltet
+var float  oSL0   = na     // oprindelig SL (til tegningen)
+var float  oAdv   = na     // laengst prisen har vaeret mod SL
+var float  oFav   = na     // laengst prisen har vaeret mod TP
 var string oTime  = ""
 
 // Tradet blev slettet fordi minuttet blev ugyldigt
@@ -535,12 +559,27 @@ if oLive and mBad and oM == minB
     oLive := false
 
 if oLive
+    // Den moerkere del: fra entry til hvor langt prisen har vaeret i feltet
+    oAdv := oShort ? math.max(oAdv, high) : math.min(oAdv, low)
+    oFav := oShort ? math.min(oFav, low)  : math.max(oFav, high)
+    float advY = oShort ? math.min(oAdv, oSL0) : math.max(oAdv, oSL0)
+    float favY = oShort ? math.max(oFav, oTP)  : math.min(oFav, oTP)
+    if oShort
+        box.set_top(oSlF, math.max(advY, oEntry))
+        box.set_bottom(oTpF, math.min(favY, oEntry))
+    else
+        box.set_bottom(oSlF, math.min(advY, oEntry))
+        box.set_top(oTpF, math.max(favY, oEntry))
     bool hitSL = oShort ? high >= oSL : low  <= oSL
     bool hitTP = oShort ? low  <= oTP : high >= oTP
     if hitSL or hitTP
         oLive := false
         line.set_x2(oBeLn, time)
         line.set_x2(oTpLn, time)
+        box.set_right(oSlB, time)
+        box.set_right(oTpB, time)
+        box.set_right(oSlF, time)
+        box.set_right(oTpF, time)
         // Viser boksen stadig dette trade -> fjern den
         if bxTime == oTime and (bxStatus == "SHORT" or bxStatus == "LONG")
             bxStatus := ""
@@ -554,6 +593,11 @@ if oLive
         // Linjen vokser 1 minut for hvert minut tradet er aabent
         line.set_x2(oBeLn, oT + (beMins + (minB - oM)) * 60000)
         line.set_x2(oTpLn, oT + (beMins + (minB - oM)) * 60000)
+        int xr = oT + (beMins + (minB - oM)) * 60000
+        box.set_right(oSlB, xr)
+        box.set_right(oTpB, xr)
+        box.set_right(oSlF, xr)
+        box.set_right(oTpF, xr)
         if barstate.isconfirmed
             oBars += 1
 
@@ -594,11 +638,12 @@ bool  slOK  = not blockMax or (armShort ? close >= mxLvl : close <= mxLvl)
 if armed and sameMin and showMaxLn
     int mS = armMinB * 60000
     if na(mxLn)
-        mxLn := line.new(mS, mxLvl, mS + 60000, mxLvl, xloc = xloc.bar_time, color = mxCol, width = 2)
+        mxLn := line.new(time, mxLvl, time + timeframe.in_seconds() * 1000, mxLvl, xloc = xloc.bar_time, color = mxCol, width = 2)
         array.push(minLines, mxLn)
     else
         line.set_y1(mxLn, mxLvl)
         line.set_y2(mxLn, mxLvl)
+        line.set_x2(mxLn, time + timeframe.in_seconds() * 1000)
 
 // ── FOERSTE 15s-close i rigtig retning afgoer tradet ──
 if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
@@ -689,7 +734,7 @@ if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
             tpX := sh ? px - tpMax : px + tpMax
 
         line tpL = na
-        if showBE
+        if showBE and not showPos
             tpL := line.new(time, tpX, time + beMins * 60000, tpX, xloc = xloc.bar_time,
                  color = tpCol, width = 2, style = line.style_dashed)
             array.push(minLines, tpL)
@@ -698,6 +743,10 @@ if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
         if oLive
             line.set_x2(oBeLn, time)
             line.set_x2(oTpLn, time)
+            box.set_right(oSlB, time)
+            box.set_right(oTpB, time)
+            box.set_right(oSlF, time)
+            box.set_right(oTpF, time)
         oLive  := true
         oShort := sh
         oEntry := px
@@ -710,6 +759,23 @@ if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
         oBars  := 0
         oBeLn  := beL
         oTpLn  := tpL
+        oSL0   := slX
+        oAdv   := px
+        oFav   := px
+        oSlB   := na
+        oTpB   := na
+        oSlF   := na
+        oTpF   := na
+        if showBE and showPos
+            int xr0 = time + beMins * 60000
+            oSlB := box.new(time, math.max(slX, px), xr0, math.min(slX, px), xloc = xloc.bar_time, border_color = color.new(#F23645, 100), bgcolor = posSlCol)
+            oTpB := box.new(time, math.max(tpX, px), xr0, math.min(tpX, px), xloc = xloc.bar_time, border_color = color.new(#089981, 100), bgcolor = posTpCol)
+            oSlF := box.new(time, px, xr0, px, xloc = xloc.bar_time, border_color = color.new(#F23645, 100), bgcolor = posSlHit)
+            oTpF := box.new(time, px, xr0, px, xloc = xloc.bar_time, border_color = color.new(#089981, 100), bgcolor = posTpHit)
+            array.push(minBoxes, oSlB)
+            array.push(minBoxes, oTpB)
+            array.push(minBoxes, oSlF)
+            array.push(minBoxes, oTpF)
         oTime  := str.format_time(time, "HH:mm:ss", tz)
         mxLn := na     // stregen hoerer til tradet
 
