@@ -569,8 +569,17 @@ if not na(smx) and smxM == minB
     line.set_y1(smx, y1)
     line.set_y2(smx, y1)
     line.set_x2(smx, time + mxAhead * 60000)
-// Trade eller SL > max: stregen bliver staaende (slettes kun hvis minuttet bliver ugyldigt)
-if not na(smx) and smxM == minB and ((hit.fired and not mBad and not dayBad) or hit.slBad)
+// Trade: stregen slettes 1 candle efter entry. SL > max: den bliver staaende.
+var line smxDel  = na
+var int  smxDelT = na
+if not na(smxDel) and time > smxDelT
+    line.delete(smxDel)
+    smxDel := na
+if not na(smx) and smxM == minB and hit.fired and not mBad and not dayBad
+    smxDel  := smx
+    smxDelT := time
+    smx     := na
+if not na(smx) and smxM == minB and hit.slBad
     array.push(minLines, smx)
     smx := na
 // Minuttet gik uden trade -> stregen vaek

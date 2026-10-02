@@ -611,6 +611,12 @@ var string armSrc   = ""
 var string armTxt   = ""
 var int    armMinB  = na
 var line   mxLn     = na
+// Stregen slettes 1 candle efter entry
+var line   mxDel    = na
+var int    mxDelT   = na
+if not na(mxDel) and time > mxDelT
+    line.delete(mxDel)
+    mxDel := na
 
 bool entLong  = false
 bool entShort = false
@@ -779,7 +785,9 @@ if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
             array.push(minBoxes, oSlF)
             array.push(minBoxes, oTpF)
         oTime  := str.format_time(time, "HH:mm:ss", tz)
-        mxLn := na     // stregen hoerer til tradet
+        mxDel  := mxLn     // slettes paa naeste candle
+        mxDelT := time
+        mxLn   := na
 
         // ── Boksen ──
         bxStatus := sh ? "SHORT" : "LONG"
