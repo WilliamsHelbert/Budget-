@@ -106,6 +106,8 @@ posSlCol = input.color(color.new(#F23645, 78), "SL-felt",            group = g8)
 posSlHit = input.color(color.new(#F23645, 55), "SL-felt (prisen har vaeret der)", group = g8)
 posTpCol = input.color(color.new(#089981, 78), "TP-felt",            group = g8)
 posTpHit = input.color(color.new(#089981, 55), "TP-felt (prisen har vaeret der)", group = g8)
+showPx   = input.bool(true, "Skriv prisen ved entry / SL / TP", group = g8)
+pxCol    = input.color(color.gray, "Entry-pris", group = g8)
 beEq    = input.bool(true, "EQ og 0.25 / 0.75",        group = g4)
 beSess  = input.bool(true, "Session liq",              group = g4)
 be15    = input.bool(true, "15m-niveauer",             group = g4)
@@ -553,6 +555,9 @@ var box    oSlB   = na     // SL-felt
 var box    oTpB   = na     // TP-felt
 var box    oSlF   = na     // moerkere del af SL-feltet (hvor prisen har vaeret)
 var box    oTpF   = na     // moerkere del af TP-feltet
+var label  oSlLb  = na     // pris ved SL
+var label  oEnLb  = na     // pris ved entry
+var label  oTpLb  = na     // pris ved TP
 var float  oSL0   = na     // oprindelig SL (til tegningen)
 var float  oAdv   = na     // laengst prisen har vaeret mod SL
 var float  oFav   = na     // laengst prisen har vaeret mod TP
@@ -584,6 +589,9 @@ if oLive
         box.set_right(oTpB, time)
         box.set_right(oSlF, time)
         box.set_right(oTpF, time)
+        label.set_x(oSlLb, time)
+        label.set_x(oEnLb, time)
+        label.set_x(oTpLb, time)
         // Viser boksen stadig dette trade -> fjern den
         if bxTime == oTime and (bxStatus == "SHORT" or bxStatus == "LONG")
             bxStatus := ""
@@ -602,6 +610,9 @@ if oLive
         box.set_right(oTpB, xr)
         box.set_right(oSlF, xr)
         box.set_right(oTpF, xr)
+        label.set_x(oSlLb, xr)
+        label.set_x(oEnLb, xr)
+        label.set_x(oTpLb, xr)
         if barstate.isconfirmed
             oBars += 1
 
@@ -757,6 +768,9 @@ if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
             box.set_right(oTpB, time)
             box.set_right(oSlF, time)
             box.set_right(oTpF, time)
+            label.set_x(oSlLb, time)
+            label.set_x(oEnLb, time)
+            label.set_x(oTpLb, time)
         oLive  := true
         oShort := sh
         oEntry := px
@@ -786,6 +800,20 @@ if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
             array.push(minBoxes, oTpB)
             array.push(minBoxes, oSlF)
             array.push(minBoxes, oTpF)
+        oSlLb := na
+        oEnLb := na
+        oTpLb := na
+        if showBE and showPos and showPx
+            int xr1 = time + beMins * 60000
+            oSlLb := label.new(xr1, slX, str.tostring(slX, format.mintick), xloc = xloc.bar_time, style = label.style_label_left,
+                 color = color.new(color.black, 100), textcolor = color.new(#F23645, 0), size = size.small)
+            oEnLb := label.new(xr1, px,  str.tostring(px,  format.mintick), xloc = xloc.bar_time, style = label.style_label_left,
+                 color = color.new(color.black, 100), textcolor = pxCol, size = size.small)
+            oTpLb := label.new(xr1, tpX, str.tostring(tpX, format.mintick), xloc = xloc.bar_time, style = label.style_label_left,
+                 color = color.new(color.black, 100), textcolor = color.new(#089981, 0), size = size.small)
+            array.push(minLbls, oSlLb)
+            array.push(minLbls, oEnLb)
+            array.push(minLbls, oTpLb)
         oTime  := str.format_time(time, "HH:mm:ss", tz)
         mxDel  := mxLn     // slettes paa naeste candle
         mxDelT := time_close + mxKeepS * 1000
