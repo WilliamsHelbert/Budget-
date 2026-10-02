@@ -1,12 +1,13 @@
 //@version=6
 // =====================================================================
-//  EQ - Equilibrium Tracker  (v12)
+//  EQ - Equilibrium Tracker  (v13)
 //  ---------------------------------------------------------------
-//  NYT I v12
-//    - 0.25- og 0.75-linjerne er nu FULDE (ikke stiplede) og tykke.
-//      Farverne er modsat zonen de ligger i:
-//        0.75 (i premium, den groenne halvdel)  -> ROED
-//        0.25 (i discount, den roede halvdel)   -> GROEN
+//  NYT I v13
+//    - Kraftigere boks-farver (premium groen, discount roed).
+//    - 0.25- og 0.75-linjerne er fulde linjer i SAMME farve som zonen
+//      de ligger i:
+//        0.75 (i premium)  -> GROEN
+//        0.25 (i discount) -> ROED
 //
 //  NYT I v11 (ift. v10):
 //    - 0.25- og 0.75-linjer i hver EQ-boks (stiplede). Kan slaas fra.
@@ -83,14 +84,14 @@ sessTz         = input.string("Europe/Copenhagen", "Tidszone", group = g4,
      tooltip = "Tidszonen som klokkeslettet ovenfor laeses i. Europe/Copenhagen 15:30 = dansk aabning. Vaelg America/New_York 09:30 hvis du vil vaere immun over for at DST skifter paa forskellige datoer i EU og USA.")
 
 g3 = "Udseende"
-premiumCol  = input.color(color.new(color.green, 82), "Premium (oevre halvdel)",  group = g3)
-discountCol = input.color(color.new(color.red,   82), "Discount (nedre halvdel)", group = g3)
+premiumCol  = input.color(color.new(color.green, 55), "Premium (oevre halvdel)",  group = g3)
+discountCol = input.color(color.new(color.red,   55), "Discount (nedre halvdel)", group = g3)
 eqLineCol   = input.color(color.orange,               "EQ-linje (halvlinjen)",    group = g3)
 borderCol   = input.color(color.new(color.gray, 40),  "Kant",                     group = g3)
 showQt      = input.bool(true, "Vis 0.25- og 0.75-linjer", group = g3)
-q75Col      = input.color(color.red,   "0.75-linje (i premium)",  group = g3)
-q25Col      = input.color(color.green, "0.25-linje (i discount)", group = g3)
-qtWidth     = input.int(2, "Tykkelse 0.25 / 0.75", minval = 1, maxval = 4, group = g3)
+q75Col      = input.color(color.green, "0.75-linje (i premium)",  group = g3)
+q25Col      = input.color(color.red,   "0.25-linje (i discount)", group = g3)
+qtWidth     = input.int(1, "Tykkelse 0.25 / 0.75", minval = 1, maxval = 4, group = g3)
 
 // ───────── OPRETTELSES-CANDLEN (repainter ikke) ─────────
 // Paa et FINERE chart end creationTF hentes den 1m-candle der lige er
