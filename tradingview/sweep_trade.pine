@@ -1,7 +1,14 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v2)
+//  Sweep Trade (SMT)  (v2.1)
 //  ---------------------------------------------------------------
+//  NYT I v2.1
+//    - "Bloker resten af dagen" er SLAAET FRA som standard. Kun samme
+//      minut goer et trade ugyldigt.
+//    - Boksen viser en grund naar et sweep ikke blev til et trade:
+//        "Close tilbage, men ikke begge samme vej"
+//        "Blokeret - begge sider taget i dag" (hvis dags-reglen er til)
+//
 //  NYT I v2
 //    - Ingen stor label laengere. Paa chartet staar kun en lille "SMT"
 //      ved tradet. Detaljerne staar i en lille boks i hjoernet.
@@ -60,7 +67,7 @@ m15M     = input.int(31, "15m-niveauer gaelder til - minut", minval = 0, maxval 
 
 g6 = "Regler"
 needBoth  = input.bool(true, "Begge indeks skal lukke samme vej", group = g6)
-dayBlock  = input.bool(true, "Bloker resten af dagen naar begge sider er taget", group = g6,
+dayBlock  = input.bool(false, "Bloker resten af dagen naar begge sider er taget", group = g6,
      tooltip = "Er der siden market open taget baade en high-side og en low-side (paa et af indeksene), kommer der ikke flere trades den dag. Signaler i SAMME minut som det skete slettes altid.")
 
 g4 = "BE"
@@ -153,6 +160,7 @@ type Hit
     float  lvl     = na
     string src     = ""
     string who     = ""
+    bool   noDir   = false   // close tilbage, men ikke begge samme vej
     bool   swHi    = false   // et high-niveau blev swept i vinduet
     bool   swLo    = false   // et low-niveau blev swept i vinduet
     string swTxt   = ""
@@ -210,6 +218,8 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h) =>
                      : (close > open and not na(bClose) and bClose > bOpen))
                 bool aBack = not st.aDone and st.aM == minB and (isHi ? close < aL : close > aL)
                 bool bBack = not st.bDone and st.bM == minB and not na(bClose) and (isHi ? bClose < bL : bClose > bL)
+                if not dirOK and (aBack or bBack)
+                    h.noDir := true
                 if dirOK and (aBack or bBack)
                     h.fired   := true
                     h.isShort := isHi
@@ -458,6 +468,19 @@ if inWin and hit.swTxt != "" and not mBad and not dayBad
     bxBE     := ""
     bxTime   := str.format_time(time, "HH:mm:ss", tz)
     pendM    := minB
+
+// Close tilbage, men ikke begge samme vej -> vis grunden (venter stadig)
+if not na(pendM) and pendM == minB and hit.noDir and not hit.fired
+    bxStatus := "Close tilbage - men ikke begge samme vej"
+    bxCol    := color.orange
+
+// Sweep mens dags-reglen blokerer -> vis det
+if inWin and hit.swTxt != "" and dayBad and not mBad
+    bxStatus := "Blokeret - begge sider taget i dag"
+    bxCol    := color.gray
+    bxLvl    := hit.swTxt
+    bxBE     := ""
+    bxTime   := str.format_time(time, "HH:mm:ss", tz)
 
 // Sweepet gav intet trade i sit minut -> vis sidste trade igen (eller intet)
 if not na(pendM) and pendM != minB
