@@ -108,7 +108,7 @@ maxSL     = input.float(30, "Max SL (points) - 3R", minval = 1, group = g7,
      tooltip = "Maales fra toppen (short) / bunden (long) af det 1m-candle entry sker i. Er SL stoerre, er tradet ugyldigt.")
 blockMax  = input.bool(true, "Ugyldigt trade hvis SL > max", group = g7)
 showMaxLn = input.bool(true, "Tegn max SL-stregen", group = g7)
-mxCol     = input.color(color.yellow, "Max SL-streg", group = g7)
+mxCol     = input.color(color.red, "Max SL-streg", group = g7)
 mxAhead  = input.int(2, "Max SL-stregen raekker frem (minutter)", minval = 0, maxval = 15, group = g7,
      tooltip = "Stregen starter ved signalet og raekker saa mange minutter frem fra den aktuelle candle, saa den er let at se.")
 tpMin  = input.float(35, "TP mindst (points)", minval = 0, group = g7)

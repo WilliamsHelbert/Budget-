@@ -87,7 +87,7 @@ maxSL     = input.float(30, "Max SL (points) - 3R", minval = 1, group = g7,
      tooltip = "Maales fra bunden (long) eller toppen (short) af det minut-candle entry ligger i. Er afstanden stoerre, er tradet ugyldigt.")
 showMaxLn = input.bool(true, "Tegn max SL-stregen", group = g7)
 blockMax  = input.bool(true, "Ugyldigt trade hvis SL > max", group = g7)
-mxCol     = input.color(color.yellow, "Max SL-streg", group = g7)
+mxCol     = input.color(color.red, "Max SL-streg", group = g7)
 warn15s   = input.bool(true, "Advar hvis chartet ikke er 15s", group = g7)
 boxMins   = input.int(30, "Trade-boksens bredde (minutter)", minval = 1, group = g7)
 keepTrades = input.int(20, "Antal trades beholdt", minval = 1, maxval = 100, group = g7)

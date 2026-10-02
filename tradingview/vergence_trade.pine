@@ -114,7 +114,7 @@ be05    = input.bool(true, "5m-niveauer (kun 15:30)",  group = g4)
 g5 = "Visning"
 bearCol  = input.color(color.red,    "Short", group = g5)
 bullCol  = input.color(color.lime,   "Long",  group = g5)
-mxCol    = input.color(color.yellow, "Max SL-streg", group = g5)
+mxCol    = input.color(color.red, "Max SL-streg", group = g5)
 mxAhead  = input.int(2, "Max SL-stregen raekker frem (minutter)", minval = 0, maxval = 15, group = g5,
      tooltip = "Stregen starter ved signalet og raekker saa mange minutter frem fra den aktuelle candle, saa den er let at se.")
 beCol    = input.color(color.orange, "BE-linje", group = g5)
