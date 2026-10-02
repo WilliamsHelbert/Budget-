@@ -1,6 +1,12 @@
 //@version=6
 // =====================================================================
-//  Vergence  (v2.4)
+//  Vergence  (v2.5)
+//  ---------------------------------------------------------------
+//  NYT I v2.5
+//    - Sweeper begge indeks i SAMME minut, skal BEGGE lukke tilbage
+//      forbi hver sit niveau paa entry-candlen (short: under, long: over).
+//      Sker sweepene i forskellige minutter, er det som foer chartets
+//      symbol der skal lukke tilbage.
 //  ---------------------------------------------------------------
 //  NYT I v2.4
 //    - NY PRE 15m-niveauerne (som Session Levels tegner) er nu ogsaa med
@@ -227,6 +233,8 @@ type Hit
     bool   fired   = false   // Vergence fuldendt (begge har taget niveauet)
     bool   isShort = false
     float  lvl     = na
+    float  lvlB    = na      // niveauet paa sammenligningssymbolet
+    bool   same    = false   // begge sweepede i samme minut
     string src     = ""
     string txt     = ""
     bool   tooLate = false   // begge tog det, men > maxGap min imellem
@@ -282,6 +290,8 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h) =>
                     h.fired   := true
                     h.isShort := isHi
                     h.lvl     := aL
+                    h.lvlB    := bL
+                    h.same    := st.aM == st.bM
                     h.src     := lvlNm
                     h.txt     := tx
                 else if inWin and gap > maxGap
@@ -639,6 +649,8 @@ if oLive
 var bool   armed    = false
 var bool   armShort = false
 var float  armLvl   = na
+var float  armLvlB  = na
+var bool   armSame  = false
 var string armSrc   = ""
 var string armTxt   = ""
 var int    armMinB  = na
@@ -657,6 +669,8 @@ if hit.fired and not armed and not mBad and not dayBad
     armed    := true
     armShort := hit.isShort
     armLvl   := hit.lvl
+    armLvlB  := hit.lvlB
+    armSame  := hit.same
     armSrc   := hit.src
     armTxt   := hit.txt
     armMinB  := minB
@@ -670,7 +684,10 @@ if hit.fired and not armed and not mBad and not dayBad
 
 bool sameMin = minB == armMinB
 bool dirOK   = armShort ? bothBear : bothBull
-bool backOK  = not needBack or (armShort ? close < armLvl : close > armLvl)
+// Sweepede begge i SAMME minut, skal begge indeks lukke tilbage forbi hver sit niveau.
+bool backA   = armShort ? close < armLvl : close > armLvl
+bool backB   = not armSame or (not na(bClose) and (armShort ? bClose < armLvlB : bClose > armLvlB))
+bool backOK  = not needBack or (backA and backB)
 
 // ── MAX SL-STREGEN: 30 points fra minut-candlens top/bund ──
 float mxLvl = armShort ? m1Hi - maxSL : m1Lo + maxSL
