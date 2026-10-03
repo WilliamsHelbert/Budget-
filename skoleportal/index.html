@@ -1,0 +1,1508 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skoleportal</title>
+<style>
+:root{
+  --bg:#f3f5f8; --panel:#fff; --line:#e2e6ec; --line2:#eef1f5; --text:#1f2933; --muted:#6b7785;
+  --brand:#2f6fb0; --brand-d:#22578c; --brand-l:#e8f0fa;
+  --ok:#1d8a4b; --ok-l:#e2f5ea; --warn:#a96400; --warn-l:#fff3da; --bad:#c22f3c; --bad-l:#fde7e9;
+  --info:#2f6fb0; --info-l:#e6f0fb; --radius:8px;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.45}
+h1{font-size:23px;font-weight:500;color:var(--brand-d);margin:0}
+h3{font-size:15px;margin:0 0 12px}
+a{color:var(--brand)}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+
+/* top + layout */
+.topbar{height:54px;background:var(--brand);color:#fff;display:flex;align-items:center;gap:18px;padding:0 16px;position:sticky;top:0;z-index:30}
+.brand{font-weight:700;font-size:21px;letter-spacing:.2px;white-space:nowrap}
+.brand span{color:#a8d4ff}
+.school{opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:5px 11px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.chip:hover{background:rgba(255,255,255,.24)}
+.chip.sim{background:#f59e0b;border-color:#f59e0b;color:#1f2933}
+.chip .ic{width:15px;height:15px}
+.me{display:flex;align-items:center;gap:8px}
+.avatar{width:32px;height:32px;border-radius:50%;background:#fff;color:var(--brand-d);display:grid;place-items:center;font-weight:700;font-size:13px;flex-shrink:0}
+.avatar.lg{width:64px;height:64px;font-size:22px;background:var(--brand-l)}
+.me-txt{display:flex;flex-direction:column;line-height:1.15}
+.me-txt small{opacity:.85}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+.side{width:214px;background:#fff;border-right:1px solid var(--line);padding:8px 0;flex-shrink:0;display:flex;flex-direction:column}
+.side a{display:flex;align-items:center;gap:11px;padding:11px 18px;color:var(--text);text-decoration:none;cursor:pointer;border-left:3px solid transparent}
+.side a:hover{background:#f4f7fb}
+.side a.active{background:var(--brand-l);border-left-color:var(--brand);color:var(--brand-d);font-weight:600}
+.side .foot{margin-top:auto;padding:14px 18px;font-size:12px;color:var(--muted);border-top:1px solid var(--line2)}
+.side .foot button{background:none;border:0;color:var(--brand);padding:0;cursor:pointer;font:inherit;font-size:12px;text-decoration:underline}
+.ic{width:18px;height:18px;flex-shrink:0}
+main{flex:1;padding:22px 26px 40px;min-width:0}
+.page-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.page-head .row{margin-left:auto}
+.back{display:inline-block;margin-bottom:10px;cursor:pointer;color:var(--brand)}
+
+/* cards, grids */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+.card.hl{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-l)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start}
+.grid2>.card{margin-bottom:0}
+.stack>*+*{margin-top:16px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+.tile .v{font-size:26px;font-weight:600;line-height:1.1}
+.tile .l{color:var(--muted);font-size:12.5px;margin-top:4px}
+.tile.bad .v{color:var(--bad)} .tile.warn .v{color:var(--warn)} .tile.ok .v{color:var(--ok)}
+.empty{color:var(--muted);padding:14px 0;text-align:center}
+.note{background:var(--info-l);color:#1d4f80;border-radius:6px;padding:10px 12px;font-size:13px;margin-bottom:14px}
+.note.warn{background:var(--warn-l);color:#7a4a00}
+.note.bad{background:var(--bad-l);color:#8c1d27}
+
+/* buttons, inputs */
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;color:var(--text);border-radius:6px;padding:7px 13px;font:inherit;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#f4f7fb}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.primary:hover{background:var(--brand-d)}
+.btn.danger{color:var(--bad);border-color:#f0c4c8}
+.btn.danger:hover{background:var(--bad-l)}
+.btn.sm{padding:4px 9px;font-size:12.5px}
+.btn:disabled{opacity:.5;cursor:default}
+.input,select,textarea{font:inherit;border:1px solid #cfd6df;border-radius:6px;padding:7px 9px;background:#fff;color:var(--text);max-width:100%}
+.input:focus,select:focus,textarea:focus{outline:2px solid var(--brand-l);border-color:var(--brand)}
+textarea{width:100%;min-height:90px;resize:vertical}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field>label{font-size:12.5px;color:var(--muted);font-weight:600}
+.field .input,.field select{width:100%}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 10px}
+.checks label{display:flex;gap:6px;align-items:center;font-size:13px}
+input[type=number].num{width:70px}
+
+/* badges, tabs, tables, progress */
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.badge.ok{background:var(--ok-l);color:var(--ok)}
+.badge.warn{background:var(--warn-l);color:var(--warn)}
+.badge.bad{background:var(--bad-l);color:var(--bad)}
+.badge.info{background:var(--info-l);color:var(--info)}
+.badge.muted{background:#eef1f5;color:var(--muted)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;cursor:pointer;font:inherit;font-size:13px}
+.tab.active{background:var(--brand);border-color:var(--brand);color:#fff}
+.tab .count{opacity:.7;margin-left:3px}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.table-wrap{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:9px 10px;border-bottom:1px solid var(--line2);vertical-align:middle}
+.tbl tr.click{cursor:pointer}
+.tbl tr.click:hover td{background:#f7f9fc}
+.tbl td.r,.tbl th.r{text-align:right}
+.progress{height:7px;background:#e9edf2;border-radius:99px;overflow:hidden;min-width:80px}
+.progress span{display:block;height:100%;background:var(--ok)}
+.progress.warn span{background:#e3a008}
+.progress.bad span{background:var(--bad)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:#fff;padding:6px 11px;font:inherit;font-size:13px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on.p{background:var(--ok);color:#fff}
+.seg button.on.l{background:#e3a008;color:#fff}
+.seg button.on.a{background:var(--bad);color:#fff}
+
+/* lessons list */
+.lessons{display:flex;flex-direction:column}
+.lrow{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line2);flex-wrap:wrap}
+.lrow:last-child{border-bottom:0}
+.lrow.past{opacity:.55}
+.lrow.now{background:var(--brand-l);border-radius:6px;padding-left:8px}
+.swatch{width:10px;height:10px;border-radius:3px;flex-shrink:0;border:1px solid rgba(0,0,0,.12)}
+.ltime{font-variant-numeric:tabular-nums;color:var(--muted);width:92px}
+.lsub{font-weight:600;flex:1;min-width:120px}
+.list-item{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line2);cursor:pointer}
+.list-item:last-child{border-bottom:0}
+.list-item:hover{background:#f7f9fc}
+.list-item .grow{flex:1;min-width:0}
+.list-item .t{font-weight:600}
+
+/* week grid */
+.weeknav{display:flex;align-items:center;gap:6px}
+.weeknav .lbl{min-width:120px;text-align:center;font-weight:600;color:var(--brand-d)}
+.week-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:#fff}
+.week{display:grid;grid-template-columns:52px repeat(5,minmax(132px,1fr));min-width:720px}
+.week .head{background:#f1f4f8;border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:8px 4px;text-align:center;font-size:13px;color:var(--muted)}
+.week .head.today{background:var(--brand);color:#fff;font-weight:600}
+.timecol,.daycol{position:relative;border-right:1px solid var(--line)}
+.daycol:last-child,.week .head:last-child{border-right:0}
+.daycol.today{background:#fafcff}
+.hourline{position:absolute;left:0;right:0;border-top:1px solid var(--line2)}
+.hourlabel{position:absolute;right:6px;font-size:11px;color:var(--muted);margin-top:2px}
+.lesson{position:absolute;left:3px;right:3px;border-radius:5px;padding:3px 6px;font-size:12px;overflow:hidden;border-left:4px solid rgba(0,0,0,.22);line-height:1.3;color:#1f2933}
+.lesson .t{font-size:11px;opacity:.75;font-variant-numeric:tabular-nums}
+.lesson .s{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lesson .m{display:flex;justify-content:space-between;gap:4px;opacity:.85}
+.lesson .flag{position:absolute;right:4px;top:3px;font-size:10px;font-weight:700;background:rgba(255,255,255,.85);border-radius:4px;padding:0 4px;color:var(--bad)}
+.lesson.click{cursor:pointer}
+.lesson.click:hover{filter:brightness(.95);box-shadow:0 1px 5px rgba(0,0,0,.18)}
+.lesson.conflict{outline:2px solid var(--bad);outline-offset:-1px}
+.lesson.now{box-shadow:0 0 0 2px var(--brand)}
+.nowline{position:absolute;left:0;right:0;border-top:2px solid var(--bad);z-index:3;pointer-events:none}
+.nowline::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;border-radius:50%;background:var(--bad)}
+
+/* scheme timeline */
+.tl{margin:6px 0 4px}
+.tl-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.tl-label{width:90px;font-size:12.5px;font-weight:600;flex-shrink:0}
+.tl-track{position:relative;height:26px;flex:1;background:repeating-linear-gradient(90deg,#f1f4f8 0 1px,transparent 1px 12.5%);border-radius:4px}
+.tl-bar{position:absolute;top:2px;bottom:2px;background:var(--brand);color:#fff;border-radius:4px;font-size:11px;display:grid;place-items:center;overflow:hidden}
+.tl-row.alt .tl-bar{background:#2a9d8f}
+.tl-axis{display:flex;justify-content:space-between;margin-left:100px;font-size:11px;color:var(--muted)}
+.slotrow{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.slotrow span{width:62px;font-size:12.5px;color:var(--muted)}
+
+/* classes page */
+.split{display:grid;grid-template-columns:240px 1fr;gap:16px;align-items:start}
+.cls-item{padding:10px 12px;border-radius:6px;cursor:pointer;display:flex;flex-direction:column}
+.cls-item:hover{background:#f4f7fb}
+.cls-item.active{background:var(--brand-l)}
+.subj-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 10px;margin:0 6px 6px 0;font-size:13px}
+.subj-chip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1}
+
+/* login */
+.login-wrap{min-height:100vh;display:grid;place-items:center;padding:16px;background:linear-gradient(160deg,#2f6fb0 0%,#22578c 55%,#1b456f 100%)}
+.login-card{background:#fff;border-radius:12px;padding:32px 28px;width:100%;max-width:400px;box-shadow:0 20px 50px rgba(0,0,0,.25);text-align:center}
+.login-card .brand{color:var(--brand-d);font-size:30px;margin-bottom:4px}
+.login-card .brand span{color:#4fa3ff}
+.btn-login{display:block;width:100%;padding:13px;border-radius:8px;font:inherit;font-weight:600;font-size:15px;cursor:pointer;margin-top:12px;border:2px solid transparent}
+.btn-login.uni{background:#1f2933;color:#fff}
+.btn-login.mitid{background:#fff;color:#0060e6;border-color:#0060e6}
+.btn-login:hover{filter:brightness(1.08)}
+.proto{margin-top:18px;font-size:12.5px;color:var(--muted)}
+.demo-pick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.demo-pick .btn{flex-direction:column;align-items:flex-start;white-space:normal;text-align:left;gap:2px}
+.pick-list{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:6px;margin-top:8px}
+.pick-group{position:sticky;top:0;background:#f1f4f8;padding:5px 10px;font-size:12px;font-weight:700;color:var(--muted)}
+.pick-row{display:flex;justify-content:space-between;padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--line2)}
+.pick-row:hover{background:var(--brand-l)}
+
+/* modal + toast */
+.modal-bg{position:fixed;inset:0;background:rgba(20,30,45,.45);display:grid;place-items:center;z-index:100;padding:16px}
+.modal{background:#fff;border-radius:10px;width:100%;max-width:520px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.modal.wide{max-width:760px}
+.modal-h{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.modal-h h3{margin:0;font-size:16px}
+.modal-h .x{margin-left:auto;border:0;background:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1}
+.modal-b{padding:16px 18px;overflow:auto}
+.modal-f{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.modal-f:empty{display:none}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{background:#1f2933;color:#fff;padding:10px 16px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-size:13.5px;animation:pop .2s ease}
+.toast.bad{background:var(--bad)}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.pre{white-space:pre-wrap}
+.file{display:inline-flex;gap:6px;align-items:center;background:#f1f4f8;border-radius:6px;padding:4px 9px;font-size:13px;margin:0 6px 6px 0}
+.feedback{background:var(--ok-l);border-radius:8px;padding:12px 14px}
+.grade{font-size:28px;font-weight:700;color:var(--ok)}
+dl.kv{display:grid;grid-template-columns:170px 1fr;gap:8px 12px;margin:0}
+dl.kv dt{color:var(--muted)}
+dl.kv dd{margin:0}
+
+@media (max-width:820px){
+  .layout{flex-direction:column}
+  .side{width:auto;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:0;position:sticky;top:54px;z-index:20}
+  .side a{border-left:0;border-bottom:3px solid transparent;white-space:nowrap;padding:11px 14px}
+  .side a.active{border-bottom-color:var(--brand)}
+  .side .foot{display:none}
+  main{padding:16px}
+  .school,.me-txt{display:none}
+  .split{grid-template-columns:1fr}
+  .form-grid{grid-template-columns:1fr}
+  .demo-pick{grid-template-columns:1fr}
+  dl.kv{grid-template-columns:1fr}
+  dl.kv dt{margin-top:6px}
+  .chip span{display:none}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="modal"></div>
+<div id="toast"></div>
+<script>
+'use strict';
+/* =====================================================================
+   Skoleportal – prototype
+   Alt kører i browseren, og data gemmes i localStorage.
+   I den rigtige version flyttes DB til en server (fx på jeres VPS).
+   ===================================================================== */
+
+const VERSION = 1;
+const KEY = 'skoleportal_db_v1', SKEY = 'skoleportal_session_v1';
+const DAYS_SHORT = ['Man','Tir','Ons','Tor','Fre','Lør','Søn'];
+const DAYS_LONG = ['mandag','tirsdag','onsdag','torsdag','fredag','lørdag','søndag'];
+const MONTHS = ['januar','februar','marts','april','maj','juni','juli','august','september','oktober','november','december'];
+const ROLE_LABEL = {student:'Elev', teacher:'Lærer', admin:'Administrator'};
+const ROLE_ORDER = {admin:0, teacher:1, student:2};
+const GRADES = ['12','10','7','4','02','00','-3'];
+const AVAIL = {all:'Hele dagen', am:'Kun formiddag', pm:'Kun eftermiddag', none:'Ikke tilgængelig'};
+
+let DB = null;
+const state = {userId:null, method:null, simTime:null, view:'home', params:{}, weekOffset:0,
+  sched:{type:'class', id:null}, regDraft:null, refocus:null};
+
+/* ---------------- utils ---------------- */
+const pad = n => String(n).padStart(2,'0');
+const toMin = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
+const fromMin = m => pad(Math.floor(m/60))+':'+pad(m%60);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = p => p + Math.random().toString(36).slice(2,9);
+const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+const dateKey = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const parseKey = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y,m-1,d); };
+const addDays = (d,n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const weekday = d => (d.getDay()+6)%7;
+const mondayOf = d => addDays(new Date(d.getFullYear(),d.getMonth(),d.getDate()), -weekday(d));
+const toLocalISO = d => dateKey(d)+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+const getNow = () => state.simTime ? new Date(state.simTime) : new Date();
+const nowMin = () => { const n = getNow(); return n.getHours()*60+n.getMinutes(); };
+const fmtDate = d => `${DAYS_LONG[weekday(d)]} ${d.getDate()}. ${MONTHS[d.getMonth()]}`;
+const fmtDT = iso => { const d = new Date(iso); return `${DAYS_SHORT[weekday(d)].toLowerCase()} ${d.getDate()}/${d.getMonth()+1} kl. ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const pctTxt = p => p.toFixed(1).replace('.',',')+' %';
+const initialsOf = name => name.split(/\s+/).filter(Boolean).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+const firstName = name => name.split(' ')[0];
+function isoWeek(d){
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate()+4-day);
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(),0,1));
+  return Math.ceil(((t-y0)/864e5+1)/7);
+}
+function relTime(iso){
+  const diff = new Date(iso) - getNow(), abs = Math.abs(diff);
+  const h = Math.round(abs/36e5), d = Math.round(abs/864e5);
+  const txt = abs < 36e5 ? Math.max(1,Math.round(abs/6e4))+' min' : h < 48 ? h+' timer' : d+' dage';
+  return diff >= 0 ? 'om '+txt : txt+' siden';
+}
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+const asciiize = s => s.toLowerCase().replace(/æ/g,'ae').replace(/ø/g,'oe').replace(/å/g,'aa').replace(/[^a-z]/g,'');
+
+const IC = {
+  home:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  file:'<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.6c2.4.6 4 2.3 4 5.4"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  magic:'<path d="M4 20L16 8M14 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1zM19 11l.7 1.3L21 13l-1.3.7L19 15l-.7-1.3L17 13l1.3-.7z"/>',
+  layers:'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
+  check:'<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>'
+};
+const icon = n => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
+
+/* ---------------- lookups ---------------- */
+const user = id => DB.users.find(u => u.id === id);
+const classOf = id => DB.classes.find(c => c.id === id);
+const course = id => DB.courses.find(c => c.id === id);
+const subj = id => DB.subjects.find(s => s.id === id);
+const schemeOf = cl => DB.schemes[cl && cl.scheme] || Object.values(DB.schemes)[0];
+const byName = (a,b) => a.name.localeCompare(b.name,'da');
+const studentsOf = classId => DB.users.filter(u => u.role==='student' && u.classId===classId).sort(byName);
+const teachers = () => DB.users.filter(u => u.role==='teacher').sort(byName);
+const submissionOf = (aid,sid) => DB.submissions.find(s => s.assignmentId===aid && s.studentId===sid);
+const courseLabel = c => { const cl = classOf(c.classId), s = subj(c.subjectId); return `${cl?cl.name:'?'} · ${s?s.name:'?'}`; };
+const myCourses = me => me.role==='admin' ? DB.courses : DB.courses.filter(c => c.teacherId===me.id);
+function entryTime(e){
+  const c = course(e.courseId); if(!c) return null;
+  const sl = schemeOf(classOf(c.classId)).slots[e.slot]; if(!sl) return null;
+  return {start:toMin(sl[0]), end:toMin(sl[1])};
+}
+const byStart = (a,b) => entryTime(a).start - entryTime(b).start;
+function lessonsOn(date, filter){
+  const w = weekday(date); if(w > 4) return [];
+  return DB.entries.filter(e => e.day===w && entryTime(e) && filter(e)).sort(byStart);
+}
+const isRegistered = (entryId, dk) => !!DB.registered[entryId+'|'+dk] || (DB.settings.seededUntil && dk < DB.settings.seededUntil);
+
+/* ---------------- storage ---------------- */
+function load(){
+  try { const raw = localStorage.getItem(KEY); if(raw){ const d = JSON.parse(raw); if(d.version===VERSION){ DB = d; } } } catch(e){}
+  if(!DB){ DB = seed(); save(); }
+  try { const s = JSON.parse(localStorage.getItem(SKEY) || 'null'); if(s){ state.userId = s.userId; state.method = s.method; state.simTime = s.simTime; } } catch(e){}
+  if(state.userId && !user(state.userId)) state.userId = null;
+}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch(e){ toast('Kunne ikke gemme lokalt', 'bad'); } }
+function saveSession(){ try { localStorage.setItem(SKEY, JSON.stringify({userId:state.userId, method:state.method, simTime:state.simTime})); } catch(e){} }
+function resetDemo(){
+  if(!confirm('Nulstil alle demo-data? Alt du har oprettet bliver slettet.')) return;
+  DB = seed(); save(); state.view = 'home'; state.params = {}; render(); toast('Demo-data er nulstillet');
+}
+
+/* =====================================================================
+   SKEMALÆGNING
+   Konflikter tjekkes på KLOKKESLÆT (minutter), ikke modulnummer.
+   Derfor kan 1.g og 2./3.g have hver deres pausetider, og en lærer kan
+   stadig undervise på tværs af årgange uden at blive dobbeltbooket.
+   ===================================================================== */
+function teacherAvail(t, day, st, en){
+  if(!t) return false;
+  const a = (t.avail || [])[day] || 'all';
+  if(a === 'none') return false;
+  if(a === 'am') return en <= toMin('12:30');
+  if(a === 'pm') return st >= toMin('12:00');
+  return true;
+}
+function runScheduler(baseSeed){
+  const units = [], skipped = [];
+  DB.courses.forEach(c => {
+    if(!classOf(c.classId)) return;
+    if(!user(c.teacherId)){ skipped.push({course:c, count:c.perWeek, reason:'Holdet har ingen lærer'}); return; }
+    for(let i=0;i<c.perWeek;i++) units.push(c);
+  });
+  const load = {}; units.forEach(c => load[c.teacherId] = (load[c.teacherId]||0)+1);
+  let best = null;
+  for(let a=0; a<150; a++){
+    const r = scheduleAttempt(units, load, mulberry32(baseSeed + a*7919));
+    if(!best || r.unplaced.length < best.unplaced.length || (r.unplaced.length===best.unplaced.length && r.penalty < best.penalty)) best = r;
+    if(best.unplaced.length===0 && best.penalty===0) break;
+    if(best.unplaced.length===0 && a>=40) break;
+  }
+  // grupér ikke-placerede pr. hold
+  const grouped = {};
+  best.unplaced.forEach(u => { const g = grouped[u.course.id] || (grouped[u.course.id] = {courseId:u.course.id, count:0, reason:u.reason}); g.count++; });
+  skipped.forEach(s => grouped[s.course.id] = {courseId:s.course.id, count:s.count, reason:s.reason});
+  const total = units.length + skipped.reduce((s,x)=>s+x.count,0);
+  return {entries:best.entries, unplaced:Object.values(grouped), gaps:best.penalty, total};
+}
+function scheduleAttempt(units, load, rnd){
+  const S = DB.settings, entries = [], unplaced = [];
+  const classBusy = new Set(), tDay = {}, rDay = {}, cDay = {}, clDay = {}, courseRoom = {};
+  const order = units.map(c => {
+    const t = user(c.teacherId), off = (t.avail||[]).filter(x => x && x!=='all').length;
+    return {c, k: load[c.teacherId] + off*3 + rnd()*5};
+  }).sort((a,b) => b.k - a.k);
+
+  for(const {c} of order){
+    const cl = classOf(c.classId), slots = schemeOf(cl).slots, t = user(c.teacherId);
+    let best = null; const why = {cls:0, same:0, avail:0, teacher:0, room:0};
+    for(let d=0; d<5; d++){
+      for(let s=0; s<slots.length; s++){
+        if(classBusy.has(cl.id+'|'+d+'|'+s)){ why.cls++; continue; }
+        if((cDay[c.id+'|'+d]||0) >= S.maxSamePerDay){ why.same++; continue; }
+        const st = toMin(slots[s][0]), en = toMin(slots[s][1]);
+        if(!teacherAvail(t,d,st,en)){ why.avail++; continue; }
+        const td = tDay[t.id+'|'+d] || [];
+        if(td.length >= S.maxPerDay || td.some(x => st < x.end+S.buffer && x.start < en+S.buffer)){ why.teacher++; continue; }
+        const room = pickRoom(cl, c, d, st, en, rDay, courseRoom);
+        if(!room){ why.room++; continue; }
+        let p = s*1.2 + (clDay[cl.id+'|'+d]||0)*1.6 + (s===slots.length-1 ? 2 : 0) + rnd()*2.5;
+        if(classBusy.has(cl.id+'|'+d+'|'+(s-1)) || classBusy.has(cl.id+'|'+d+'|'+(s+1))) p -= 1;
+        if(!best || p < best.p) best = {d, s, st, en, room, p};
+      }
+    }
+    if(!best){ unplaced.push({course:c, reason:reasonText(why)}); continue; }
+    entries.push({id:uid('e'), courseId:c.id, day:best.d, slot:best.s, room:best.room});
+    classBusy.add(cl.id+'|'+best.d+'|'+best.s);
+    (tDay[t.id+'|'+best.d] = tDay[t.id+'|'+best.d] || []).push({start:best.st, end:best.en});
+    (rDay[best.room+'|'+best.d] = rDay[best.room+'|'+best.d] || []).push({start:best.st, end:best.en});
+    cDay[c.id+'|'+best.d] = (cDay[c.id+'|'+best.d]||0)+1;
+    clDay[cl.id+'|'+best.d] = (clDay[cl.id+'|'+best.d]||0)+1;
+    if(!courseRoom[c.id]) courseRoom[c.id] = best.room;
+  }
+  // straf for huller i klassernes dage
+  let penalty = 0;
+  DB.classes.forEach(cl => {
+    const n = schemeOf(cl).slots.length;
+    for(let d=0; d<5; d++){
+      const occ = []; for(let s=0;s<n;s++) if(classBusy.has(cl.id+'|'+d+'|'+s)) occ.push(s);
+      if(occ.length) for(let s=occ[0]; s<=occ[occ.length-1]; s++) if(!classBusy.has(cl.id+'|'+d+'|'+s)) penalty++;
+    }
+  });
+  return {entries, unplaced, penalty};
+}
+function pickRoom(cl, c, d, st, en, rDay, courseRoom){
+  const prefs = [courseRoom[c.id], cl.homeRoom, ...DB.rooms].filter((r,i,a) => r && a.indexOf(r)===i && DB.rooms.includes(r));
+  return prefs.find(r => !(rDay[r+'|'+d] || []).some(x => st < x.end && x.start < en)) || null;
+}
+function reasonText(why){
+  const k = Object.keys(why).sort((a,b) => why[b]-why[a])[0];
+  return ({
+    cls:'Klassen har ikke flere ledige moduler',
+    same:'Faget har allerede max antal lektioner på alle dage',
+    avail:'Læreren er ikke tilgængelig på de ledige tidspunkter',
+    teacher:'Læreren er optaget (overlap, pause/forberedelse eller max lektioner pr. dag)',
+    room:'Ingen ledige lokaler'
+  })[k];
+}
+function findConflicts(entries){
+  const S = DB.settings, list = [], ids = new Set();
+  const ex = entries.map(e => { const c = course(e.courseId); const t = c && (() => {
+      const sl = schemeOf(classOf(c.classId)).slots[e.slot]; return sl ? {start:toMin(sl[0]), end:toMin(sl[1])} : null; })();
+    return t ? {e, c, ...t} : null; }).filter(Boolean);
+  const add = (type, text, a, b) => { list.push({type, text, ids:b ? [a.e.id,b.e.id] : [a.e.id], day:a.e.day}); ids.add(a.e.id); if(b) ids.add(b.e.id); };
+  const lbl = x => `${courseLabel(x.c)} ${fromMin(x.start)}`;
+  for(let i=0;i<ex.length;i++){
+    const a = ex[i];
+    const t = user(a.c.teacherId);
+    if(t && !teacherAvail(t, a.e.day, a.start, a.end)) add('Tilgængelighed', `${t.initials} er ikke tilgængelig: ${lbl(a)}`, a);
+    for(let j=i+1;j<ex.length;j++){
+      const b = ex[j]; if(a.e.day !== b.e.day) continue;
+      const ov = (pad0) => a.start < b.end+pad0 && b.start < a.end+pad0;
+      if(a.c.classId === b.c.classId && ov(0)) add('Klasse', `${classOf(a.c.classId).name} har to lektioner samtidig: ${lbl(a)} / ${lbl(b)}`, a, b);
+      if(a.c.teacherId && a.c.teacherId === b.c.teacherId){
+        const ti = user(a.c.teacherId)?.initials || '?';
+        if(ov(0)) add('Lærer', `${ti} er dobbeltbooket: ${lbl(a)} / ${lbl(b)}`, a, b);
+        else if(ov(S.buffer)) add('Pause', `${ti} har under ${S.buffer} min. mellem ${lbl(a)} og ${lbl(b)}`, a, b);
+      }
+      if(a.e.room && a.e.room === b.e.room && ov(0)) add('Lokale', `Lokale ${a.e.room} er dobbeltbooket: ${lbl(a)} / ${lbl(b)}`, a, b);
+    }
+  }
+  return {list, ids};
+}
+
+/* ---------------- fravær ---------------- */
+function heldCount(classId){
+  const now = getNow(), today = dateKey(now), nm = nowMin();
+  const byDay = [[],[],[],[],[]];
+  DB.entries.forEach(e => { const c = course(e.courseId); if(c && c.classId===classId){ const t = entryTime(e); if(t) byDay[e.day].push(t.end); } });
+  let n = 0, d = parseKey(DB.settings.termStart);
+  while(dateKey(d) <= today){
+    const w = weekday(d), k = dateKey(d);
+    if(w < 5) n += k < today ? byDay[w].length : byDay[w].filter(end => end <= nm).length;
+    d = addDays(d,1);
+  }
+  return n;
+}
+function absenceStats(st){
+  const held = heldCount(st.classId), today = dateKey(getNow());
+  const recs = DB.absences.filter(a => a.studentId===st.id && a.date <= today);
+  const units = recs.reduce((s,r) => s + (r.status==='late' ? 0.5 : 1), 0);
+  return {held, units, pct: held ? units/held*100 : 0, recs};
+}
+const studentAssignments = st => DB.assignments.filter(a => { const c = course(a.courseId); return c && c.classId===st.classId; });
+function writtenAbsence(st){
+  const now = getNow(); let total = 0, missing = 0; const missingList = [];
+  studentAssignments(st).filter(a => new Date(a.deadline) < now).forEach(a => {
+    total += a.hours; if(!submissionOf(a.id, st.id)){ missing += a.hours; missingList.push(a); }
+  });
+  return {total, missing, pct: total ? missing/total*100 : 0, missingList};
+}
+const pctBadge = p => `<span class="badge ${p>=15?'bad':p>=10?'warn':'ok'}">${pctTxt(p)}</span>`;
+
+/* ---------------- opgaver ---------------- */
+function subStatus(a, sid){
+  const sub = submissionOf(a.id, sid), dl = new Date(a.deadline);
+  if(sub) return new Date(sub.submittedAt) > dl ? 'late' : 'done';
+  return dl < getNow() ? 'missing' : 'open';
+}
+const STATUS = {done:['Afleveret','ok'], late:['Afleveret for sent','warn'], missing:['Mangler','bad'], open:['Ikke afleveret endnu','muted']};
+const statusBadge = st => `<span class="badge ${STATUS[st][1]}">${STATUS[st][0]}</span>`;
+function assignmentCounts(a){
+  const c = course(a.courseId); const studs = c ? studentsOf(c.classId) : [];
+  const r = {total:studs.length, done:0, late:0, missing:0, open:0, toGrade:0};
+  studs.forEach(s => { r[subStatus(a,s.id)]++; const sub = submissionOf(a.id,s.id); if(sub && !sub.grade && !sub.feedback) r.toGrade++; });
+  r.handed = r.done + r.late; return r;
+}
+const progress = (n, total, cls='') => `<div class="progress ${cls}"><span style="width:${total ? n/total*100 : 0}%"></span></div>`;
+
+/* =====================================================================
+   SEED (demo-data)
+   ===================================================================== */
+function seed(){
+  const rnd = mulberry32(42), pick = arr => arr[Math.floor(rnd()*arr.length)];
+  const now = new Date();
+  const db = {
+    version:VERSION,
+    settings:{schoolName:'Demo Handelsgymnasium', termStart:'2026-08-10', buffer:10, maxPerDay:4, maxSamePerDay:1},
+    schemes:{
+      '1g': {name:'1.g', slots:[['08:15','09:25'],['09:35','10:45'],['10:55','12:05'],['12:35','13:45'],['13:55','15:05']]},
+      '23g':{name:'2.g og 3.g', slots:[['08:15','09:25'],['09:40','10:50'],['11:20','12:30'],['12:40','13:50'],['14:00','15:10']]}
+    },
+    subjects:[
+      {id:'da',name:'Dansk A',color:'#fbe3a8'}, {id:'en',name:'Engelsk A',color:'#bcdcf7'},
+      {id:'maA',name:'Matematik A',color:'#d9cbf3'}, {id:'maB',name:'Matematik B',color:'#e6dcf8'},
+      {id:'sa',name:'Samfundsfag B',color:'#bfe3c0'}, {id:'hi',name:'Historie B',color:'#f6c9c9'},
+      {id:'io',name:'Int. økonomi A',color:'#fcd7b4'}, {id:'ve',name:'Virksomhedsøkonomi A',color:'#c6ebe4'},
+      {id:'ps',name:'Psykologi C',color:'#f3cbe4'}, {id:'so',name:'Studieområde',color:'#e0e7b8'},
+      {id:'if',name:'Informatik C',color:'#d3dbe6'}
+    ],
+    rooms:['101','102','103','104','105','201','202','203','IT-lab'],
+    classes:[
+      {id:'c1a',name:'1.g A',year:1,scheme:'1g',homeRoom:'101'}, {id:'c1b',name:'1.g B',year:1,scheme:'1g',homeRoom:'102'},
+      {id:'c2a',name:'2.g A',year:2,scheme:'23g',homeRoom:'103'}, {id:'c2b',name:'2.g B',year:2,scheme:'23g',homeRoom:'104'},
+      {id:'c3a',name:'3.g A',year:3,scheme:'23g',homeRoom:'105'}
+    ],
+    users:[{id:'u_admin',name:'Karin Kontor',role:'admin',unilogin:'admin01',email:'kontor@demo-skole.dk',phone:'',mitid:true}],
+    courses:[], entries:[], assignments:[], submissions:[], absences:[], registered:{}, dirty:false, lastRun:null
+  };
+  const T = [
+    ['Mette Hansen','mh',['da']], ['Rasmus Vang','rv',['da','hi'],['pm','all','all','all','all']],
+    ['Louise Krogh','lk',['en']], ['Jonas Bak','jb',['en','ps'],['all','all','am','all','all']],
+    ['Sofie Thomsen','st',['maA','maB'],['all','all','all','all','none']], ['Peter Gade','pg',['maB','maA','if']],
+    ['Camilla Juul','cj',['sa','so']], ['Henrik Lund','hl',['io','ve']], ['Ida Mortensen','im',['hi','so']],
+    ['Anders Friis','af',['io','ps']], ['Nanna Berg','nb',['ve','sa']]
+  ];
+  T.forEach(([name,ini,subs,avail]) => db.users.push({id:'t_'+ini, name, role:'teacher', initials:ini, unilogin:ini+'01',
+    email:ini+'@demo-skole.dk', phone:'', subjects:subs, avail:avail || ['all','all','all','all','all'], mitid:true}));
+
+  const FN = ['Emil','Freja','Noah','Ida','Oliver','Clara','Alma','Lucas','Ella','Victor','Sofia','Oscar','Agnes','Malthe','Laura','Magnus','Josefine','Carl','Asta','Frederik','Karla','Elias','Anna','Mikkel','Signe','Valdemar','Emma','August','Liva','Mathias'];
+  const LN = ['Nielsen','Jensen','Hansen','Pedersen','Andersen','Christensen','Larsen','Sørensen','Rasmussen','Jørgensen','Petersen','Madsen','Kristensen','Olsen','Thomsen','Poulsen','Johansen','Møller','Mortensen','Nørgaard'];
+  const used = new Set();
+  db.classes.forEach(cl => { for(let i=0;i<8;i++){
+    let n; do { n = pick(FN)+' '+pick(LN); } while(used.has(n)); used.add(n);
+    const un = asciiize(n.split(' ')[0]).slice(0,4) + String(1000+Math.floor(rnd()*9000));
+    db.users.push({id:uid('s'), name:n, role:'student', classId:cl.id, unilogin:un, email:un+'@elev.demo-skole.dk', phone:'', mitid:rnd()<.6});
+  }});
+
+  const PLAN = {
+    1:[['da',3],['en',3],['maB',3],['sa',3],['hi',2],['io',3],['ve',2],['if',2]],
+    2:[['da',3],['en',3],['maA',3],['sa',3],['hi',3],['io',3],['ps',2],['so',2]],
+    3:[['da',3],['en',3],['maA',3],['sa',2],['hi',2],['io',3],['ve',3],['so',3]]
+  };
+  const ts = db.users.filter(u => u.role==='teacher'), tl = {};
+  db.classes.forEach(cl => PLAN[cl.year].forEach(([sid,n]) => {
+    const t = ts.filter(x => x.subjects.includes(sid)).sort((a,b) => (tl[a.id]||0)-(tl[b.id]||0))[0];
+    tl[t.id] = (tl[t.id]||0)+n;
+    db.courses.push({id:'h_'+cl.id+'_'+sid, classId:cl.id, subjectId:sid, teacherId:t.id, perWeek:n});
+  }));
+  db.settings.demoTeacher = db.courses.find(c => c.id==='h_c2a_da').teacherId;
+
+  DB = db;
+  const r = runScheduler(1);
+  db.entries = r.entries;
+  db.lastRun = {placed:r.entries.length, total:r.total, unplaced:r.unplaced, gaps:r.gaps, at:toLocalISO(now)};
+
+  // opgaver + afleveringer
+  const TPL = {da:['Analyse af novelle','Kronik: Sociale medier og demokrati'], en:['Essay: The American Dream','Short story analysis'],
+    maA:['Opgavesæt 3: Differentialregning','Opgavesæt 4: Integraler'], maB:['Opgavesæt 2: Lineære funktioner','Opgavesæt 3: Procent og rente'],
+    sa:['Rapport: Partier og ideologier','Analyse: Ulighed i Danmark'], hi:['Kildeanalyse: Den kolde krig','Opgave: Industrialiseringen'],
+    io:['Case: Inflation og renter','Opgave: Handelsbalancen'], ve:['Case: Budget og likviditet','Opgave: Prisfastsættelse'],
+    ps:['Mini-projekt: Hukommelse','Opgave: Sociale relationer'], so:['SO: Problemformulering','SO: Metodeafsnit'], if:['Programmering: Lommeregner','Projekt: Lille webside']};
+  const FB = ['Fin struktur og god brug af fagbegreber. Arbejd videre med din konklusion.','Rigtig godt arbejde! Præcis analyse.','Du er godt på vej, men husk at underbygge dine pointer med eksempler.','Solid besvarelse. Kig på kommatering og kildehenvisninger.'];
+  db.courses.forEach(c => {
+    const tpl = TPL[c.subjectId] || ['Skriftlig opgave','Afleveringsopgave'];
+    const mk = (title, d) => { const a = {id:uid('a'), courseId:c.id, title, description:'Læs materialet fra timerne og besvar opgaven.\nAfleveres som PDF eller Word-dokument.\nHusk navn og klasse på forsiden.', deadline:toLocalISO(d), hours:2+Math.floor(rnd()*5), createdAt:toLocalISO(now)}; db.assignments.push(a); return a; };
+    const past = addDays(now, -(3+Math.floor(rnd()*20))); past.setHours(23,59,0,0);
+    const fut = addDays(now, 2+Math.floor(rnd()*14)); const h = rnd()<.5; fut.setHours(h?23:12, h?59:0, 0, 0);
+    const list = [mk(tpl[0], past)]; if(rnd() < .8) list.push(mk(tpl[1], fut));
+    list.forEach(a => {
+      const dl = new Date(a.deadline), isPast = dl < now;
+      db.users.filter(u => u.role==='student' && u.classId===c.classId).forEach(s => {
+        const x = rnd(); let at = null;
+        if(isPast){ if(x < .78) at = new Date(dl - (1+rnd()*72)*36e5); else if(x < .88) at = new Date(Math.min(+now, +dl + (1+rnd()*30)*36e5)); }
+        else if(x < .3) at = new Date(+now - (1+rnd()*48)*36e5);
+        if(!at) return;
+        const sub = {id:uid('s'), assignmentId:a.id, studentId:s.id, text:'Se vedhæftet fil.', files:[{name:asciiize(a.title).slice(0,18)+'_'+asciiize(firstName(s.name))+'.pdf', size:Math.floor(80000+rnd()*900000)}], submittedAt:toLocalISO(at)};
+        if(isPast && rnd() < .6){ sub.grade = pick(['12','10','10','7','7','7','4','02']); sub.feedback = pick(FB); sub.gradedAt = toLocalISO(now); }
+        db.submissions.push(sub);
+      });
+    });
+  });
+
+  // fravær fra tidligere uger
+  const days = []; for(let d = parseKey(db.settings.termStart); dateKey(d) < dateKey(now); d = addDays(d,1)) if(weekday(d) < 5) days.push(d);
+  db.users.filter(u => u.role==='student').forEach(s => {
+    const k = Math.floor(Math.pow(rnd(),2)*16);
+    for(let i=0;i<k && days.length;i++){
+      const d = pick(days), es = db.entries.filter(e => e.day===weekday(d) && course(e.courseId).classId===s.classId);
+      if(!es.length) continue; const e = pick(es);
+      if(db.absences.some(a => a.studentId===s.id && a.entryId===e.id && a.date===dateKey(d))) continue;
+      db.absences.push({id:uid('f'), studentId:s.id, courseId:e.courseId, entryId:e.id, date:dateKey(d), status:rnd()<.75?'absent':'late'});
+    }
+  });
+  db.settings.seededUntil = dateKey(now);
+  return db;
+}
+
+/* =====================================================================
+   UI-rammer: modal, toast, navigation
+   ===================================================================== */
+function openModal(title, body, foot='', wide=false){
+  document.getElementById('modal').innerHTML = `<div class="modal-bg" onmousedown="if(event.target===this)closeModal()"><div class="modal ${wide?'wide':''}" role="dialog" aria-modal="true">
+    <div class="modal-h"><h3>${title}</h3><button class="x" onclick="closeModal()" aria-label="Luk">×</button></div>
+    <div class="modal-b">${body}</div><div class="modal-f">${foot}</div></div></div>`;
+  const f = document.querySelector('#modal input:not([type=hidden]), #modal select, #modal textarea'); if(f) f.focus();
+}
+function closeModal(){ document.getElementById('modal').innerHTML = ''; }
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
+function toast(msg, kind=''){
+  const el = document.createElement('div'); el.className = 'toast '+kind; el.textContent = msg;
+  document.getElementById('toast').appendChild(el); setTimeout(() => el.remove(), 2800);
+}
+function go(view, params={}){
+  state.view = view; state.params = params;
+  if(view !== 'absence-reg') state.regDraft = null;
+  closeModal(); render(); window.scrollTo(0,0);
+}
+function setParam(k, v){ state.params = {...state.params, [k]:v}; render(); }
+function shiftWeek(n){ state.weekOffset = n===0 ? 0 : state.weekOffset+n; render(); }
+
+const NAV = {
+  student:[['home','Forside','home'],['schedule','Skema','cal'],['assignments','Opgaver','file'],['absence','Fravær','clock'],['profile','Om mig','user']],
+  teacher:[['home','Forside','home'],['schedule','Skema','cal'],['assignments','Opgaver','file'],['absence','Fravær','clock'],['profile','Om mig','user']],
+  admin:[['home','Oversigt','home'],['planner','Skemalægning','magic'],['schedule','Skemaer','cal'],['users','Brugere','users'],['classes','Klasser og hold','layers'],['assignments','Opgaver','file'],['absence','Fravær','clock'],['profile','Om mig','user']]
+};
+const SUB_VIEWS = {assignment:'assignments', 'absence-reg':'absence'};
+
+function render(){
+  const app = document.getElementById('app'), me = state.userId && user(state.userId);
+  if(!me){ app.innerHTML = loginView(); return; }
+  const nav = NAV[me.role];
+  const allowed = nav.map(n => n[0]).concat(me.role==='student' ? ['assignment'] : ['assignment','absence-reg']);
+  if(!allowed.includes(state.view)){ state.view = 'home'; state.params = {}; }
+  const activeKey = SUB_VIEWS[state.view] || state.view;
+  let body;
+  try { body = VIEWS[state.view](me); } catch(err){ console.error(err); body = `<div class="note bad">Der skete en fejl: ${esc(err.message)}</div>`; }
+  app.innerHTML = topbar(me) + `<div class="layout"><nav class="side">
+    ${nav.map(([v,t,i]) => `<a class="${activeKey===v?'active':''}" onclick="go('${v}')">${icon(i)}<span>${t}</span></a>`).join('')}
+    <div class="foot">Prototype · data gemmes kun i din browser.<br><button onclick="resetDemo()">Nulstil demo-data</button></div>
+  </nav><main id="main">${body}</main></div>`;
+  if(state.refocus){ const el = document.getElementById(state.refocus); if(el){ el.focus(); const l = el.value.length; try { el.setSelectionRange(l,l); } catch(e){} } state.refocus = null; }
+}
+function topbar(me){
+  const n = getNow(), cl = me.role==='student' && classOf(me.classId);
+  return `<header class="topbar">
+    <div class="brand">Skole<span>portal</span></div>
+    <div class="school">${esc(DB.settings.schoolName)}</div>
+    <div class="top-right">
+      <button class="chip ${state.simTime?'sim':''}" onclick="openSimTime()" title="Simulér et tidspunkt (kun i prototypen)">${icon('clock')}<span>${DAYS_SHORT[weekday(n)]} ${n.getDate()}/${n.getMonth()+1} ${pad(n.getHours())}:${pad(n.getMinutes())}${state.simTime?' · simuleret':''}</span></button>
+      <div class="me"><div class="avatar">${esc(initialsOf(me.name))}</div><div class="me-txt"><b>${esc(me.name)}</b><small>${ROLE_LABEL[me.role]}${cl?' · '+esc(cl.name):''}</small></div></div>
+      <button class="chip" onclick="logout()">Log ud</button>
+    </div></header>`;
+}
+
+/* ---------------- login ---------------- */
+function loginView(){
+  return `<div class="login-wrap"><div class="login-card">
+    <div class="brand">Skole<span>portal</span></div>
+    <div class="muted">${esc(DB.settings.schoolName)}</div>
+    <p>Log ind for at se skema, opgaver og fravær.</p>
+    <button class="btn-login uni" onclick="startLogin('UNI-login')">Log ind med UNI-login</button>
+    <button class="btn-login mitid" onclick="startLogin('MitID')">Log ind med MitID</button>
+    <div class="proto">Prototype: login er simuleret. I næste trin vælger du en demobruger i stedet for at logge ind rigtigt.</div>
+  </div></div>`;
+}
+function startLogin(method){
+  const demo = [DB.users.find(u => u.role==='student' && u.classId==='c2a'), user(DB.settings.demoTeacher), DB.users.find(u => u.role==='admin')].filter(Boolean);
+  const groups = [['admin','Administration'],['teacher','Lærere'],['student','Elever']];
+  openModal(`Simuleret ${esc(method)}`, `
+    <p class="muted" style="margin-top:0">I den rigtige løsning sendes du videre til ${esc(method)} og kommer tilbage med et bekræftet brugernavn. Skolen slår så brugeren op og giver de rigtige rettigheder.</p>
+    <b>Hurtigt valg</b>
+    <div class="demo-pick">${demo.map(u => `<button class="btn" onclick="login('${u.id}','${method}')"><b>${ROLE_LABEL[u.role]}</b><span class="muted small">${esc(u.name)}</span></button>`).join('')}</div>
+    <input class="input" style="width:100%" placeholder="Søg efter navn eller brugernavn" oninput="filterPick(this.value)">
+    <div class="pick-list">${groups.map(([r,t]) => `<div class="pick-group">${t}</div>` + DB.users.filter(u => u.role===r).sort(byName).map(u =>
+      `<div class="pick-row" data-k="${esc((u.name+' '+u.unilogin).toLowerCase())}" onclick="login('${u.id}','${method}')"><span>${esc(u.name)}</span><span class="muted small">${esc(u.role==='student' ? (classOf(u.classId)?.name || '') : u.unilogin)}</span></div>`).join('')).join('')}</div>`);
+}
+function filterPick(q){ q = q.toLowerCase(); document.querySelectorAll('.pick-row').forEach(r => r.style.display = r.dataset.k.includes(q) ? '' : 'none'); }
+function login(id, method){
+  state.userId = id; state.method = method; state.view = 'home'; state.params = {}; state.weekOffset = 0;
+  saveSession(); closeModal(); render(); toast(`Logget ind med ${method}`);
+}
+function logout(){ state.userId = null; saveSession(); closeModal(); render(); }
+
+/* ---------------- simuleret tid ---------------- */
+function openSimTime(){
+  const mon = mondayOf(new Date()), at = (d,h,m) => toLocalISO(new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m));
+  const presets = [['Mandag kl. 10:00 (denne uge)', at(mon,10,0)], ['Onsdag kl. 12:00 (denne uge)', at(addDays(mon,2),12,0)], ['Næste mandag kl. 08:20', at(addDays(mon,7),8,20)]];
+  openModal('Simulér tidspunkt', `
+    <p class="muted" style="margin-top:0">Kun til test. Så kan du prøve "nuværende time" og fraværsregistrering, selv om det er weekend.</p>
+    <div class="field"><label>Dato og tid</label><input type="datetime-local" class="input" id="sim-dt" value="${toLocalISO(getNow())}"></div>
+    <div class="row">${presets.map(([t,v]) => `<button class="btn sm" onclick="document.getElementById('sim-dt').value='${v}'">${t}</button>`).join('')}</div>`,
+    `<button class="btn" onclick="setSim(null)">Brug rigtig tid</button><button class="btn primary" onclick="setSim(val('sim-dt'))">Anvend</button>`);
+}
+function setSim(v){ state.simTime = v || null; state.weekOffset = 0; saveSession(); closeModal(); render(); toast(v ? 'Simuleret tid er slået til' : 'Bruger rigtig tid'); }
+
+/* =====================================================================
+   SKEMA-GITTER (fælles)
+   ===================================================================== */
+function itemsFor(filter, mode, weekStart, opts={}){
+  const now = getNow(), today = dateKey(now), nm = nowMin();
+  return DB.entries.filter(filter).map(e => {
+    const t = entryTime(e); if(!t) return null;
+    const c = course(e.courseId), s = subj(c.subjectId), te = user(c.teacherId), cl = classOf(c.classId);
+    const dk = dateKey(addDays(weekStart, e.day));
+    const due = DB.assignments.some(a => a.courseId===c.id && a.deadline.slice(0,10)===dk);
+    const left = mode==='teacher' ? cl.name : mode==='room' ? `${cl.name} · ${te?te.initials:'—'}` : (te ? te.initials : '—');
+    const cls = [opts.click ? 'click' : '', opts.conflicts && opts.conflicts.has(e.id) ? 'conflict' : '', dk===today && t.start<=nm && nm<t.end ? 'now' : ''].join(' ');
+    return {day:e.day, start:t.start, end:t.end, color:s?s.color:'#eee', title:s?s.name:'?', left, right:e.room||'', cls,
+      flag: due ? 'Aflevering' : '', onclick: opts.click ? opts.click(e, dk) : '', tip:`${courseLabel(c)} · ${te?te.name:'ingen lærer'} · lokale ${e.room||'-'}`};
+  }).filter(Boolean);
+}
+function weekGrid(items, weekStart){
+  const ds = 8*60, de = Math.max(16*60, ...items.map(i => Math.ceil((i.end+20)/60)*60)), ppm = 1.15, H = (de-ds)*ppm;
+  const now = getNow(), today = dateKey(now), nm = nowMin();
+  let hours = ''; for(let h = ds; h < de; h += 60) hours += `<div class="hourline" style="top:${(h-ds)*ppm}px"></div>`;
+  let html = '<div class="week-wrap"><div class="week"><div class="head"></div>';
+  for(let d=0; d<5; d++){ const dt = addDays(weekStart,d); html += `<div class="head ${dateKey(dt)===today?'today':''}">${DAYS_SHORT[d]} ${dt.getDate()}/${dt.getMonth()+1}</div>`; }
+  html += `<div class="timecol" style="height:${H}px">`;
+  for(let h = ds; h < de; h += 60) html += `<div class="hourlabel" style="top:${(h-ds)*ppm}px">${fromMin(h)}</div>`;
+  html += '</div>';
+  for(let d=0; d<5; d++){
+    const isToday = dateKey(addDays(weekStart,d)) === today;
+    html += `<div class="daycol ${isToday?'today':''}" style="height:${H}px">${hours}`;
+    items.filter(i => i.day===d).forEach(i => {
+      html += `<div class="lesson ${i.cls}" style="top:${(i.start-ds)*ppm}px;height:${(i.end-i.start)*ppm-2}px;background:${i.color}" ${i.onclick?`onclick="${i.onclick}"`:''} title="${esc(i.tip)}">
+        ${i.flag?`<span class="flag">${i.flag}</span>`:''}
+        <div class="t">${fromMin(i.start)}–${fromMin(i.end)}</div><div class="s">${esc(i.title)}</div>
+        <div class="m"><span>${esc(i.left)}</span><span>${esc(i.right)}</span></div></div>`;
+    });
+    if(isToday && nm >= ds && nm <= de) html += `<div class="nowline" style="top:${(nm-ds)*ppm}px"></div>`;
+    html += '</div>';
+  }
+  return html + '</div></div>';
+}
+function weekNav(ws){
+  return `<div class="weeknav"><button class="btn sm" onclick="shiftWeek(-1)" aria-label="Forrige uge">‹</button>
+    <span class="lbl">Uge ${isoWeek(ws)} · ${ws.getFullYear()}</span>
+    <button class="btn sm" onclick="shiftWeek(1)" aria-label="Næste uge">›</button><button class="btn sm" onclick="shiftWeek(0)">I dag</button></div>`;
+}
+const curWeekStart = () => addDays(mondayOf(getNow()), state.weekOffset*7);
+
+function lessonRows(entries, date, mode, withReg){
+  if(!entries.length) return '<div class="empty">Ingen lektioner.</div>';
+  const dk = dateKey(date), isToday = dk === dateKey(getNow()), m = nowMin();
+  return '<div class="lessons">' + entries.map(e => {
+    const t = entryTime(e), c = course(e.courseId), s = subj(c.subjectId), te = user(c.teacherId), cl = classOf(c.classId);
+    const past = isToday && t.end <= m, now = isToday && t.start <= m && m < t.end;
+    const who = mode==='teacher' ? cl.name : (te ? te.name : 'Ingen lærer');
+    const reg = withReg ? `${isRegistered(e.id,dk) ? '<span class="badge ok">Registreret</span>' : '<span class="badge muted">Ikke registreret</span>'}
+      <button class="btn sm" onclick="go('absence-reg',{entry:'${e.id}',date:'${dk}'})">Fravær</button>` : '';
+    return `<div class="lrow ${past&&!withReg?'past':''} ${now?'now':''}"><span class="swatch" style="background:${s.color}"></span>
+      <span class="ltime">${fromMin(t.start)}–${fromMin(t.end)}</span>
+      <span class="lsub">${esc(s.name)} ${now?'<span class="badge info">Nu</span>':''}<br><span class="muted small" style="font-weight:400">${esc(who)} · lokale ${esc(e.room||'-')}</span></span>${reg}</div>`;
+  }).join('') + '</div>';
+}
+function nextSchoolDay(filter){
+  const now = getNow();
+  if(weekday(now) < 5) return {date:now, label:'I dag'};
+  let d = addDays(now,1); while(weekday(d) > 4) d = addDays(d,1);
+  return {date:d, label:'Næste skoledag: '+fmtDate(d)};
+}
+
+/* =====================================================================
+   VIEWS
+   ===================================================================== */
+const VIEWS = {
+  home: me => me.role==='student' ? studentHome(me) : me.role==='teacher' ? teacherHome(me) : adminHome(me),
+  schedule: me => me.role==='admin' ? adminSchedule(me) : scheduleView(me),
+  assignments: me => me.role==='student' ? studentAssignments_(me) : staffAssignments(me),
+  assignment: me => me.role==='student' ? studentAssignment(me) : staffAssignment(me),
+  absence: me => me.role==='student' ? studentAbsence(me) : me.role==='teacher' ? teacherAbsence(me) : adminAbsence(me),
+  'absence-reg': me => absenceReg(me),
+  profile: me => profileView(me),
+  planner: me => plannerView(me),
+  users: me => usersView(me),
+  classes: me => classesView(me)
+};
+
+/* ---------------- forside: elev ---------------- */
+function studentHome(me){
+  const now = getNow(), cl = classOf(me.classId);
+  const mine = e => course(e.courseId)?.classId === me.classId;
+  const {date, label} = nextSchoolDay();
+  const upcoming = studentAssignments(me).filter(a => new Date(a.deadline) > now && !submissionOf(a.id, me.id)).sort((a,b) => a.deadline.localeCompare(b.deadline)).slice(0,5);
+  const ab = absenceStats(me), wr = writtenAbsence(me);
+  const fb = DB.submissions.filter(s => s.studentId===me.id && (s.grade || s.feedback)).slice(-3).reverse();
+  return `<div class="page-head"><div><h1>Hej ${esc(firstName(me.name))}</h1><div class="muted">${fmtDate(now)}${cl?' · '+esc(cl.name):''}</div></div></div>
+  <div class="tiles">
+    <div class="tile ${ab.pct>=10?'warn':''}"><div class="v">${pctTxt(ab.pct)}</div><div class="l">Fravær (lektioner)</div></div>
+    <div class="tile ${wr.pct>=10?'warn':''}"><div class="v">${pctTxt(wr.pct)}</div><div class="l">Skriftligt fravær</div></div>
+    <div class="tile"><div class="v">${upcoming.length}</div><div class="l">Kommende afleveringer</div></div>
+    <div class="tile ${wr.missingList.length?'bad':''}"><div class="v">${wr.missingList.length}</div><div class="l">Manglende afleveringer</div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>${label}</h3>${lessonRows(lessonsOn(date, mine), date, 'student', false)}</div>
+    <div class="card"><h3>Kommende afleveringer</h3>${upcoming.length ? upcoming.map(a => assignmentListItem(a, me)).join('') : '<div class="empty">Ingen afleveringer på vej. Godt gået!</div>'}</div>
+    <div class="card"><h3>Seneste feedback</h3>${fb.length ? fb.map(s => { const a = DB.assignments.find(x => x.id===s.assignmentId); if(!a) return '';
+      return `<div class="list-item" onclick="go('assignment',{id:'${a.id}'})"><div class="grow"><div class="t">${esc(a.title)}</div><div class="muted small">${esc(s.feedback||'')}</div></div>${s.grade?`<span class="badge ok">${esc(s.grade)}</span>`:''}</div>`; }).join('') : '<div class="empty">Ingen feedback endnu.</div>'}</div>
+  </div>`;
+}
+function assignmentListItem(a, me){
+  const c = course(a.courseId), s = subj(c.subjectId), st = subStatus(a, me.id);
+  return `<div class="list-item" onclick="go('assignment',{id:'${a.id}'})"><span class="swatch" style="background:${s.color}"></span>
+    <div class="grow"><div class="t">${esc(a.title)}</div><div class="muted small">${esc(s.name)} · frist ${fmtDT(a.deadline)} (${relTime(a.deadline)})</div></div>${statusBadge(st)}</div>`;
+}
+
+/* ---------------- forside: lærer ---------------- */
+function teacherHome(me){
+  const now = getNow(), mine = e => course(e.courseId)?.teacherId === me.id, m = nowMin(), dk = dateKey(now);
+  const today = lessonsOn(now, mine);
+  const cur = today.find(e => { const t = entryTime(e); return t.start-5 <= m && m < t.end; });
+  const next = today.find(e => entryTime(e).start > m);
+  let curCard;
+  if(cur){
+    const c = course(cur.courseId), t = entryTime(cur), n = studentsOf(c.classId).length;
+    const reg = isRegistered(cur.id, dk);
+    curCard = `<div class="card hl"><div class="muted small">Din time lige nu</div>
+      <h2 style="margin:4px 0">${esc(courseLabel(c))}</h2>
+      <div class="muted">${fromMin(t.start)}–${fromMin(t.end)} · lokale ${esc(cur.room)} · ${n} elever</div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" onclick="go('absence-reg',{entry:'${cur.id}',date:'${dk}'})">${icon('check')} ${reg?'Ret fravær':'Registrér fravær nu'}</button>
+      ${reg?'<span class="badge ok">Fravær er registreret</span>':'<span class="badge warn">Ikke registreret endnu</span>'}</div></div>`;
+  } else {
+    curCard = `<div class="card"><div class="muted small">Din time lige nu</div><h3 style="margin:6px 0">Du har ingen time lige nu</h3>
+      ${next ? `<div class="muted">Næste time: ${esc(courseLabel(course(next.courseId)))} kl. ${fromMin(entryTime(next).start)} i lokale ${esc(next.room)}</div>` : ''}
+      ${weekday(now) > 4 ? '<div class="note" style="margin:12px 0 0">Det er weekend. Brug uret øverst til højre for at simulere en skoledag og prøve fraværsregistrering.</div>' : ''}</div>`;
+  }
+  const mc = myCourses(me).map(c => c.id);
+  const mineA = DB.assignments.filter(a => mc.includes(a.courseId));
+  const toGrade = mineA.map(a => ({a, n:assignmentCounts(a)})).filter(x => x.n.toGrade > 0).sort((x,y) => y.n.toGrade - x.n.toGrade).slice(0,6);
+  const week = mineA.filter(a => { const d = new Date(a.deadline); return d >= now && d - now < 7*864e5; }).sort((a,b) => a.deadline.localeCompare(b.deadline));
+  return `<div class="page-head"><div><h1>Hej ${esc(firstName(me.name))}</h1><div class="muted">${fmtDate(now)}</div></div>
+    <div class="row"><button class="btn primary" onclick="assignmentModal()">+ Opret opgave</button></div></div>
+  ${curCard}
+  <div class="grid2">
+    <div class="card"><h3>${weekday(now) < 5 ? 'Dine lektioner i dag' : 'Ingen undervisning i dag'}</h3>${lessonRows(today, now, 'teacher', true)}</div>
+    <div class="card"><h3>Afleveringer der venter på rettelse</h3>${toGrade.length ? toGrade.map(({a,n}) =>
+      `<div class="list-item" onclick="go('assignment',{id:'${a.id}'})"><div class="grow"><div class="t">${esc(a.title)}</div><div class="muted small">${esc(courseLabel(course(a.courseId)))}</div></div><span class="badge info">${n.toGrade} til retning</span></div>`).join('') : '<div class="empty">Alt er rettet.</div>'}</div>
+    <div class="card"><h3>Frister de næste 7 dage</h3>${week.length ? week.map(a => { const n = assignmentCounts(a);
+      return `<div class="list-item" onclick="go('assignment',{id:'${a.id}'})"><div class="grow"><div class="t">${esc(a.title)}</div><div class="muted small">${esc(courseLabel(course(a.courseId)))} · ${fmtDT(a.deadline)}</div></div><span class="muted small">${n.handed}/${n.total}</span></div>`; }).join('') : '<div class="empty">Ingen frister den næste uge.</div>'}</div>
+  </div>`;
+}
+
+/* ---------------- forside: admin ---------------- */
+function adminHome(){
+  const conf = findConflicts(DB.entries), lr = DB.lastRun;
+  const need = DB.courses.reduce((s,c) => s + c.perWeek, 0);
+  const now = getNow(), activeA = DB.assignments.filter(a => new Date(a.deadline) > now).length;
+  const cnt = r => DB.users.filter(u => u.role===r).length;
+  return `<div class="page-head"><h1>Oversigt</h1><div class="row"><button class="btn" onclick="userModal()">+ Opret bruger</button><button class="btn primary" onclick="go('planner')">${icon('magic')} Skemalægning</button></div></div>
+  ${DB.dirty ? `<div class="note warn">Hold, lærere eller moduler er ændret siden skemaet blev lagt. <a href="#" onclick="go('planner');return false">Generér skemaet igen</a> for at få ændringerne med.</div>` : ''}
+  <div class="tiles">
+    <div class="tile"><div class="v">${cnt('student')}</div><div class="l">Elever</div></div>
+    <div class="tile"><div class="v">${cnt('teacher')}</div><div class="l">Lærere</div></div>
+    <div class="tile"><div class="v">${DB.classes.length}</div><div class="l">Klasser</div></div>
+    <div class="tile"><div class="v">${DB.courses.length}</div><div class="l">Hold</div></div>
+    <div class="tile ${DB.entries.length < need ? 'warn' : 'ok'}"><div class="v">${DB.entries.length}/${need}</div><div class="l">Lektioner pr. uge placeret</div></div>
+    <div class="tile ${conf.list.length ? 'bad' : 'ok'}"><div class="v">${conf.list.length}</div><div class="l">Konflikter i skemaet</div></div>
+    <div class="tile"><div class="v">${activeA}</div><div class="l">Aktive opgaver</div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>Modulskemaer</h3><p class="muted" style="margin-top:0">1.g har andre pauser end 2.g og 3.g. Skemalæggeren tjekker lærere og lokaler på klokkeslæt, så de forskellige pauser ikke giver dobbeltbookinger.</p>${schemeTimeline()}</div>
+    <div class="card"><h3>Seneste skemalægning</h3>${lr ? `<dl class="kv"><dt>Tidspunkt</dt><dd>${fmtDT(lr.at)}</dd><dt>Placeret</dt><dd>${lr.placed} af ${lr.total} lektioner</dd><dt>Huller i klasseskemaer</dt><dd>${lr.gaps}</dd><dt>Ikke placeret</dt><dd>${lr.unplaced.length ? lr.unplaced.map(u => `${esc(course(u.courseId) ? courseLabel(course(u.courseId)) : '?')} (${u.count})`).join(', ') : 'Ingen'}</dd></dl>` : '<div class="empty">Skemaet er ikke genereret endnu.</div>'}
+      <div class="row" style="margin-top:12px"><button class="btn" onclick="go('schedule')">Se skemaer</button></div></div>
+    <div class="card"><h3>Konflikter</h3>${conflictList(conf.list, 6)}</div>
+  </div>`;
+}
+function conflictList(list, max=50){
+  if(!list.length) return '<div class="empty">Ingen konflikter.</div>';
+  return list.slice(0,max).map(c => `<div class="lrow"><span class="badge ${c.type==='Pause'?'warn':'bad'}">${c.type}</span><span class="small">${DAYS_SHORT[c.day]}: ${esc(c.text)}</span></div>`).join('') + (list.length > max ? `<div class="muted small" style="margin-top:6px">… og ${list.length-max} mere</div>` : '');
+}
+
+/* ---------------- skema: elev/lærer ---------------- */
+function scheduleView(me){
+  const ws = curWeekStart();
+  const isT = me.role==='teacher';
+  const filter = isT ? (e => course(e.courseId)?.teacherId===me.id) : (e => course(e.courseId)?.classId===me.classId);
+  const click = isT ? ((e,dk) => `go('absence-reg',{entry:'${e.id}',date:'${dk}'})`) : null;
+  return `<div class="page-head"><h1>Skema</h1><div class="row">${weekNav(ws)}</div></div>
+    ${isT ? '<div class="note">Klik på en lektion for at registrere fravær.</div>' : ''}
+    ${weekGrid(itemsFor(filter, isT ? 'teacher' : 'class', ws, {click}), ws)}`;
+}
+
+/* ---------------- skema: admin ---------------- */
+function adminSchedule(){
+  const sv = state.sched, ws = curWeekStart();
+  const opts = sv.type==='class' ? DB.classes.map(c => [c.id, c.name]) : sv.type==='teacher' ? teachers().map(t => [t.id, `${t.name} (${t.initials})`]) : DB.rooms.map(r => [r, 'Lokale '+r]);
+  if(!opts.some(o => o[0]===sv.id)) sv.id = opts[0] ? opts[0][0] : null;
+  const filter = sv.type==='class' ? (e => course(e.courseId)?.classId===sv.id) : sv.type==='teacher' ? (e => course(e.courseId)?.teacherId===sv.id) : (e => e.room===sv.id);
+  const conf = findConflicts(DB.entries);
+  const mine = conf.list.filter(c => c.ids.some(id => { const e = DB.entries.find(x => x.id===id); return e && filter(e); }));
+  const cl = sv.type==='class' && classOf(sv.id);
+  return `<div class="page-head"><h1>Skemaer</h1><div class="row">${weekNav(ws)}</div></div>
+  <div class="toolbar">
+    <div class="tabs">${[['class','Klasse'],['teacher','Lærer'],['room','Lokale']].map(([k,t]) => `<button class="tab ${sv.type===k?'active':''}" onclick="state.sched={type:'${k}',id:null};render()">${t}</button>`).join('')}</div>
+    <select onchange="state.sched.id=this.value;render()">${opts.map(([v,t]) => `<option value="${esc(v)}" ${v===sv.id?'selected':''}>${esc(t)}</option>`).join('')}</select>
+    ${cl ? `<span class="muted small">Modulskema: ${esc(schemeOf(cl).name)}</span><span class="spacer"></span><button class="btn" onclick="entryModal(null,'${cl.id}')">+ Tilføj lektion</button>` : ''}
+  </div>
+  <div class="note">Klik på en lektion for at flytte den, skifte lokale eller slette den. Røde rammer betyder konflikt.</div>
+  ${weekGrid(itemsFor(filter, sv.type==='class' ? 'class' : sv.type, ws, {click:e => `entryModal('${e.id}')`, conflicts:conf.ids}), ws)}
+  ${mine.length ? `<div class="card" style="margin-top:16px"><h3>Konflikter i denne visning</h3>${conflictList(mine)}</div>` : ''}`;
+}
+function entryModal(id, classId){
+  const e = id ? DB.entries.find(x => x.id===id) : null;
+  const cid = e ? course(e.courseId).classId : classId, cl = classOf(cid);
+  const cs = DB.courses.filter(c => c.classId===cid), slots = schemeOf(cl).slots;
+  const cur = e || {courseId:cs[0]?.id, day:0, slot:0, room:cl.homeRoom};
+  if(!cs.length) return toast('Klassen har ingen hold endnu', 'bad');
+  openModal(e ? 'Redigér lektion' : 'Tilføj lektion · '+esc(cl.name), `
+    <div class="field"><label>Hold</label><select id="ee-course">${cs.map(c => `<option value="${c.id}" ${c.id===cur.courseId?'selected':''}>${esc(subj(c.subjectId).name)} · ${esc(user(c.teacherId)?.initials || 'ingen lærer')}</option>`).join('')}</select></div>
+    <div class="form-grid">
+      <div class="field"><label>Dag</label><select id="ee-day">${DAYS_LONG.slice(0,5).map((d,i) => `<option value="${i}" ${i===cur.day?'selected':''}>${d}</option>`).join('')}</select></div>
+      <div class="field"><label>Modul (${esc(schemeOf(cl).name)})</label><select id="ee-slot">${slots.map((s,i) => `<option value="${i}" ${i===cur.slot?'selected':''}>${i+1}. modul ${s[0]}–${s[1]}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>Lokale</label><select id="ee-room">${DB.rooms.map(r => `<option ${r===cur.room?'selected':''}>${esc(r)}</option>`).join('')}</select></div>
+    <div id="ee-conf"></div>`,
+    `${e ? `<button class="btn danger" onclick="deleteEntry('${e.id}')">Slet lektion</button><span class="spacer"></span>` : ''}
+     <button class="btn" onclick="closeModal()">Annullér</button><button class="btn primary" id="ee-save" onclick="saveEntry(${e?`'${e.id}'`:'null'},false)">Gem</button>`);
+}
+function saveEntry(id, force){
+  const cand = {id:id || uid('e'), courseId:val('ee-course'), day:+val('ee-day'), slot:+val('ee-slot'), room:val('ee-room')};
+  const conf = findConflicts(DB.entries.filter(x => x.id!==cand.id).concat([cand])).list.filter(c => c.ids.includes(cand.id));
+  if(conf.length && !force){
+    document.getElementById('ee-conf').innerHTML = `<div class="note bad"><b>Ændringen giver konflikter:</b>${conflictList(conf)}</div>`;
+    const b = document.getElementById('ee-save'); b.textContent = 'Gem alligevel'; b.setAttribute('onclick', `saveEntry(${id?`'${id}'`:'null'},true)`);
+    return;
+  }
+  const ex = id && DB.entries.find(x => x.id===id);
+  if(ex) Object.assign(ex, cand); else DB.entries.push(cand);
+  save(); closeModal(); render(); toast(conf.length ? 'Gemt med konflikter' : 'Lektionen er gemt');
+}
+function deleteEntry(id){
+  if(!confirm('Slet denne lektion fra skemaet?')) return;
+  DB.entries = DB.entries.filter(e => e.id!==id); save(); closeModal(); render(); toast('Lektionen er slettet');
+}
+
+/* ---------------- opgaver: elev ---------------- */
+function studentAssignments_(me){
+  const tab = state.params.tab || 'active', all = studentAssignments(me);
+  const groups = {
+    active: all.filter(a => subStatus(a,me.id)==='open').sort((a,b) => a.deadline.localeCompare(b.deadline)),
+    done: all.filter(a => ['done','late'].includes(subStatus(a,me.id))).sort((a,b) => b.deadline.localeCompare(a.deadline)),
+    missing: all.filter(a => subStatus(a,me.id)==='missing').sort((a,b) => b.deadline.localeCompare(a.deadline))
+  };
+  const list = groups[tab];
+  return `<div class="page-head"><h1>Opgaver</h1></div>
+  <div class="toolbar"><div class="tabs">${[['active','Aktive'],['done','Afleveret'],['missing','Mangler']].map(([k,t]) => `<button class="tab ${tab===k?'active':''}" onclick="setParam('tab','${k}')">${t}<span class="count">${groups[k].length}</span></button>`).join('')}</div></div>
+  <div class="card">${list.length ? list.map(a => assignmentListItem(a, me)).join('') : `<div class="empty">${tab==='missing' ? 'Du mangler ingen afleveringer.' : 'Ingen opgaver her.'}</div>`}</div>`;
+}
+function studentAssignment(me){
+  const a = DB.assignments.find(x => x.id===state.params.id);
+  if(!a || course(a.courseId)?.classId !== me.classId) return '<div class="note bad">Opgaven findes ikke.</div>';
+  const c = course(a.courseId), s = subj(c.subjectId), te = user(c.teacherId), sub = submissionOf(a.id, me.id), st = subStatus(a, me.id);
+  const over = new Date(a.deadline) < getNow(), graded = sub && (sub.grade || sub.feedback);
+  return `<a class="back" onclick="go('assignments')">‹ Tilbage til opgaver</a>
+  <div class="card"><div class="row"><h1 style="margin-right:auto">${esc(a.title)}</h1>${statusBadge(st)}</div>
+    <dl class="kv" style="margin-top:12px"><dt>Fag</dt><dd>${esc(s.name)}</dd><dt>Lærer</dt><dd>${esc(te ? te.name : '—')}</dd>
+    <dt>Frist</dt><dd>${fmtDT(a.deadline)} <span class="muted">(${relTime(a.deadline)})</span></dd><dt>Elevtid</dt><dd>${a.hours} timer</dd></dl>
+    <h3 style="margin-top:16px">Opgavebeskrivelse</h3><div class="pre">${esc(a.description)}</div></div>
+  ${sub ? `<div class="card"><h3>Din aflevering</h3><div class="muted small" style="margin-bottom:8px">Afleveret ${fmtDT(sub.submittedAt)}</div>
+    ${(sub.files||[]).map(f => `<span class="file">${icon('file')} ${esc(f.name)} <span class="muted">${Math.round(f.size/1024)} kB</span></span>`).join('')}
+    ${sub.text ? `<div class="pre" style="margin-top:8px">${esc(sub.text)}</div>` : ''}
+    ${graded ? `<div class="feedback" style="margin-top:14px"><div class="row">${sub.grade ? `<div class="grade">${esc(sub.grade)}</div>` : ''}<div><b>Feedback fra ${esc(te ? te.name : 'læreren')}</b><div class="pre">${esc(sub.feedback || '')}</div></div></div></div>` : ''}</div>` : ''}
+  ${!graded ? `<div class="card"><h3>${sub ? 'Aflevér igen (erstatter din tidligere aflevering)' : 'Aflevér opgaven'}</h3>
+    ${over ? '<div class="note warn">Fristen er overskredet. Afleverer du nu, bliver det registreret som for sent.</div>' : ''}
+    <div class="field"><label>Fil(er)</label><input type="file" id="sa-file" multiple></div>
+    <div class="field"><label>Kommentar til læreren (valgfri)</label><textarea id="sa-text" placeholder="Skriv evt. en kommentar…"></textarea></div>
+    <button class="btn primary" onclick="submitAssignment('${a.id}')">${sub ? 'Aflevér igen' : 'Aflevér'}</button>
+    <div class="muted small" style="margin-top:8px">I prototypen gemmes kun filnavnet. I den rigtige version uploades filen til serveren.</div></div>` : ''}`;
+}
+function submitAssignment(aid){
+  const me = user(state.userId), a = DB.assignments.find(x => x.id===aid);
+  const text = val('sa-text').trim(), files = [...document.getElementById('sa-file').files].map(f => ({name:f.name, size:f.size}));
+  if(!text && !files.length) return toast('Vedhæft en fil eller skriv en kommentar', 'bad');
+  if(new Date(a.deadline) < getNow() && !confirm('Fristen er overskredet. Afleveringen bliver markeret som for sent. Vil du aflevere alligevel?')) return;
+  const sub = submissionOf(aid, me.id);
+  const data = {text, files: files.length ? files : (sub ? sub.files : []), submittedAt:toLocalISO(getNow())};
+  if(sub) Object.assign(sub, data); else DB.submissions.push({id:uid('s'), assignmentId:aid, studentId:me.id, ...data});
+  save(); render(); toast('Opgaven er afleveret');
+}
+
+/* ---------------- opgaver: lærer/admin ---------------- */
+function staffAssignments(me){
+  const cs = myCourses(me), f = state.params.course || '', now = getNow();
+  const list = DB.assignments.filter(a => cs.some(c => c.id===a.courseId) && (!f || a.courseId===f));
+  const active = list.filter(a => new Date(a.deadline) >= now).sort((a,b) => a.deadline.localeCompare(b.deadline));
+  const closed = list.filter(a => new Date(a.deadline) < now).sort((a,b) => b.deadline.localeCompare(a.deadline));
+  const table = (rows, isActive) => rows.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Opgave</th><th>Hold</th><th>Frist</th><th>Afleveret</th><th></th><th class="r">${isActive?'Ikke afleveret':'Mangler'}</th><th class="r">Til retning</th></tr></thead><tbody>
+    ${rows.map(a => { const n = assignmentCounts(a); const miss = isActive ? n.open : n.missing;
+      return `<tr class="click" onclick="go('assignment',{id:'${a.id}'})"><td><b>${esc(a.title)}</b></td><td>${esc(courseLabel(course(a.courseId)))}</td><td>${fmtDT(a.deadline)}<div class="muted small">${relTime(a.deadline)}</div></td>
+      <td style="width:130px">${progress(n.handed, n.total, !isActive && n.missing ? 'warn' : '')}</td><td class="small">${n.handed}/${n.total}</td>
+      <td class="r">${miss ? `<span class="badge ${isActive?'muted':'bad'}">${miss}</span>` : '<span class="muted">0</span>'}</td><td class="r">${n.toGrade ? `<span class="badge info">${n.toGrade}</span>` : '<span class="muted">0</span>'}</td></tr>`; }).join('')}
+    </tbody></table></div>` : '<div class="empty">Ingen opgaver.</div>';
+  return `<div class="page-head"><h1>Opgaver</h1><div class="row"><button class="btn primary" onclick="assignmentModal()">+ Opret opgave</button></div></div>
+  <div class="toolbar"><select onchange="setParam('course',this.value)"><option value="">Alle ${me.role==='admin'?'hold':'mine hold'}</option>${cs.map(c => `<option value="${c.id}" ${c.id===f?'selected':''}>${esc(courseLabel(c))}</option>`).join('')}</select></div>
+  <div class="card"><h3>Aktive opgaver</h3>${table(active, true)}</div>
+  <div class="card"><h3>Fristen er overskredet</h3>${table(closed, false)}</div>`;
+}
+function assignmentModal(id){
+  const me = user(state.userId), cs = myCourses(me);
+  if(!cs.length) return toast('Du har ingen hold', 'bad');
+  const a = id ? DB.assignments.find(x => x.id===id) : null;
+  const def = addDays(getNow(), 7); def.setHours(23,59,0,0);
+  const cur = a || {courseId: state.params.course || cs[0].id, title:'', description:'', deadline:toLocalISO(def), hours:3};
+  openModal(a ? 'Redigér opgave' : 'Opret opgave', `
+    <div class="field"><label>Hold</label><select id="af-course">${cs.map(c => `<option value="${c.id}" ${c.id===cur.courseId?'selected':''}>${esc(courseLabel(c))}</option>`).join('')}</select></div>
+    <div class="field"><label>Titel</label><input class="input" id="af-title" value="${esc(cur.title)}" placeholder="Fx Analyse af novelle"></div>
+    <div class="field"><label>Beskrivelse</label><textarea id="af-desc" placeholder="Hvad skal eleverne lave? Krav, omfang, materialer…">${esc(cur.description)}</textarea></div>
+    <div class="form-grid">
+      <div class="field"><label>Frist</label><input class="input" type="datetime-local" id="af-deadline" value="${cur.deadline}"></div>
+      <div class="field"><label>Elevtid (timer)</label><input class="input" type="number" min="0" max="50" step="0.5" id="af-hours" value="${cur.hours}"></div>
+    </div>`,
+    `<button class="btn" onclick="closeModal()">Annullér</button><button class="btn primary" onclick="saveAssignment(${a?`'${a.id}'`:'null'})">${a ? 'Gem' : 'Opret og send til elever'}</button>`);
+}
+function saveAssignment(id){
+  const data = {courseId:val('af-course'), title:val('af-title').trim(), description:val('af-desc').trim(), deadline:val('af-deadline'), hours:Math.max(0, parseFloat(val('af-hours')) || 0)};
+  if(!data.title) return toast('Titel mangler', 'bad');
+  if(!data.deadline) return toast('Frist mangler', 'bad');
+  if(id) Object.assign(DB.assignments.find(x => x.id===id), data);
+  else { const a = {id:uid('a'), createdAt:toLocalISO(getNow()), ...data}; DB.assignments.push(a); state.view = 'assignment'; state.params = {id:a.id}; }
+  save(); closeModal(); render(); toast(id ? 'Opgaven er opdateret' : 'Opgaven er oprettet og synlig for eleverne');
+}
+function deleteAssignment(id){
+  if(!confirm('Slet opgaven og alle afleveringer til den?')) return;
+  DB.assignments = DB.assignments.filter(a => a.id!==id); DB.submissions = DB.submissions.filter(s => s.assignmentId!==id);
+  save(); go('assignments'); toast('Opgaven er slettet');
+}
+function staffAssignment(me){
+  const a = DB.assignments.find(x => x.id===state.params.id), c = a && course(a.courseId);
+  if(!a || !c || (me.role==='teacher' && c.teacherId!==me.id)) return '<div class="note bad">Opgaven findes ikke, eller du har ikke adgang.</div>';
+  const f = state.params.filter || 'all', n = assignmentCounts(a);
+  const rows = studentsOf(c.classId).map(s => ({s, sub:submissionOf(a.id,s.id), st:subStatus(a,s.id)}))
+    .filter(r => f==='all' || (f==='handed' ? ['done','late'].includes(r.st) : f==='missing' ? ['missing','open'].includes(r.st) : r.st===f));
+  const over = new Date(a.deadline) < getNow(), missCount = over ? n.missing : n.open;
+  return `<a class="back" onclick="go('assignments')">‹ Tilbage til opgaver</a>
+  <div class="card"><div class="row"><h1 style="margin-right:auto">${esc(a.title)}</h1>
+    <button class="btn" onclick="assignmentModal('${a.id}')">Redigér</button><button class="btn danger" onclick="deleteAssignment('${a.id}')">Slet</button></div>
+    <dl class="kv" style="margin-top:12px"><dt>Hold</dt><dd>${esc(courseLabel(c))}</dd><dt>Frist</dt><dd>${fmtDT(a.deadline)} <span class="muted">(${relTime(a.deadline)})</span></dd><dt>Elevtid</dt><dd>${a.hours} timer</dd></dl>
+    <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Vis beskrivelse</summary><div class="pre" style="margin-top:8px">${esc(a.description)}</div></details></div>
+  <div class="tiles">
+    <div class="tile ok"><div class="v">${n.done}</div><div class="l">Afleveret til tiden</div></div>
+    <div class="tile warn"><div class="v">${n.late}</div><div class="l">Afleveret for sent</div></div>
+    <div class="tile ${over && n.missing ? 'bad' : ''}"><div class="v">${missCount}</div><div class="l">${over ? 'Mangler' : 'Ikke afleveret endnu'}</div></div>
+    <div class="tile"><div class="v">${n.toGrade}</div><div class="l">Til retning</div></div>
+  </div>
+  <div class="card"><div class="toolbar"><div class="tabs">${[['all','Alle'],['handed','Afleveret'],['late','For sent'],['missing','Mangler']].map(([k,t]) => `<button class="tab ${f===k?'active':''}" onclick="setParam('filter','${k}')">${t}</button>`).join('')}</div>
+    <span class="spacer"></span>${missCount ? `<button class="btn" onclick="remindMissing('${a.id}')">Send påmindelse til ${missCount}</button>` : ''}</div>
+    <div class="table-wrap"><table class="tbl"><thead><tr><th>Elev</th><th>Status</th><th>Afleveret</th><th>Fil</th><th>Karakter</th><th></th></tr></thead><tbody>
+    ${rows.map(({s,sub,st}) => `<tr class="click" onclick="openSubmission('${a.id}','${s.id}')"><td><b>${esc(s.name)}</b></td><td>${statusBadge(st)}</td>
+      <td>${sub ? fmtDT(sub.submittedAt) : '<span class="muted">—</span>'}</td><td class="small">${sub && sub.files && sub.files[0] ? esc(sub.files[0].name) : '<span class="muted">—</span>'}</td>
+      <td>${sub && sub.grade ? `<span class="badge ok">${esc(sub.grade)}</span>` : sub && sub.feedback ? '<span class="badge info">Feedback</span>' : '<span class="muted">—</span>'}</td>
+      <td class="r"><button class="btn sm">${sub ? 'Åbn' : 'Detaljer'}</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">Ingen elever i dette filter.</td></tr>'}
+    </tbody></table></div></div>`;
+}
+function openSubmission(aid, sid){
+  const a = DB.assignments.find(x => x.id===aid), s = user(sid), sub = submissionOf(aid, sid), st = subStatus(a, sid);
+  openModal(esc(s.name)+' · '+esc(a.title), sub ? `
+    <div class="row" style="margin-bottom:10px">${statusBadge(st)}<span class="muted small">Afleveret ${fmtDT(sub.submittedAt)}</span></div>
+    ${(sub.files||[]).map(f => `<span class="file">${icon('file')} ${esc(f.name)} <span class="muted">${Math.round(f.size/1024)} kB</span></span>`).join('') || '<div class="muted">Ingen filer.</div>'}
+    ${sub.text ? `<div class="field" style="margin-top:10px"><label>Elevens kommentar</label><div class="pre">${esc(sub.text)}</div></div>` : ''}
+    <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+    <div class="field"><label>Karakter</label><select id="sf-grade"><option value="">Ingen karakter</option>${GRADES.map(g => `<option ${sub.grade===g?'selected':''}>${g}</option>`).join('')}</select></div>
+    <div class="field"><label>Feedback til eleven</label><textarea id="sf-fb" placeholder="Skriv din feedback…">${esc(sub.feedback || '')}</textarea></div>`
+    : `<div class="row">${statusBadge(st)}</div><p class="muted">${esc(firstName(s.name))} har ikke afleveret endnu. Frist: ${fmtDT(a.deadline)}.</p>`,
+    sub ? `<button class="btn" onclick="closeModal()">Annullér</button><button class="btn primary" onclick="saveFeedback('${sub.id}')">Gem feedback</button>` : `<button class="btn" onclick="closeModal()">Luk</button>`);
+}
+function saveFeedback(subId){
+  const sub = DB.submissions.find(s => s.id===subId);
+  sub.grade = val('sf-grade') || null; sub.feedback = val('sf-fb').trim(); sub.gradedAt = toLocalISO(getNow());
+  save(); closeModal(); render(); toast('Feedback er gemt og synlig for eleven');
+}
+function remindMissing(aid){
+  const a = DB.assignments.find(x => x.id===aid), n = assignmentCounts(a);
+  toast(`Påmindelse sendt til ${new Date(a.deadline) < getNow() ? n.missing : n.open} elever (simuleret)`);
+}
+
+/* ---------------- fravær ---------------- */
+function studentAbsence(me){
+  const ab = absenceStats(me), wr = writtenAbsence(me);
+  const recs = ab.recs.slice().sort((a,b) => b.date.localeCompare(a.date));
+  return `<div class="page-head"><h1>Fravær</h1></div>
+  <div class="tiles">
+    <div class="tile ${ab.pct>=10?'warn':'ok'}"><div class="v">${pctTxt(ab.pct)}</div><div class="l">Fravær i lektioner</div></div>
+    <div class="tile"><div class="v">${String(ab.units).replace('.',',')} / ${ab.held}</div><div class="l">Fraværende lektioner / afholdte</div></div>
+    <div class="tile ${wr.pct>=10?'warn':'ok'}"><div class="v">${pctTxt(wr.pct)}</div><div class="l">Skriftligt fravær</div></div>
+    <div class="tile"><div class="v">${String(wr.missing).replace('.',',')} / ${String(wr.total).replace('.',',')}</div><div class="l">Manglende elevtimer</div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>Registreret fravær</h3>${recs.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Dato</th><th>Fag</th><th>Status</th></tr></thead><tbody>
+      ${recs.map(r => { const c = course(r.courseId); return `<tr><td>${fmtDate(parseKey(r.date))}</td><td>${esc(c ? subj(c.subjectId).name : '?')}</td><td>${r.status==='late' ? '<span class="badge warn">For sent (50 %)</span>' : '<span class="badge bad">Fraværende</span>'}</td></tr>`; }).join('')}
+      </tbody></table></div>` : '<div class="empty">Intet fravær registreret.</div>'}</div>
+    <div class="card"><h3>Manglende afleveringer</h3>${wr.missingList.length ? wr.missingList.map(a => assignmentListItem(a, me)).join('') : '<div class="empty">Du har ingen manglende afleveringer.</div>'}</div>
+  </div>`;
+}
+function dayLessonsCard(date, filter, mode, title){
+  const d = parseKey(date);
+  return `<div class="card"><div class="toolbar"><h3 style="margin:0;margin-right:auto">${title}</h3>
+    <button class="btn sm" onclick="setParam('date','${dateKey(addDays(d,-1))}')">‹</button>
+    <input type="date" class="input" value="${date}" onchange="setParam('date',this.value)">
+    <button class="btn sm" onclick="setParam('date','${dateKey(addDays(d,1))}')">›</button></div>
+    <div class="muted small" style="margin-bottom:6px">${fmtDate(d)}</div>
+    ${weekday(d) > 4 ? '<div class="empty">Ingen undervisning i weekenden.</div>' : lessonRows(lessonsOn(d, filter), d, mode, true)}</div>`;
+}
+function teacherAbsence(me){
+  const date = state.params.date || dateKey(getNow()), cs = myCourses(me);
+  const hc = state.params.course || cs[0]?.id, c = course(hc);
+  let table = '<div class="empty">Vælg et hold.</div>';
+  if(c){
+    table = `<div class="table-wrap"><table class="tbl"><thead><tr><th>Elev</th><th class="r">Fravær på holdet</th><th class="r">Samlet fravær</th><th class="r">Skriftligt</th></tr></thead><tbody>
+    ${studentsOf(c.classId).map(s => { const recs = DB.absences.filter(a => a.studentId===s.id && a.courseId===c.id); const u = recs.reduce((t,r) => t + (r.status==='late'?.5:1), 0);
+      return `<tr><td>${esc(s.name)}</td><td class="r">${String(u).replace('.',',')} lekt.</td><td class="r">${pctBadge(absenceStats(s).pct)}</td><td class="r">${pctBadge(writtenAbsence(s).pct)}</td></tr>`; }).join('')}
+    </tbody></table></div>`;
+  }
+  return `<div class="page-head"><h1>Fravær</h1></div>
+  ${dayLessonsCard(date, e => course(e.courseId)?.teacherId===me.id, 'teacher', 'Registrér fravær')}
+  <div class="card"><div class="toolbar"><h3 style="margin:0;margin-right:auto">Fravær på mine hold</h3>
+    <select onchange="setParam('course',this.value)">${cs.map(x => `<option value="${x.id}" ${x.id===hc?'selected':''}>${esc(courseLabel(x))}</option>`).join('')}</select></div>${table}</div>`;
+}
+function adminAbsence(){
+  const clId = state.params.cls || DB.classes[0]?.id, date = state.params.date || dateKey(getNow());
+  const rows = studentsOf(clId).map(s => ({s, a:absenceStats(s), w:writtenAbsence(s)})).sort((x,y) => y.a.pct - x.a.pct);
+  return `<div class="page-head"><h1>Fravær</h1><div class="row"><select onchange="setParam('cls',this.value)">${DB.classes.map(c => `<option value="${c.id}" ${c.id===clId?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div></div>
+  <div class="card"><h3>Fraværsoversigt · ${esc(classOf(clId)?.name || '')}</h3>
+    <div class="table-wrap"><table class="tbl"><thead><tr><th>Elev</th><th class="r">Fravær</th><th class="r">Lektioner</th><th class="r">Skriftligt fravær</th><th class="r">Manglende afleveringer</th></tr></thead><tbody>
+    ${rows.map(({s,a,w}) => `<tr><td>${esc(s.name)}</td><td class="r">${pctBadge(a.pct)}</td><td class="r">${String(a.units).replace('.',',')} / ${a.held}</td><td class="r">${pctBadge(w.pct)}</td><td class="r">${w.missingList.length}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">Ingen elever.</td></tr>'}
+    </tbody></table></div><div class="muted small" style="margin-top:8px">Gul ved 10 % og rød ved 15 %.</div></div>
+  ${dayLessonsCard(date, e => course(e.courseId)?.classId===clId, 'student', 'Lektioner og registrering')}`;
+}
+function absenceReg(me){
+  const e = DB.entries.find(x => x.id===state.params.entry), dk = state.params.date;
+  if(!e || !dk) return '<div class="note bad">Lektionen findes ikke længere. Skemaet kan være genereret igen.</div>';
+  const c = course(e.courseId), cl = classOf(c.classId), s = subj(c.subjectId), t = entryTime(e);
+  if(me.role==='teacher' && c.teacherId!==me.id) return '<div class="note bad">Du har ikke adgang til at registrere fravær på dette hold.</div>';
+  const key = e.id+'|'+dk, studs = studentsOf(cl.id);
+  if(!state.regDraft || state.regDraft.key !== key){
+    const map = {}; studs.forEach(st => { const r = DB.absences.find(a => a.studentId===st.id && a.entryId===e.id && a.date===dk); map[st.id] = r ? r.status : 'present'; });
+    state.regDraft = {key, map};
+  }
+  const map = state.regDraft.map, cnt = {present:0, late:0, absent:0}; studs.forEach(st => cnt[map[st.id]]++);
+  const start = parseKey(dk); start.setMinutes(t.start);
+  const future = start > getNow();
+  return `<a class="back" onclick="go('absence')">‹ Tilbage til fravær</a>
+  <div class="card hl"><div class="row"><span class="swatch" style="background:${s.color};width:14px;height:14px"></span><h1 style="margin-right:auto">${esc(cl.name)} · ${esc(s.name)}</h1>
+    ${isRegistered(e.id,dk) ? '<span class="badge ok">Registreret</span>' : '<span class="badge warn">Ikke registreret</span>'}</div>
+    <div class="muted" style="margin-top:4px">${fmtDate(parseKey(dk))} · ${fromMin(t.start)}–${fromMin(t.end)} · lokale ${esc(e.room)}</div></div>
+  ${future ? '<div class="note warn">Lektionen er ikke begyndt endnu. Du kan godt registrere på forhånd.</div>' : ''}
+  <div class="card"><div class="toolbar"><span class="badge ok">${cnt.present} til stede</span><span class="badge warn">${cnt.late} for sent</span><span class="badge bad">${cnt.absent} fraværende</span>
+    <span class="spacer"></span><button class="btn" onclick="regAll()">Alle til stede</button></div>
+    <div class="table-wrap"><table class="tbl"><tbody>
+    ${studs.map(st => `<tr><td><div class="row"><div class="avatar" style="background:var(--brand-l);width:28px;height:28px;font-size:11px">${esc(initialsOf(st.name))}</div><b>${esc(st.name)}</b></div></td>
+      <td class="r"><div class="seg">${[['present','Til stede','p'],['late','For sent','l'],['absent','Fraværende','a']].map(([k,tx,cls]) => `<button class="${cls} ${map[st.id]===k?'on':''}" onclick="setReg('${st.id}','${k}')">${tx}</button>`).join('')}</div></td></tr>`).join('') || '<tr><td class="empty">Ingen elever i klassen.</td></tr>'}
+    </tbody></table></div>
+    <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn primary" onclick="saveReg()">Gem registrering</button></div></div>`;
+}
+function setReg(sid, st){ state.regDraft.map[sid] = st; render(); }
+function regAll(){ Object.keys(state.regDraft.map).forEach(k => state.regDraft.map[k] = 'present'); render(); }
+function saveReg(){
+  const e = DB.entries.find(x => x.id===state.params.entry), dk = state.params.date, map = state.regDraft.map;
+  DB.absences = DB.absences.filter(a => !(a.entryId===e.id && a.date===dk));
+  Object.entries(map).forEach(([sid,st]) => { if(st !== 'present') DB.absences.push({id:uid('f'), studentId:sid, courseId:e.courseId, entryId:e.id, date:dk, status:st}); });
+  DB.registered[e.id+'|'+dk] = true;
+  save(); render(); toast('Fraværet er gemt');
+}
+
+/* ---------------- om mig ---------------- */
+function profileView(me){
+  let extra = '';
+  if(me.role==='student'){
+    const cs = DB.courses.filter(c => c.classId===me.classId), ab = absenceStats(me), wr = writtenAbsence(me);
+    extra = `<div class="card"><h3>Mine hold</h3>${cs.map(c => `<div class="lrow"><span class="swatch" style="background:${subj(c.subjectId).color}"></span><span class="lsub">${esc(subj(c.subjectId).name)}</span><span class="muted">${esc(user(c.teacherId)?.name || 'Ingen lærer')}</span></div>`).join('') || '<div class="empty">Ingen hold.</div>'}</div>
+    <div class="card"><h3>Status</h3><dl class="kv"><dt>Fravær</dt><dd>${pctBadge(ab.pct)}</dd><dt>Skriftligt fravær</dt><dd>${pctBadge(wr.pct)}</dd><dt>Elevtid afleveret</dt><dd>${String(wr.total - wr.missing).replace('.',',')} af ${String(wr.total).replace('.',',')} timer</dd></dl></div>`;
+  } else if(me.role==='teacher'){
+    const cs = myCourses(me);
+    extra = `<div class="card"><h3>Mine hold</h3>${cs.map(c => `<div class="lrow"><span class="swatch" style="background:${subj(c.subjectId).color}"></span><span class="lsub">${esc(courseLabel(c))}</span><span class="muted">${c.perWeek} lekt./uge</span></div>`).join('') || '<div class="empty">Ingen hold.</div>'}</div>
+    <div class="card"><h3>Tilgængelighed</h3><dl class="kv">${[0,1,2,3,4].map(d => `<dt>${DAYS_LONG[d]}</dt><dd>${AVAIL[(me.avail||[])[d]||'all']}</dd>`).join('')}</dl><div class="muted small" style="margin-top:8px">Det er administrationen, der ændrer din tilgængelighed.</div></div>`;
+  } else {
+    extra = `<div class="card"><h3>Rettigheder</h3><p style="margin-top:0">Som administrator kan du alt: oprette brugere og klasser, lægge skema, se og oprette alle opgaver og registrere fravær på alle hold.</p></div>`;
+  }
+  return `<div class="page-head"><h1>Om mig</h1></div>
+  <div class="grid2"><div class="card"><div class="row" style="margin-bottom:16px"><div class="avatar lg">${esc(initialsOf(me.name))}</div><div><h2 style="margin:0">${esc(me.name)}</h2><div class="muted">${ROLE_LABEL[me.role]}${me.role==='student' && classOf(me.classId) ? ' · '+esc(classOf(me.classId).name) : ''}${me.initials ? ' · '+esc(me.initials) : ''}</div></div></div>
+    <dl class="kv"><dt>UNI-login brugernavn</dt><dd>${esc(me.unilogin)}</dd><dt>MitID</dt><dd>${me.mitid ? '<span class="badge ok">Koblet</span>' : `<span class="badge muted">Ikke koblet</span> <button class="btn sm" onclick="linkMitID()">Kobl MitID</button>`}</dd>
+    <dt>Logget ind med</dt><dd>${esc(state.method || '—')}</dd></dl>
+    <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+    <div class="field"><label>E-mail</label><input class="input" id="pf-email" value="${esc(me.email)}"></div>
+    <div class="field"><label>Telefon</label><input class="input" id="pf-phone" value="${esc(me.phone)}" placeholder="Fx 12 34 56 78"></div>
+    <button class="btn primary" onclick="saveProfile()">Gem oplysninger</button></div>
+    <div class="stack">${extra}</div></div>`;
+}
+function saveProfile(){ const me = user(state.userId); me.email = val('pf-email').trim(); me.phone = val('pf-phone').trim(); save(); render(); toast('Dine oplysninger er gemt'); }
+function linkMitID(){ const me = user(state.userId); me.mitid = true; save(); render(); toast('MitID er koblet til din bruger (simuleret)'); }
+
+/* ---------------- skemalægning (admin) ---------------- */
+function schemeTimeline(){
+  const s0 = toMin('08:00'), s1 = toMin('16:00'), W = s1 - s0;
+  return `<div class="tl">${Object.entries(DB.schemes).map(([k,sc],i) => `<div class="tl-row ${i%2?'alt':''}"><div class="tl-label">${esc(sc.name)}</div><div class="tl-track">
+    ${sc.slots.map((sl,j) => `<div class="tl-bar" style="left:${(toMin(sl[0])-s0)/W*100}%;width:${(toMin(sl[1])-toMin(sl[0]))/W*100}%" title="${sl[0]}–${sl[1]}">${j+1}</div>`).join('')}</div></div>`).join('')}
+    <div class="tl-axis">${[8,9,10,11,12,13,14,15,16].map(h => `<span>${pad(h)}</span>`).join('')}</div></div>`;
+}
+function plannerView(){
+  const S = DB.settings, conf = findConflicts(DB.entries), lr = DB.lastRun;
+  const need = DB.courses.reduce((s,c) => s + c.perWeek, 0);
+  const load = {}; DB.entries.forEach(e => { const c = course(e.courseId); if(!c || !c.teacherId) return; const l = load[c.teacherId] || (load[c.teacherId] = [0,0,0,0,0]); l[e.day]++; });
+  return `<div class="page-head"><h1>Skemalægning</h1></div>
+  ${DB.dirty ? '<div class="note warn">Der er ændringer i hold, lærere eller moduler siden sidste skemalægning. Generér skemaet igen for at få dem med.</div>' : ''}
+  <div class="card hl"><div class="row"><div style="margin-right:auto"><h3 style="margin-bottom:4px">Automatisk skemalægning</h3>
+    <div class="muted">${DB.courses.length} hold · ${need} lektioner pr. uge · ${teachers().length} lærere · ${DB.rooms.length} lokaler</div></div>
+    <button class="btn primary" id="gen-btn" onclick="generate()">${icon('magic')} Generér skema</button></div>
+    <div class="note" style="margin:14px 0 0"><b>Sådan løses problemet med forskellige pauser:</b> Hver klasse har sit eget modulskema (1.g eller 2./3.g). Når skemalæggeren tjekker en lærer eller et lokale, sammenligner den <i>klokkeslæt</i> og ikke modulnumre. Den kræver også mindst ${S.buffer} minutters pause/forberedelse mellem en lærers lektioner. En lærer kan derfor ikke få 2.g 09:40–10:50 og 1.g 10:55–12:05 lige efter hinanden.</div>
+    ${lr ? `<div style="margin-top:14px"><div class="row"><b>Seneste resultat:</b><span>${lr.placed} af ${lr.total} lektioner placeret</span><span class="muted small">(${fmtDT(lr.at)})</span></div>
+      <div style="margin:8px 0">${progress(lr.placed, lr.total, lr.placed < lr.total ? 'warn' : '')}</div>
+      <div class="muted small">Huller i klasseskemaer: ${lr.gaps}</div>
+      ${lr.unplaced.length ? `<div class="note warn" style="margin-top:10px"><b>Kunne ikke placeres:</b>${lr.unplaced.map(u => `<div>${esc(course(u.courseId) ? courseLabel(course(u.courseId)) : 'Slettet hold')}: ${u.count} lektion(er). ${esc(u.reason)}</div>`).join('')}</div>` : ''}</div>` : ''}
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>Regler</h3>
+      <div class="field"><label>Min. pause/forberedelse mellem en lærers lektioner (minutter)</label><input class="input" type="number" min="0" max="60" id="r-buffer" value="${S.buffer}"></div>
+      <div class="field"><label>Max lektioner pr. lærer pr. dag</label><input class="input" type="number" min="1" max="8" id="r-maxday" value="${S.maxPerDay}"></div>
+      <div class="field"><label>Max lektioner i samme fag pr. dag (for en klasse)</label><input class="input" type="number" min="1" max="4" id="r-same" value="${S.maxSamePerDay}"></div>
+      <div class="field"><label>Skoleårets start (bruges til fraværsprocent)</label><input class="input" type="date" id="r-term" value="${S.termStart}"></div>
+      <div class="field"><label>Skolens navn</label><input class="input" id="r-name" value="${esc(S.schoolName)}"></div>
+      <button class="btn primary" onclick="saveRules()">Gem regler</button>
+      <div class="muted small" style="margin-top:10px">Lærernes tilgængelighed (fx fri om fredagen) sættes på den enkelte lærer under Brugere.</div></div>
+    <div class="card"><h3>Modulskemaer</h3>${schemeTimeline()}
+      ${Object.entries(DB.schemes).map(([k,sc]) => `<div style="margin-top:16px"><div class="row" style="margin-bottom:8px"><input class="input" value="${esc(sc.name)}" onchange="DB.schemes['${k}'].name=this.value;save();render()" style="font-weight:600">
+        <span class="muted small">Bruges af: ${esc(DB.classes.filter(c => c.scheme===k).map(c => c.name).join(', ') || 'ingen klasser')}</span></div>
+        ${sc.slots.map((sl,i) => `<div class="slotrow"><span>${i+1}. modul</span><input class="input" type="time" value="${sl[0]}" onchange="setSlot('${k}',${i},0,this.value)"> – <input class="input" type="time" value="${sl[1]}" onchange="setSlot('${k}',${i},1,this.value)">
+          <button class="btn sm danger" onclick="removeSlot('${k}',${i})" aria-label="Fjern modul">×</button></div>`).join('')}
+        <button class="btn sm" onclick="addSlot('${k}')">+ Tilføj modul</button></div>`).join('')}
+      <div class="row" style="margin-top:16px"><button class="btn" onclick="addScheme()">+ Nyt modulskema</button></div></div>
+  </div>
+  <div class="grid2" style="margin-top:16px">
+    <div class="card"><h3>Konflikter i nuværende skema (${conf.list.length})</h3>${conflictList(conf.list, 30)}</div>
+    <div class="card"><h3>Lærernes belastning</h3><div class="table-wrap"><table class="tbl"><thead><tr><th>Lærer</th>${DAYS_SHORT.slice(0,5).map(d => `<th class="r">${d}</th>`).join('')}<th class="r">I alt</th></tr></thead><tbody>
+      ${teachers().map(t => { const l = load[t.id] || [0,0,0,0,0]; return `<tr><td>${esc(t.name)} <span class="muted">(${esc(t.initials)})</span></td>${l.map((n,d) => `<td class="r">${(t.avail||[])[d]==='none' ? '<span class="muted">fri</span>' : n}</td>`).join('')}<td class="r"><b>${l.reduce((a,b) => a+b, 0)}</b></td></tr>`; }).join('')}
+    </tbody></table></div></div>
+  </div>`;
+}
+function generate(){
+  if(DB.entries.length && !confirm('Det nuværende skema bliver erstattet, også manuelle ændringer. Fortsæt?')) return;
+  const b = document.getElementById('gen-btn'); if(b){ b.disabled = true; b.textContent = 'Lægger skema…'; }
+  setTimeout(() => {
+    const r = runScheduler(Math.floor(Math.random()*1e6));
+    DB.entries = r.entries; DB.dirty = false;
+    DB.lastRun = {placed:r.entries.length, total:r.total, unplaced:r.unplaced, gaps:r.gaps, at:toLocalISO(getNow())};
+    save(); render();
+    toast(r.unplaced.length ? `${r.entries.length} af ${r.total} lektioner placeret. Se hvad der mangler.` : `Alle ${r.total} lektioner er placeret uden konflikter`, r.unplaced.length ? 'bad' : '');
+  }, 30);
+}
+function saveRules(){
+  const S = DB.settings;
+  S.buffer = Math.max(0, parseInt(val('r-buffer')) || 0);
+  S.maxPerDay = Math.max(1, parseInt(val('r-maxday')) || 1);
+  S.maxSamePerDay = Math.max(1, parseInt(val('r-same')) || 1);
+  S.termStart = val('r-term') || S.termStart;
+  S.schoolName = val('r-name').trim() || S.schoolName;
+  DB.dirty = true; save(); render(); toast('Reglerne er gemt');
+}
+function setSlot(k, i, j, v){
+  if(!v) return;
+  const sl = DB.schemes[k].slots[i]; sl[j] = v;
+  if(toMin(sl[0]) >= toMin(sl[1])) toast('Starttid skal være før sluttid', 'bad');
+  DB.dirty = true; save(); render();
+}
+function addSlot(k){
+  const sl = DB.schemes[k].slots, last = sl[sl.length-1];
+  const st = last ? toMin(last[1]) + 10 : toMin('08:15');
+  sl.push([fromMin(st), fromMin(st+70)]); DB.dirty = true; save(); render();
+}
+function removeSlot(k, i){
+  if(!confirm(`Fjern ${i+1}. modul? Lektioner i det modul bliver fjernet fra skemaet.`)) return;
+  const cls = DB.classes.filter(c => c.scheme===k).map(c => c.id);
+  DB.entries = DB.entries.filter(e => { const c = course(e.courseId); return !(c && cls.includes(c.classId) && e.slot===i); });
+  DB.entries.forEach(e => { const c = course(e.courseId); if(c && cls.includes(c.classId) && e.slot > i) e.slot--; });
+  DB.schemes[k].slots.splice(i,1); DB.dirty = true; save(); render();
+}
+function addScheme(){
+  const name = prompt('Navn på det nye modulskema (fx "HHX fredag" eller "EUX")'); if(!name) return;
+  const k = uid('m'); DB.schemes[k] = {name, slots:JSON.parse(JSON.stringify(DB.schemes['23g'] ? DB.schemes['23g'].slots : [['08:15','09:25']]))};
+  save(); render(); toast('Modulskemaet er oprettet. Vælg det på en klasse under Klasser og hold.');
+}
+
+/* ---------------- brugere (admin) ---------------- */
+function usersView(){
+  const p = state.params, q = (p.q || '').toLowerCase(), role = p.role || 'all';
+  const list = DB.users.filter(u => (role==='all' || u.role===role) && (!q || (u.name+' '+u.unilogin+' '+(u.email||'')+' '+(u.initials||'')).toLowerCase().includes(q)))
+    .sort((a,b) => ROLE_ORDER[a.role]-ROLE_ORDER[b.role] || byName(a,b));
+  const info = u => u.role==='student' ? esc(classOf(u.classId)?.name || 'Ingen klasse') : u.role==='teacher' ? `<b>${esc(u.initials)}</b> · ${esc((u.subjects||[]).map(s => subj(s)?.name).filter(Boolean).join(', ') || 'ingen fag')}` : '—';
+  return `<div class="page-head"><h1>Brugere</h1><div class="row"><button class="btn" onclick="importModal()">Importér liste</button><button class="btn primary" onclick="userModal()">+ Opret bruger</button></div></div>
+  <div class="card"><div class="toolbar"><input id="q-users" class="input" placeholder="Søg på navn, brugernavn, e-mail…" value="${esc(p.q||'')}" oninput="state.params.q=this.value;state.refocus='q-users';render()" style="min-width:240px">
+    <div class="tabs">${[['all','Alle'],['student','Elever'],['teacher','Lærere'],['admin','Administratorer']].map(([k,t]) => `<button class="tab ${role===k?'active':''}" onclick="setParam('role','${k}')">${t}<span class="count">${k==='all' ? DB.users.length : DB.users.filter(u => u.role===k).length}</span></button>`).join('')}</div></div>
+    <div class="table-wrap"><table class="tbl"><thead><tr><th>Navn</th><th>Rolle</th><th>Klasse / fag</th><th>UNI-login</th><th>E-mail</th><th></th></tr></thead><tbody>
+    ${list.map(u => `<tr><td><b>${esc(u.name)}</b></td><td><span class="badge ${u.role==='admin'?'bad':u.role==='teacher'?'info':'muted'}">${ROLE_LABEL[u.role]}</span></td><td class="small">${info(u)}</td><td class="small">${esc(u.unilogin)}</td><td class="small">${esc(u.email||'')}</td>
+      <td class="r" style="white-space:nowrap"><button class="btn sm" onclick="userModal('${u.id}')">Redigér</button> <button class="btn sm danger" onclick="deleteUser('${u.id}')">Slet</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">Ingen brugere matcher.</td></tr>'}
+    </tbody></table></div></div>
+  <div class="card"><h3>Roller og rettigheder</h3><div class="table-wrap"><table class="tbl"><thead><tr><th>Rolle</th><th>Kan</th></tr></thead><tbody>
+    <tr><td><span class="badge muted">Elev</span></td><td>Se eget skema, se og aflevere opgaver, se feedback og karakterer, se eget fravær og egen profil.</td></tr>
+    <tr><td><span class="badge info">Lærer</span></td><td>Alt på egne hold: se skema, oprette opgaver, se hvem der har afleveret og hvem der mangler, give feedback og karakter, registrere fravær.</td></tr>
+    <tr><td><span class="badge bad">Administrator</span></td><td>Alt: oprette og redigere brugere, klasser, hold, fag, lokaler og modulskemaer, lægge skema, se og oprette alle opgaver, se og registrere alt fravær.</td></tr>
+  </tbody></table></div></div>`;
+}
+function userModal(id){
+  const u = id ? user(id) : {role:'student', name:'', unilogin:'', email:'', phone:'', classId:DB.classes[0]?.id, initials:'', subjects:[], avail:['all','all','all','all','all']};
+  const r = u.role;
+  openModal(id ? 'Redigér bruger' : 'Opret bruger', `
+    <div class="form-grid">
+      <div class="field"><label>Fulde navn</label><input class="input" id="uf-name" value="${esc(u.name)}"></div>
+      <div class="field"><label>Rolle</label><select id="uf-role" onchange="toggleRoleFields(this.value)">${Object.entries(ROLE_LABEL).map(([k,t]) => `<option value="${k}" ${k===r?'selected':''}>${t}</option>`).join('')}</select></div>
+      <div class="field"><label>UNI-login brugernavn</label><input class="input" id="uf-uni" value="${esc(u.unilogin)}" placeholder="Laves automatisk hvis tom"></div>
+      <div class="field"><label>E-mail</label><input class="input" id="uf-email" value="${esc(u.email||'')}"></div>
+      <div class="field"><label>Telefon</label><input class="input" id="uf-phone" value="${esc(u.phone||'')}"></div>
+    </div>
+    <div id="f-student" style="display:${r==='student'?'block':'none'}"><div class="field"><label>Klasse</label><select id="uf-class"><option value="">Ingen klasse</option>${DB.classes.map(c => `<option value="${c.id}" ${c.id===u.classId?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div></div>
+    <div id="f-teacher" style="display:${r==='teacher'?'block':'none'}">
+      <div class="field"><label>Initialer</label><input class="input" id="uf-init" value="${esc(u.initials||'')}" placeholder="Fx mh" style="max-width:120px"></div>
+      <div class="field"><label>Underviser i</label><div class="checks">${DB.subjects.map(s => `<label><input type="checkbox" class="uf-subj" value="${s.id}" ${(u.subjects||[]).includes(s.id)?'checked':''}> ${esc(s.name)}</label>`).join('')}</div></div>
+      <div class="field"><label>Tilgængelighed (bruges af skemalæggeren)</label><div class="form-grid">${[0,1,2,3,4].map(d => `<div class="row" style="margin-bottom:6px"><span style="width:70px">${DAYS_LONG[d]}</span><select id="uf-av${d}">${Object.entries(AVAIL).map(([k,t]) => `<option value="${k}" ${((u.avail||[])[d]||'all')===k?'selected':''}>${t}</option>`).join('')}</select></div>`).join('')}</div></div>
+    </div>`,
+    `<button class="btn" onclick="closeModal()">Annullér</button><button class="btn primary" onclick="saveUser(${id?`'${id}'`:'null'})">${id ? 'Gem' : 'Opret bruger'}</button>`, true);
+}
+function toggleRoleFields(r){ document.getElementById('f-student').style.display = r==='student' ? 'block' : 'none'; document.getElementById('f-teacher').style.display = r==='teacher' ? 'block' : 'none'; }
+function genUni(name){ let u; do { u = asciiize(name.split(' ')[0]).slice(0,4) + String(1000+Math.floor(Math.random()*9000)); } while(DB.users.some(x => x.unilogin===u)); return u; }
+function genInitials(name){ const p = name.split(/\s+/); return asciiize((p[0]||'x')[0] + (p[p.length-1]||'x')[0]); }
+function saveUser(id){
+  const name = val('uf-name').trim(), role = val('uf-role');
+  if(!name) return toast('Navn mangler', 'bad');
+  const un = val('uf-uni').trim() || genUni(name);
+  if(DB.users.some(u => u.unilogin===un && u.id!==id)) return toast('UNI-login brugernavnet er allerede i brug', 'bad');
+  const data = {name, role, unilogin:un, email:val('uf-email').trim(), phone:val('uf-phone').trim()};
+  if(role==='student') data.classId = val('uf-class') || null;
+  if(role==='teacher'){
+    data.initials = (val('uf-init').trim() || genInitials(name)).toLowerCase();
+    data.subjects = [...document.querySelectorAll('.uf-subj:checked')].map(x => x.value);
+    data.avail = [0,1,2,3,4].map(d => val('uf-av'+d));
+  }
+  if(id){ const u = user(id); if(u.role==='teacher' && JSON.stringify(u.avail) !== JSON.stringify(data.avail)) DB.dirty = true; Object.assign(u, data); }
+  else DB.users.push({id:uid('u'), mitid:false, ...data});
+  save(); closeModal(); render(); toast(id ? 'Brugeren er opdateret' : 'Brugeren er oprettet');
+}
+function deleteUser(id){
+  if(id === state.userId) return toast('Du kan ikke slette dig selv', 'bad');
+  const u = user(id); if(!confirm(`Slet ${u.name}?`)) return;
+  if(u.role==='teacher'){ DB.courses.forEach(c => { if(c.teacherId===id){ c.teacherId = null; DB.dirty = true; } }); }
+  if(u.role==='student'){ DB.submissions = DB.submissions.filter(s => s.studentId!==id); DB.absences = DB.absences.filter(a => a.studentId!==id); }
+  DB.users = DB.users.filter(x => x.id!==id); save(); render(); toast('Brugeren er slettet');
+}
+function importModal(){
+  openModal('Importér brugere', `
+    <p class="muted" style="margin-top:0">Indsæt én bruger pr. linje, adskilt med semikolon:<br><code>Navn;rolle;klasse eller initialer;UNI-login;e-mail</code><br>Rolle: elev, lærer eller admin. UNI-login og e-mail kan udelades.</p>
+    <textarea id="imp" style="min-height:160px;font-family:monospace" placeholder="Mads Holm;elev;1.g A;madh2231;madh2231@elev.skole.dk&#10;Lene Dahl;lærer;ld"></textarea>`,
+    `<button class="btn" onclick="closeModal()">Annullér</button><button class="btn primary" onclick="doImport()">Importér</button>`);
+}
+function doImport(){
+  const map = {elev:'student', 'lærer':'teacher', laerer:'teacher', admin:'admin', administrator:'admin'};
+  let ok = 0; const errs = [];
+  val('imp').split('\n').map(l => l.trim()).filter(Boolean).forEach((line, i) => {
+    const [name, r, x, un, email] = line.split(';').map(s => (s||'').trim());
+    const role = map[(r||'').toLowerCase()];
+    if(!name || !role){ errs.push(`Linje ${i+1}: mangler navn eller ukendt rolle`); return; }
+    const u = {id:uid('u'), name, role, unilogin: un || genUni(name), email: email || '', phone:'', mitid:false};
+    if(DB.users.some(o => o.unilogin===u.unilogin)){ errs.push(`Linje ${i+1}: UNI-login ${u.unilogin} findes allerede`); return; }
+    if(role==='student'){ const cl = DB.classes.find(c => c.name.toLowerCase()===(x||'').toLowerCase()); u.classId = cl ? cl.id : null; if(x && !cl) errs.push(`Linje ${i+1}: klassen "${x}" findes ikke. Eleven er oprettet uden klasse`); }
+    if(role==='teacher'){ u.initials = (x || genInitials(name)).toLowerCase(); u.subjects = []; u.avail = ['all','all','all','all','all']; }
+    DB.users.push(u); ok++;
+  });
+  save(); closeModal(); render(); toast(`${ok} brugere importeret`);
+  if(errs.length) setTimeout(() => alert(errs.join('\n')), 50);
+}
+
+/* ---------------- klasser og hold (admin) ---------------- */
+function teacherOptions(sid, selected){
+  const ts = teachers(), q = ts.filter(t => (t.subjects||[]).includes(sid)), o = ts.filter(t => !(t.subjects||[]).includes(sid));
+  const opt = t => `<option value="${t.id}" ${t.id===selected?'selected':''}>${esc(t.name)} (${esc(t.initials)})</option>`;
+  return `<option value="">Ingen lærer</option>${q.length ? `<optgroup label="Underviser i faget">${q.map(opt).join('')}</optgroup>` : ''}${o.length ? `<optgroup label="Andre lærere">${o.map(opt).join('')}</optgroup>` : ''}`;
+}
+function classesView(){
+  const sel = classOf(state.params.cls) || DB.classes[0];
+  const classes = DB.classes.slice().sort(byName);
+  let right = '<div class="card"><div class="empty">Opret den første klasse.</div></div>';
+  if(sel){
+    const cs = DB.courses.filter(c => c.classId===sel.id), total = cs.reduce((s,c) => s + c.perWeek, 0), cap = schemeOf(sel).slots.length*5;
+    right = `<div class="card"><div class="row"><h2 style="margin:0;margin-right:auto">${esc(sel.name)}</h2><button class="btn" onclick="classModal('${sel.id}')">Redigér</button><button class="btn danger" onclick="deleteClass('${sel.id}')">Slet</button></div>
+      <dl class="kv" style="margin-top:12px"><dt>Årgang</dt><dd>${sel.year}.g</dd><dt>Modulskema</dt><dd>${esc(schemeOf(sel).name)} (${schemeOf(sel).slots.length} moduler pr. dag)</dd><dt>Stamlokale</dt><dd>${esc(sel.homeRoom||'—')}</dd><dt>Elever</dt><dd>${studentsOf(sel.id).length}</dd></dl>
+      <div style="margin-top:14px"><div class="row small"><b>${total} af ${cap} moduler pr. uge brugt</b>${total > cap ? '<span class="badge bad">For mange lektioner</span>' : ''}</div><div style="margin-top:6px">${progress(Math.min(total,cap), cap, total > cap ? 'bad' : '')}</div></div></div>
+    <div class="card"><h3>Hold</h3><div class="table-wrap"><table class="tbl"><thead><tr><th>Fag</th><th>Lærer</th><th>Lekt./uge</th><th></th></tr></thead><tbody>
+      ${cs.map(c => `<tr><td><div class="row"><span class="swatch" style="background:${subj(c.subjectId)?.color}"></span>${esc(subj(c.subjectId)?.name || '?')}</div></td>
+        <td><select onchange="setCourse('${c.id}','teacherId',this.value)">${teacherOptions(c.subjectId, c.teacherId)}</select>${c.teacherId ? '' : ' <span class="badge bad">Mangler</span>'}</td>
+        <td><input type="number" class="input num" min="1" max="10" value="${c.perWeek}" onchange="setCourse('${c.id}','perWeek',this.value)"></td>
+        <td class="r"><button class="btn sm danger" onclick="removeCourse('${c.id}')">Fjern</button></td></tr>`).join('') || '<tr><td colspan="4" class="empty">Ingen hold endnu.</td></tr>'}
+      <tr><td><select id="nh-subj" onchange="document.getElementById('nh-teacher').innerHTML=teacherOptions(this.value,'')">${DB.subjects.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></td>
+        <td><select id="nh-teacher">${teacherOptions(DB.subjects[0]?.id, '')}</select></td>
+        <td><input type="number" class="input num" id="nh-n" min="1" max="10" value="3"></td>
+        <td class="r"><button class="btn sm primary" onclick="addCourse('${sel.id}')">+ Tilføj hold</button></td></tr>
+    </tbody></table></div>
+    <div class="muted small" style="margin-top:8px">Elever tilføjes til klassen under Brugere. Husk at generere skemaet igen efter ændringer.</div></div>`;
+  }
+  return `<div class="page-head"><h1>Klasser og hold</h1><div class="row"><button class="btn primary" onclick="classModal()">+ Ny klasse</button></div></div>
+  <div class="split"><div class="card" style="padding:8px">${classes.map(c => `<div class="cls-item ${sel && c.id===sel.id?'active':''}" onclick="setParam('cls','${c.id}')"><b>${esc(c.name)}</b>
+    <span class="muted small">${studentsOf(c.id).length} elever · ${DB.courses.filter(x => x.classId===c.id).reduce((s,x) => s + x.perWeek, 0)} lekt./uge</span></div>`).join('')}</div>
+    <div>${right}</div></div>
+  <div class="grid2" style="margin-top:16px">
+    <div class="card"><h3>Fag</h3><div>${DB.subjects.map(s => `<span class="subj-chip"><span class="swatch" style="background:${s.color}"></span>${esc(s.name)}<button onclick="removeSubject('${s.id}')" title="Slet fag" aria-label="Slet fag">×</button></span>`).join('')}</div>
+      <div class="row" style="margin-top:10px"><input class="input" id="ns-name" placeholder="Fx Erhvervsjura C"><input type="color" id="ns-color" value="#cfe3f7" style="width:44px;height:34px;padding:2px"><button class="btn" onclick="addSubject()">+ Tilføj fag</button></div></div>
+    <div class="card"><h3>Lokaler</h3><div class="field"><label>Lokaler adskilt med komma</label><input class="input" id="rooms" value="${esc(DB.rooms.join(', '))}"></div><button class="btn" onclick="saveRooms()">Gem lokaler</button></div>
+  </div>`;
+}
+function setCourse(id, field, v){
+  const c = course(id);
+  if(field==='perWeek') c.perWeek = Math.min(10, Math.max(1, parseInt(v) || 1)); else c[field] = v || null;
+  DB.dirty = true; save(); render();
+}
+function addCourse(classId){
+  const sid = val('nh-subj');
+  if(DB.courses.some(c => c.classId===classId && c.subjectId===sid) && !confirm('Klassen har allerede et hold i det fag. Opret et ekstra hold?')) return;
+  DB.courses.push({id:uid('h'), classId, subjectId:sid, teacherId:val('nh-teacher') || null, perWeek:Math.min(10, Math.max(1, parseInt(val('nh-n')) || 1))});
+  DB.dirty = true; save(); render(); toast('Holdet er tilføjet');
+}
+function removeCourse(id){
+  if(!confirm('Fjern holdet? Holdets lektioner, opgaver og afleveringer bliver også slettet.')) return;
+  const aids = DB.assignments.filter(a => a.courseId===id).map(a => a.id);
+  DB.courses = DB.courses.filter(c => c.id!==id); DB.entries = DB.entries.filter(e => e.courseId!==id);
+  DB.assignments = DB.assignments.filter(a => a.courseId!==id); DB.submissions = DB.submissions.filter(s => !aids.includes(s.assignmentId));
+  DB.dirty = true; save(); render(); toast('Holdet er fjernet');
+}
+function classModal(id){
+  const c = id ? classOf(id) : {name:'', year:1, scheme:'1g', homeRoom:DB.rooms[0]};
+  openModal(id ? 'Redigér klasse' : 'Ny klasse', `
+    <div class="form-grid">
+      <div class="field"><label>Navn</label><input class="input" id="cf-name" value="${esc(c.name)}" placeholder="Fx 1.g C"></div>
+      <div class="field"><label>Årgang</label><select id="cf-year" onchange="document.getElementById('cf-scheme').value=this.value==='1'&&DB.schemes['1g']?'1g':(DB.schemes['23g']?'23g':document.getElementById('cf-scheme').value)">${[1,2,3].map(y => `<option value="${y}" ${y===c.year?'selected':''}>${y}.g</option>`).join('')}</select></div>
+      <div class="field"><label>Modulskema</label><select id="cf-scheme">${Object.entries(DB.schemes).map(([k,s]) => `<option value="${k}" ${k===c.scheme?'selected':''}>${esc(s.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>Stamlokale</label><select id="cf-room">${DB.rooms.map(r => `<option ${r===c.homeRoom?'selected':''}>${esc(r)}</option>`).join('')}</select></div>
+    </div>
+    ${id ? '' : '<label class="row"><input type="checkbox" id="cf-std" checked> Opret standardhold for årgangen med automatisk valgte lærere</label>'}`,
+    `<button class="btn" onclick="closeModal()">Annullér</button><button class="btn primary" onclick="saveClass(${id?`'${id}'`:'null'})">${id ? 'Gem' : 'Opret klasse'}</button>`);
+}
+const STD_PLAN = {1:[['da',3],['en',3],['maB',3],['sa',3],['hi',2],['io',3],['ve',2],['if',2]], 2:[['da',3],['en',3],['maA',3],['sa',3],['hi',3],['io',3],['ps',2],['so',2]], 3:[['da',3],['en',3],['maA',3],['sa',2],['hi',2],['io',3],['ve',3],['so',3]]};
+function saveClass(id){
+  const data = {name:val('cf-name').trim(), year:+val('cf-year'), scheme:val('cf-scheme'), homeRoom:val('cf-room')};
+  if(!data.name) return toast('Navn mangler', 'bad');
+  if(DB.classes.some(c => c.name.toLowerCase()===data.name.toLowerCase() && c.id!==id)) return toast('Der findes allerede en klasse med det navn', 'bad');
+  if(id){ const c = classOf(id); if(c.scheme !== data.scheme) DB.dirty = true; Object.assign(c, data); }
+  else {
+    const c = {id:uid('c'), ...data}; DB.classes.push(c); state.params = {cls:c.id};
+    if(document.getElementById('cf-std')?.checked){
+      const load = {}; DB.courses.forEach(x => { if(x.teacherId) load[x.teacherId] = (load[x.teacherId]||0) + x.perWeek; });
+      (STD_PLAN[data.year] || []).filter(([sid]) => subj(sid)).forEach(([sid,n]) => {
+        const t = teachers().filter(x => (x.subjects||[]).includes(sid)).sort((a,b) => (load[a.id]||0)-(load[b.id]||0))[0];
+        if(t) load[t.id] = (load[t.id]||0) + n;
+        DB.courses.push({id:uid('h'), classId:c.id, subjectId:sid, teacherId:t ? t.id : null, perWeek:n});
+      });
+    }
+    DB.dirty = true;
+  }
+  save(); closeModal(); render(); toast(id ? 'Klassen er opdateret' : 'Klassen er oprettet');
+}
+function deleteClass(id){
+  const c = classOf(id); if(!confirm(`Slet ${c.name}? Holdene og deres lektioner og opgaver slettes. Eleverne bliver liggende uden klasse.`)) return;
+  DB.courses.filter(x => x.classId===id).forEach(x => {
+    const aids = DB.assignments.filter(a => a.courseId===x.id).map(a => a.id);
+    DB.entries = DB.entries.filter(e => e.courseId!==x.id); DB.assignments = DB.assignments.filter(a => a.courseId!==x.id); DB.submissions = DB.submissions.filter(s => !aids.includes(s.assignmentId));
+  });
+  DB.courses = DB.courses.filter(x => x.classId!==id);
+  DB.users.forEach(u => { if(u.classId===id) u.classId = null; });
+  DB.classes = DB.classes.filter(x => x.id!==id); DB.dirty = true; state.params = {}; save(); render(); toast('Klassen er slettet');
+}
+function addSubject(){
+  const name = val('ns-name').trim(); if(!name) return toast('Skriv et navn på faget', 'bad');
+  DB.subjects.push({id:uid('f'), name, color:val('ns-color') || '#e5e7eb'}); save(); render(); toast('Faget er tilføjet');
+}
+function removeSubject(id){
+  if(DB.courses.some(c => c.subjectId===id)) return toast('Faget bruges af et hold og kan ikke slettes', 'bad');
+  if(!confirm('Slet faget?')) return;
+  DB.subjects = DB.subjects.filter(s => s.id!==id); DB.users.forEach(u => { if(u.subjects) u.subjects = u.subjects.filter(s => s!==id); }); save(); render();
+}
+function saveRooms(){
+  const rooms = val('rooms').split(',').map(s => s.trim()).filter(Boolean);
+  if(!rooms.length) return toast('Der skal være mindst ét lokale', 'bad');
+  DB.rooms = [...new Set(rooms)]; DB.dirty = true; save(); render(); toast('Lokalerne er gemt');
+}
+
+/* ---------------- start ---------------- */
+load();
+render();
+</script>
+</body>
+</html>
