@@ -4,228 +4,399 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Skoleportal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#f3f5f8; --panel:#fff; --line:#e2e6ec; --line2:#eef1f5; --text:#1f2933; --muted:#6b7785;
-  --brand:#2f6fb0; --brand-d:#22578c; --brand-l:#e8f0fa;
-  --ok:#1d8a4b; --ok-l:#e2f5ea; --warn:#a96400; --warn-l:#fff3da; --bad:#c22f3c; --bad-l:#fde7e9;
-  --info:#2f6fb0; --info-l:#e6f0fb; --radius:8px;
+  --bg:#f4f6fb; --panel:#fff; --panel-2:#f8f9fc; --hover:#f2f4f9; --line:#e5e8ef; --line-2:#eef0f5;
+  --text:#141826; --muted:#667085; --faint:#98a2b3;
+  --brand:#4f5fe8; --brand-d:#3f4ed6; --brand-l:#eef0fe; --brand-ink:#3442c4;
+  --ok:#0f7b55; --ok-l:#e5f6ee; --warn:#ad5b06; --warn-l:#fff3e2; --bad:#cf2c40; --bad-l:#fdebee; --info:#4f5fe8; --info-l:#eef0fe;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.05);
+  --shadow-lg:0 24px 48px -12px rgba(16,24,40,.28);
+  --grad:linear-gradient(135deg,#5466f0 0%,#7458ef 55%,#9d5af0 100%);
+  --lesson-mix:68%; --edge-with:#000; --edge-amt:25%;
+  --r:14px; --r-sm:10px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --bg:#0d1017; --panel:#151922; --panel-2:#1a1f2b; --hover:#1e2431; --line:#262c3a; --line-2:#1f2532;
+  --text:#e7eaf1; --muted:#9aa3b5; --faint:#6b7486;
+  --brand:#7a88ff; --brand-d:#6676f7; --brand-l:#20264a; --brand-ink:#b8c0ff;
+  --ok:#46c28d; --ok-l:#11291f; --warn:#f0a54e; --warn-l:#2f2414; --bad:#f36b7d; --bad-l:#33171d; --info:#8e9bff; --info-l:#20264a;
+  --shadow:0 1px 2px rgba(0,0,0,.35); --shadow-lg:0 24px 48px -12px rgba(0,0,0,.7);
+  --lesson-mix:34%; --edge-with:#fff; --edge-amt:10%;
+  color-scheme:dark;
+}}
+:root[data-theme=dark]{
+  --bg:#0d1017; --panel:#151922; --panel-2:#1a1f2b; --hover:#1e2431; --line:#262c3a; --line-2:#1f2532;
+  --text:#e7eaf1; --muted:#9aa3b5; --faint:#6b7486;
+  --brand:#7a88ff; --brand-d:#6676f7; --brand-l:#20264a; --brand-ink:#b8c0ff;
+  --ok:#46c28d; --ok-l:#11291f; --warn:#f0a54e; --warn-l:#2f2414; --bad:#f36b7d; --bad-l:#33171d; --info:#8e9bff; --info-l:#20264a;
+  --shadow:0 1px 2px rgba(0,0,0,.35); --shadow-lg:0 24px 48px -12px rgba(0,0,0,.7);
+  --lesson-mix:34%; --edge-with:#fff; --edge-amt:10%;
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.45}
-h1{font-size:23px;font-weight:500;color:var(--brand-d);margin:0}
-h3{font-size:15px;margin:0 0 12px}
+html,body{margin:0}
+body{font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+h1{font-size:24px;font-weight:700;letter-spacing:-.02em;margin:0}
+h2{font-size:19px;font-weight:700;letter-spacing:-.015em}
+h3{font-size:15px;font-weight:600;margin:0 0 12px;letter-spacing:-.005em}
 a{color:var(--brand)}
+code{background:var(--panel-2);border:1px solid var(--line);padding:1px 6px;border-radius:6px;font-size:12.5px}
 .muted{color:var(--muted)}
-.small{font-size:12px}
+.small{font-size:12.5px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .spacer{flex:1}
-
-/* top + layout */
-.topbar{height:54px;background:var(--brand);color:#fff;display:flex;align-items:center;gap:18px;padding:0 16px;position:sticky;top:0;z-index:30}
-.brand{font-weight:700;font-size:21px;letter-spacing:.2px;white-space:nowrap}
-.brand span{color:#a8d4ff}
-.school{opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.top-right{margin-left:auto;display:flex;align-items:center;gap:10px}
-.chip{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:5px 11px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
-.chip:hover{background:rgba(255,255,255,.24)}
-.chip.sim{background:#f59e0b;border-color:#f59e0b;color:#1f2933}
-.chip .ic{width:15px;height:15px}
-.me{display:flex;align-items:center;gap:8px}
-.avatar{width:32px;height:32px;border-radius:50%;background:#fff;color:var(--brand-d);display:grid;place-items:center;font-weight:700;font-size:13px;flex-shrink:0}
-.avatar.lg{width:64px;height:64px;font-size:22px;background:var(--brand-l)}
-.me-txt{display:flex;flex-direction:column;line-height:1.15}
-.me-txt small{opacity:.85}
-.layout{display:flex;min-height:calc(100vh - 54px)}
-.side{width:214px;background:#fff;border-right:1px solid var(--line);padding:8px 0;flex-shrink:0;display:flex;flex-direction:column}
-.side a{display:flex;align-items:center;gap:11px;padding:11px 18px;color:var(--text);text-decoration:none;cursor:pointer;border-left:3px solid transparent}
-.side a:hover{background:#f4f7fb}
-.side a.active{background:var(--brand-l);border-left-color:var(--brand);color:var(--brand-d);font-weight:600}
-.side .foot{margin-top:auto;padding:14px 18px;font-size:12px;color:var(--muted);border-top:1px solid var(--line2)}
-.side .foot button{background:none;border:0;color:var(--brand);padding:0;cursor:pointer;font:inherit;font-size:12px;text-decoration:underline}
 .ic{width:18px;height:18px;flex-shrink:0}
-main{flex:1;padding:22px 26px 40px;min-width:0}
-.page-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
-.page-head .row{margin-left:auto}
-.back{display:inline-block;margin-bottom:10px;cursor:pointer;color:var(--brand)}
 
-/* cards, grids */
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:16px}
-.card.hl{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-l)}
-.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start}
+/* skal */
+.shell{display:flex;min-height:100vh}
+.side{width:248px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;padding:18px 14px}
+.side-brand{display:flex;align-items:center;gap:11px;padding:4px 8px 22px}
+.side-brand b{display:block;font-size:16px;letter-spacing:-.01em}
+.side-brand small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.logo{width:38px;height:38px;border-radius:11px;background:var(--grad);color:#fff;display:grid;place-items:center;font-weight:800;font-size:18px;box-shadow:0 6px 16px -6px rgba(84,102,240,.65);flex-shrink:0}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:10px;color:var(--muted);text-decoration:none;cursor:pointer;font-weight:500;transition:background .15s,color .15s}
+.nav a:hover{background:var(--hover);color:var(--text)}
+.nav a.active{background:var(--brand-l);color:var(--brand-ink)}
+.nav a.active .ic{color:var(--brand)}
+.side-foot{margin-top:auto;padding:12px 14px;font-size:12px;color:var(--muted);background:var(--panel-2);border:1px solid var(--line-2);border-radius:12px}
+.side-foot button{background:none;border:0;color:var(--brand);padding:0;margin-top:4px;cursor:pointer;font:inherit;font-size:12px;font-weight:600}
+.main-col{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{height:64px;display:flex;align-items:center;gap:14px;padding:0 28px;position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:saturate(1.5) blur(14px);-webkit-backdrop-filter:saturate(1.5) blur(14px);border-bottom:1px solid var(--line-2)}
+.mobile-brand{display:none;align-items:center;gap:9px;font-weight:700}
+.mobile-brand .logo{width:32px;height:32px;font-size:15px;border-radius:9px}
+.top-title{color:var(--muted);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:inherit;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;box-shadow:var(--shadow)}
+.chip:hover{background:var(--hover)}
+.chip.sim{background:var(--warn-l);color:var(--warn);border-color:transparent}
+.chip .ic{width:16px;height:16px}
+.icon-btn{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer;box-shadow:var(--shadow)}
+.icon-btn:hover{color:var(--text);background:var(--hover)}
+.me{display:flex;align-items:center;gap:9px;height:36px;padding:0 12px 0 3px;border-radius:999px;border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow)}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--grad);color:#fff;display:grid;place-items:center;font-weight:700;font-size:12px;flex-shrink:0}
+.avatar.lg{width:64px;height:64px;font-size:22px}
+.avatar.soft{background:var(--brand-l);color:var(--brand-ink)}
+.me-txt{display:flex;flex-direction:column;line-height:1.15}
+.me-txt b{font-size:13px;font-weight:600}
+.me-txt small{color:var(--muted);font-size:11.5px}
+main{padding:26px 28px 56px;width:100%;max-width:1440px}
+.page-head{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.page-head .row{margin-left:auto}
+.back{display:inline-flex;align-items:center;gap:4px;margin-bottom:12px;cursor:pointer;color:var(--muted);font-weight:500}
+.back:hover{color:var(--text)}
+
+/* kort */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-bottom:18px;box-shadow:var(--shadow)}
+.card.hl{border-color:color-mix(in srgb,var(--brand) 40%,var(--line));box-shadow:0 0 0 4px var(--brand-l),var(--shadow)}
+.card.hero{background:var(--grad);color:#fff;border:0;position:relative;overflow:hidden;padding:26px 26px}
+.card.hero::after{content:"";position:absolute;width:380px;height:380px;right:-120px;top:-180px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.22),transparent 65%);pointer-events:none}
+.card.hero h1{color:#fff;font-size:28px}
+.card.hero .hero-sub{opacity:.88;margin-top:6px}
+.card.hero .hero-date{opacity:.8;font-size:13px;font-weight:500;margin-bottom:4px}
+.card.hero .btn{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.28);color:#fff;box-shadow:none;backdrop-filter:blur(4px)}
+.card.hero .btn:hover{background:rgba(255,255,255,.26)}
+.card.hero .btn.primary{background:#fff;color:#3b3fc4;border-color:#fff}
+.card.hero .badge{background:rgba(255,255,255,.2);color:#fff}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:18px;align-items:start}
 .grid2>.card{margin-bottom:0}
-.stack>*+*{margin-top:16px}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
-.tile{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px}
-.tile .v{font-size:26px;font-weight:600;line-height:1.1}
+.stack>*+*{margin-top:18px}
+.stack>.card{margin-bottom:0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:18px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.tile::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:var(--line)}
+.tile.ok::before{background:var(--ok)} .tile.warn::before{background:var(--warn)} .tile.bad::before{background:var(--bad)}
+.tile .v{font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.15;font-variant-numeric:tabular-nums}
 .tile .l{color:var(--muted);font-size:12.5px;margin-top:4px}
 .tile.bad .v{color:var(--bad)} .tile.warn .v{color:var(--warn)} .tile.ok .v{color:var(--ok)}
-.empty{color:var(--muted);padding:14px 0;text-align:center}
-.note{background:var(--info-l);color:#1d4f80;border-radius:6px;padding:10px 12px;font-size:13px;margin-bottom:14px}
-.note.warn{background:var(--warn-l);color:#7a4a00}
-.note.bad{background:var(--bad-l);color:#8c1d27}
+.empty{color:var(--muted);padding:18px 0;text-align:center}
+.note{background:var(--info-l);color:var(--brand-ink);border-radius:var(--r-sm);padding:11px 14px;font-size:13px;margin-bottom:16px}
+.note.warn{background:var(--warn-l);color:var(--warn)}
+.note.bad{background:var(--bad-l);color:var(--bad)}
 
-/* buttons, inputs */
-.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;color:var(--text);border-radius:6px;padding:7px 13px;font:inherit;cursor:pointer;white-space:nowrap}
-.btn:hover{background:#f4f7fb}
-.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+/* knapper og felter */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:38px;padding:0 15px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:inherit;font-weight:500;cursor:pointer;white-space:nowrap;box-shadow:var(--shadow);transition:background .15s,border-color .15s,transform .05s}
+.btn:hover{background:var(--hover)}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 1px 2px rgba(16,24,40,.1),inset 0 1px 0 rgba(255,255,255,.18)}
 .btn.primary:hover{background:var(--brand-d)}
-.btn.danger{color:var(--bad);border-color:#f0c4c8}
-.btn.danger:hover{background:var(--bad-l)}
-.btn.sm{padding:4px 9px;font-size:12.5px}
-.btn:disabled{opacity:.5;cursor:default}
-.input,select,textarea{font:inherit;border:1px solid #cfd6df;border-radius:6px;padding:7px 9px;background:#fff;color:var(--text);max-width:100%}
-.input:focus,select:focus,textarea:focus{outline:2px solid var(--brand-l);border-color:var(--brand)}
-textarea{width:100%;min-height:90px;resize:vertical}
-.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.btn.danger{color:var(--bad)}
+.btn.danger:hover{background:var(--bad-l);border-color:transparent}
+.btn.sm{height:30px;padding:0 10px;font-size:12.5px;border-radius:8px}
+.btn:disabled{opacity:.55;cursor:default}
+.btn .ic{width:16px;height:16px}
+.input,select,textarea{font:inherit;height:40px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:var(--panel);color:var(--text);max-width:100%;transition:border-color .15s,box-shadow .15s}
+select{padding-right:8px;cursor:pointer}
+textarea{height:auto;width:100%;min-height:100px;padding:10px 12px;resize:vertical}
+.input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 4px var(--brand-l)}
+input[type=checkbox]{accent-color:var(--brand);width:16px;height:16px}
+input[type=color]{height:40px;width:48px;padding:3px;border-radius:10px;border:1px solid var(--line);background:var(--panel);cursor:pointer}
+input[type=file]{font:inherit;color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
 .field>label{font-size:12.5px;color:var(--muted);font-weight:600}
 .field .input,.field select{width:100%}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
-.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 10px}
-.checks label{display:flex;gap:6px;align-items:center;font-size:13px}
-input[type=number].num{width:70px}
+.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px 12px}
+.checks label{display:flex;gap:8px;align-items:center;font-size:13px}
+input[type=number].num{width:76px}
 
-/* badges, tabs, tables, progress */
-.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+/* badges, tabs, tabeller */
+.badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.75}
 .badge.ok{background:var(--ok-l);color:var(--ok)}
 .badge.warn{background:var(--warn-l);color:var(--warn)}
 .badge.bad{background:var(--bad-l);color:var(--bad)}
 .badge.info{background:var(--info-l);color:var(--info)}
-.badge.muted{background:#eef1f5;color:var(--muted)}
-.tabs{display:flex;gap:4px;flex-wrap:wrap}
-.tab{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;cursor:pointer;font:inherit;font-size:13px}
-.tab.active{background:var(--brand);border-color:var(--brand);color:#fff}
-.tab .count{opacity:.7;margin-left:3px}
-.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.badge.muted{background:var(--line-2);color:var(--muted)}
+.tabs{display:inline-flex;gap:2px;padding:3px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;flex-wrap:wrap}
+.tab{border:0;background:none;border-radius:9px;padding:6px 12px;cursor:pointer;font:inherit;font-size:13px;font-weight:500;color:var(--muted)}
+.tab:hover{color:var(--text)}
+.tab.active{background:var(--panel);color:var(--text);box-shadow:var(--shadow)}
+.tab .count{margin-left:6px;font-size:11px;background:var(--line-2);border-radius:999px;padding:1px 7px;color:var(--muted)}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
 .table-wrap{overflow-x:auto}
-.tbl{width:100%;border-collapse:collapse}
-.tbl th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
-.tbl td{padding:9px 10px;border-bottom:1px solid var(--line2);vertical-align:middle}
+.tbl{width:100%;border-collapse:separate;border-spacing:0}
+.tbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:600;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:11px 12px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
 .tbl tr.click{cursor:pointer}
-.tbl tr.click:hover td{background:#f7f9fc}
+.tbl tr.click:hover td{background:var(--hover)}
 .tbl td.r,.tbl th.r{text-align:right}
-.progress{height:7px;background:#e9edf2;border-radius:99px;overflow:hidden;min-width:80px}
-.progress span{display:block;height:100%;background:var(--ok)}
-.progress.warn span{background:#e3a008}
+.progress{height:8px;background:var(--line-2);border-radius:99px;overflow:hidden;min-width:80px}
+.progress span{display:block;height:100%;background:var(--ok);border-radius:99px;transition:width .4s}
+.progress.warn span{background:var(--warn)}
 .progress.bad span{background:var(--bad)}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
-.seg button{border:0;background:#fff;padding:6px 11px;font:inherit;font-size:13px;cursor:pointer;border-right:1px solid var(--line)}
-.seg button:last-child{border-right:0}
+.seg{display:inline-flex;padding:3px;gap:2px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px}
+.seg button{border:0;background:none;padding:6px 12px;border-radius:7px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;color:var(--muted)}
+.seg button:hover{color:var(--text)}
 .seg button.on.p{background:var(--ok);color:#fff}
-.seg button.on.l{background:#e3a008;color:#fff}
+.seg button.on.l{background:var(--warn);color:#fff}
 .seg button.on.a{background:var(--bad);color:#fff}
 
-/* lessons list */
-.lessons{display:flex;flex-direction:column}
-.lrow{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line2);flex-wrap:wrap}
-.lrow:last-child{border-bottom:0}
-.lrow.past{opacity:.55}
-.lrow.now{background:var(--brand-l);border-radius:6px;padding-left:8px}
-.swatch{width:10px;height:10px;border-radius:3px;flex-shrink:0;border:1px solid rgba(0,0,0,.12)}
-.ltime{font-variant-numeric:tabular-nums;color:var(--muted);width:92px}
-.lsub{font-weight:600;flex:1;min-width:120px}
-.list-item{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line2);cursor:pointer}
-.list-item:last-child{border-bottom:0}
-.list-item:hover{background:#f7f9fc}
+/* lister */
+.lessons{display:flex;flex-direction:column;gap:2px}
+.lrow{display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:10px;flex-wrap:wrap}
+.lrow:hover{background:var(--hover)}
+.lrow.past{opacity:.5}
+.lrow.now{background:var(--brand-l)}
+.swatch{width:10px;height:10px;border-radius:4px;flex-shrink:0}
+.lrow .swatch,.list-item .swatch{width:4px;height:34px;border-radius:4px}
+.ltime{font-variant-numeric:tabular-nums;color:var(--muted);width:96px;font-size:13px}
+.lsub{font-weight:600;flex:1;min-width:140px;line-height:1.35}
+.list-item{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;cursor:pointer}
+.list-item:hover{background:var(--hover)}
 .list-item .grow{flex:1;min-width:0}
+.list-item .badge{flex-shrink:0}
 .list-item .t{font-weight:600}
 
-/* week grid */
+/* ugeskema */
 .weeknav{display:flex;align-items:center;gap:6px}
-.weeknav .lbl{min-width:120px;text-align:center;font-weight:600;color:var(--brand-d)}
-.week-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:#fff}
-.week{display:grid;grid-template-columns:52px repeat(5,minmax(132px,1fr));min-width:720px}
-.week .head{background:#f1f4f8;border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:8px 4px;text-align:center;font-size:13px;color:var(--muted)}
-.week .head.today{background:var(--brand);color:#fff;font-weight:600}
-.timecol,.daycol{position:relative;border-right:1px solid var(--line)}
-.daycol:last-child,.week .head:last-child{border-right:0}
-.daycol.today{background:#fafcff}
-.hourline{position:absolute;left:0;right:0;border-top:1px solid var(--line2)}
-.hourlabel{position:absolute;right:6px;font-size:11px;color:var(--muted);margin-top:2px}
-.lesson{position:absolute;left:3px;right:3px;border-radius:5px;padding:3px 6px;font-size:12px;overflow:hidden;border-left:4px solid rgba(0,0,0,.22);line-height:1.3;color:#1f2933}
-.lesson .t{font-size:11px;opacity:.75;font-variant-numeric:tabular-nums}
-.lesson .s{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lesson .m{display:flex;justify-content:space-between;gap:4px;opacity:.85}
-.lesson .flag{position:absolute;right:4px;top:3px;font-size:10px;font-weight:700;background:rgba(255,255,255,.85);border-radius:4px;padding:0 4px;color:var(--bad)}
+.weeknav .lbl{min-width:130px;text-align:center;font-weight:600}
+.week-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);box-shadow:var(--shadow)}
+.week{display:grid;grid-template-columns:56px repeat(5,minmax(136px,1fr));min-width:740px}
+.week .head{padding:10px 6px 12px;text-align:center;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);font-weight:500;text-transform:uppercase;letter-spacing:.05em}
+.week .head b{display:grid;place-items:center;width:34px;height:34px;margin:4px auto 0;border-radius:50%;font-size:17px;color:var(--text);font-weight:700;letter-spacing:-.01em;text-transform:none}
+.week .head.today{color:var(--brand)}
+.week .head.today b{background:var(--brand);color:#fff}
+.timecol,.daycol{position:relative}
+.daycol{border-left:1px solid var(--line-2)}
+.daycol.today{background:color-mix(in srgb,var(--brand-l) 40%,transparent)}
+.hourline{position:absolute;left:0;right:0;border-top:1px dashed var(--line)}
+.hourlabel{position:absolute;right:8px;font-size:11px;color:var(--faint);margin-top:3px;font-variant-numeric:tabular-nums}
+.lesson{position:absolute;left:4px;right:4px;border-radius:9px;padding:5px 8px;font-size:12px;overflow:hidden;line-height:1.3;color:var(--text);background:color-mix(in srgb,var(--c) var(--lesson-mix),var(--panel));border-left:3px solid color-mix(in srgb,var(--c),var(--edge-with) var(--edge-amt));transition:transform .12s,box-shadow .12s}
+.lesson .t{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.lesson .s{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lesson .m{display:flex;justify-content:space-between;gap:4px;color:var(--muted);font-size:11.5px}
+.lesson .flag{position:absolute;right:5px;top:5px;font-size:10px;font-weight:700;background:var(--panel);border-radius:6px;padding:1px 6px;color:var(--bad);box-shadow:var(--shadow)}
 .lesson.click{cursor:pointer}
-.lesson.click:hover{filter:brightness(.95);box-shadow:0 1px 5px rgba(0,0,0,.18)}
-.lesson.conflict{outline:2px solid var(--bad);outline-offset:-1px}
+.lesson.click:hover{transform:translateY(-1px);box-shadow:0 8px 18px -8px rgba(16,24,40,.35)}
+.lesson.conflict{box-shadow:0 0 0 2px var(--bad)}
 .lesson.now{box-shadow:0 0 0 2px var(--brand)}
 .nowline{position:absolute;left:0;right:0;border-top:2px solid var(--bad);z-index:3;pointer-events:none}
-.nowline::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;border-radius:50%;background:var(--bad)}
+.nowline::before{content:"";position:absolute;left:-5px;top:-6px;width:10px;height:10px;border-radius:50%;background:var(--bad)}
 
-/* scheme timeline */
+/* modultidslinje */
 .tl{margin:6px 0 4px}
 .tl-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .tl-label{width:90px;font-size:12.5px;font-weight:600;flex-shrink:0}
-.tl-track{position:relative;height:26px;flex:1;background:repeating-linear-gradient(90deg,#f1f4f8 0 1px,transparent 1px 12.5%);border-radius:4px}
-.tl-bar{position:absolute;top:2px;bottom:2px;background:var(--brand);color:#fff;border-radius:4px;font-size:11px;display:grid;place-items:center;overflow:hidden}
-.tl-row.alt .tl-bar{background:#2a9d8f}
-.tl-axis{display:flex;justify-content:space-between;margin-left:100px;font-size:11px;color:var(--muted)}
+.tl-track{position:relative;height:28px;flex:1;background:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 12.5%);border-radius:6px;background-color:var(--panel-2)}
+.tl-bar{position:absolute;top:3px;bottom:3px;background:var(--brand);color:#fff;border-radius:6px;font-size:11px;font-weight:600;display:grid;place-items:center;overflow:hidden}
+.tl-row.alt .tl-bar{background:#14a38b}
+.tl-bar.dbl{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.18) 0 4px,transparent 4px 8px)}
+.tl-axis{display:flex;justify-content:space-between;margin-left:100px;font-size:11px;color:var(--faint)}
 .slotrow{display:flex;align-items:center;gap:6px;margin-bottom:6px}
 .slotrow span{width:62px;font-size:12.5px;color:var(--muted)}
+.slotrow .input{height:36px}
 
-/* classes page */
-.split{display:grid;grid-template-columns:240px 1fr;gap:16px;align-items:start}
-.cls-item{padding:10px 12px;border-radius:6px;cursor:pointer;display:flex;flex-direction:column}
-.cls-item:hover{background:#f4f7fb}
-.cls-item.active{background:var(--brand-l)}
-.subj-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 10px;margin:0 6px 6px 0;font-size:13px}
-.subj-chip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1}
+/* klasser */
+.split{display:grid;grid-template-columns:250px 1fr;gap:18px;align-items:start}
+.cls-item{padding:10px 12px;border-radius:10px;cursor:pointer;display:flex;flex-direction:column}
+.cls-item:hover{background:var(--hover)}
+.cls-item.active{background:var(--brand-l);color:var(--brand-ink)}
+.subj-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:4px 6px 4px 10px;margin:0 6px 6px 0;font-size:13px}
+.subj-chip button{border:0;background:none;color:var(--faint);cursor:pointer;font-size:15px;line-height:1;border-radius:50%;width:20px;height:20px}
+.subj-chip button:hover{background:var(--hover);color:var(--text)}
 
-/* login */
-.login-wrap{min-height:100vh;display:grid;place-items:center;padding:16px;background:linear-gradient(160deg,#2f6fb0 0%,#22578c 55%,#1b456f 100%)}
-.login-card{background:#fff;border-radius:12px;padding:32px 28px;width:100%;max-width:400px;box-shadow:0 20px 50px rgba(0,0,0,.25);text-align:center}
-.login-card .brand{color:var(--brand-d);font-size:30px;margin-bottom:4px}
-.login-card .brand span{color:#4fa3ff}
-.btn-login{display:block;width:100%;padding:13px;border-radius:8px;font:inherit;font-weight:600;font-size:15px;cursor:pointer;margin-top:12px;border:2px solid transparent}
-.btn-login.uni{background:#1f2933;color:#fff}
-.btn-login.mitid{background:#fff;color:#0060e6;border-color:#0060e6}
-.btn-login:hover{filter:brightness(1.08)}
-.proto{margin-top:18px;font-size:12.5px;color:var(--muted)}
-.demo-pick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
-.demo-pick .btn{flex-direction:column;align-items:flex-start;white-space:normal;text-align:left;gap:2px}
-.pick-list{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:6px;margin-top:8px}
-.pick-group{position:sticky;top:0;background:#f1f4f8;padding:5px 10px;font-size:12px;font-weight:700;color:var(--muted)}
-.pick-row{display:flex;justify-content:space-between;padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--line2)}
-.pick-row:hover{background:var(--brand-l)}
+/* loginside */
+.login{min-height:100vh;display:grid;grid-template-columns:1.1fr 1fr;background:var(--bg)}
+.login-hero{background:var(--grad);color:#fff;padding:44px 48px;display:flex;flex-direction:column;justify-content:space-between;gap:32px;position:relative;overflow:hidden}
+.login-hero::before{content:"";position:absolute;width:560px;height:560px;right:-200px;bottom:-240px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.2),transparent 65%)}
+.login-hero::after{content:"";position:absolute;width:300px;height:300px;left:-120px;top:-120px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.14),transparent 65%)}
+.login-hero>*{position:relative;z-index:1}
+.hero-brand{display:flex;align-items:center;gap:12px;font-weight:700;font-size:18px}
+.hero-brand .logo{background:rgba(255,255,255,.2);box-shadow:none}
+.login-hero h1{color:#fff;font-size:42px;line-height:1.08;letter-spacing:-.035em;max-width:470px;margin:0 0 14px}
+.hero-points{display:grid;gap:10px;max-width:430px}
+.hero-point{display:flex;gap:12px;align-items:flex-start;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:12px 14px;backdrop-filter:blur(6px)}
+.hero-point .ic{width:20px;height:20px;margin-top:2px}
+.hero-point b{display:block}
+.hero-point span{opacity:.85;font-size:13px}
+.login-panel{display:grid;place-items:center;padding:32px 20px}
+.login-card{width:100%;max-width:400px}
+.login-card h2{font-size:30px;margin:0 0 4px;letter-spacing:-.025em}
+.quick-label{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin:26px 0 10px}
+.quick-user{display:flex;align-items:center;gap:12px;padding:12px 12px 12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);cursor:pointer;box-shadow:var(--shadow);margin-bottom:8px;transition:border-color .15s,box-shadow .15s}
+.quick-user:hover{border-color:var(--brand);box-shadow:0 0 0 4px var(--brand-l)}
+.quick-user .avatar{width:40px;height:40px;font-size:14px}
+.quick-user .grow{flex:1;min-width:0}
+.quick-user b{display:block}
+.quick-user small{color:var(--muted)}
+.quick-user .forget{border:0;background:none;color:var(--faint);cursor:pointer;font-size:18px;width:30px;height:30px;border-radius:8px}
+.quick-user .forget:hover{background:var(--hover);color:var(--text)}
+.divider{display:flex;align-items:center;gap:12px;color:var(--faint);font-size:12px;margin:22px 0 2px}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
+.btn-login{display:flex;align-items:center;gap:14px;width:100%;height:56px;padding:0 16px;border-radius:14px;font:inherit;font-weight:600;font-size:15px;cursor:pointer;margin-top:12px;border:1px solid var(--line);background:var(--panel);color:var(--text);box-shadow:var(--shadow);transition:border-color .15s,box-shadow .15s}
+.btn-login:hover{border-color:var(--brand);box-shadow:0 0 0 4px var(--brand-l)}
+.btn-login .go{margin-left:auto;color:var(--faint);font-size:20px}
+.mark{display:inline-grid;place-items:center;height:32px;min-width:52px;padding:0 7px;border-radius:8px;font-size:12px;font-weight:800;letter-spacing:.01em;color:#fff}
+.mark.uni{background:#111827}
+.mark.mitid{background:#0060e6}
+.linkbtn{background:none;border:0;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline;margin-top:22px;padding:0}
+.linkbtn:hover{color:var(--text)}
+.login-foot{margin-top:26px;font-size:12px;color:var(--faint)}
+
+/* simuleret login-udbyder (egen "side", altid lyst) */
+.idp{min-height:100vh;display:flex;flex-direction:column;align-items:center;background:#eef1f6;color:#1a1d24;color-scheme:light}
+.idp.mitid{background:#f1f5fb}
+.idp-sim{width:100%;background:#fff1c7;color:#6b4a00;text-align:center;font-size:11.5px;font-weight:700;padding:7px 12px;letter-spacing:.06em}
+.idp-wrap{width:100%;max-width:440px;padding:48px 16px 40px;display:flex;flex-direction:column;align-items:center}
+.idp-card{background:#fff;width:100%;border-radius:14px;box-shadow:0 12px 36px rgba(16,24,40,.12);overflow:hidden}
+.idp-head{padding:20px 28px;border-bottom:1px solid #e9ecf1;display:flex;align-items:center;justify-content:space-between}
+.idp-tag{font-size:12px;color:#5b6472;background:#f2f4f7;border-radius:999px;padding:4px 10px}
+.wordmark{font-weight:800;letter-spacing:-.02em}
+.wordmark.uni{font-size:22px;color:#111827}
+.wordmark.uni i{font-style:normal;color:#e11d48}
+.wordmark.mitid{font-size:26px;color:#0060e6}
+.idp-body{padding:26px 28px 28px}
+.idp-body h2{font-size:21px;margin:0 0 4px;color:#1a1d24}
+.idp-body p{color:#5b6472;margin:0 0 20px}
+.idp-body label.lbl{display:block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#3b4250;margin-bottom:6px}
+.idp-in{width:100%;height:50px;border:1.5px solid #c9ced8;border-radius:9px;padding:0 14px;font:inherit;font-size:16px;background:#fff;color:#1a1d24}
+.idp-in:focus{outline:none;border-color:#0060e6;box-shadow:0 0 0 3px rgba(0,96,230,.18)}
+.idp.uni .idp-in:focus{border-color:#111827;box-shadow:0 0 0 3px rgba(17,24,39,.14)}
+.idp-btn{width:100%;height:50px;border:0;border-radius:9px;font:inherit;font-weight:700;font-size:15px;cursor:pointer;margin-top:16px;color:#fff;background:#0060e6}
+.idp.uni .idp-btn{background:#111827}
+.idp-btn:hover{filter:brightness(1.12)}
+.idp-link{background:none;border:0;color:#0060e6;font:inherit;font-size:13.5px;cursor:pointer;padding:0;text-decoration:underline}
+.idp.uni .idp-link{color:#374151}
+.idp-err{background:#fdecee;color:#b4232f;border-radius:9px;padding:10px 12px;font-size:13.5px;margin-bottom:14px}
+.idp-remember{display:flex;gap:8px;align-items:center;margin-top:14px;font-size:13.5px;color:#3b4250}
+.idp-remember input{accent-color:#0060e6}
+.idp.uni .idp-remember input{accent-color:#111827}
+.idp-user{display:flex;align-items:center;justify-content:space-between;background:#f3f5f8;border-radius:9px;padding:11px 14px;margin-bottom:16px;font-weight:600}
+.idp-hint{margin-top:18px;padding:12px 14px;border-radius:9px;background:#f5f7fa;font-size:12.5px;color:#5b6472}
+.idp-hint button{border:1px solid #d5dae2;background:#fff;border-radius:999px;padding:4px 11px;font:inherit;font-size:12px;cursor:pointer;margin:7px 6px 0 0;color:#1a1d24}
+.idp-hint button:hover{border-color:#8a93a3}
+.idp-foot{margin-top:18px;font-size:13px;color:#5b6472;text-align:center}
+.idp-cancel{margin-top:20px;color:#5b6472;font:inherit;font-size:13px;cursor:pointer;text-decoration:underline;background:none;border:0}
+.approve{display:flex;flex-direction:column;align-items:center;text-align:center}
+.ring{width:112px;height:112px;border-radius:50%;display:grid;place-items:center;position:relative;margin:4px 0 18px}
+.ring::before{content:"";position:absolute;inset:0;border-radius:50%;border:4px solid #e3ecfb;border-top-color:#0060e6;animation:spin 1.1s linear infinite}
+.ring .phone{width:40px;height:64px;border:3px solid #0060e6;border-radius:10px;position:relative;animation:buzz 1.6s ease-in-out infinite}
+.ring .phone::after{content:"";position:absolute;bottom:6px;left:50%;width:12px;height:3px;border-radius:2px;background:#0060e6;transform:translateX(-50%)}
+.countdown{height:4px;background:#e3ecfb;border-radius:4px;overflow:hidden;width:100%}
+.countdown span{display:block;height:100%;background:#0060e6;animation:count 4s linear forwards}
+.spinner{width:34px;height:34px;border-radius:50%;border:3px solid #e3ecfb;border-top-color:#0060e6;animation:spin .8s linear infinite;margin:18px auto 16px}
+.idp.uni .spinner{border-color:#e5e7eb;border-top-color:#111827}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes count{from{width:0}to{width:100%}}
+@keyframes buzz{0%,70%,100%{transform:rotate(0)}75%{transform:rotate(-6deg)}80%{transform:rotate(6deg)}85%{transform:rotate(-4deg)}90%{transform:rotate(3deg)}}
+
+/* PIN */
+.pin-dots{display:flex;gap:14px;justify-content:center;margin:14px 0 22px}
+.pin-dots span{width:14px;height:14px;border-radius:50%;border:2px solid var(--faint);transition:background .1s,border-color .1s}
+.pin-dots span.on{background:var(--brand);border-color:var(--brand)}
+.pin-dots.shake{animation:shake .35s}
+.pinpad{display:grid;grid-template-columns:repeat(3,76px);gap:10px;justify-content:center}
+.pinpad button{height:58px;border-radius:16px;border:1px solid var(--line);background:var(--panel-2);font:inherit;font-size:22px;font-weight:600;cursor:pointer;color:var(--text)}
+.pinpad button:hover{background:var(--hover)}
+.pinpad button:active{transform:scale(.96)}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}50%{transform:translateX(8px)}75%{transform:translateX(-4px)}}
+
+/* demo-vælger */
+.demo-pick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 14px}
+.demo-pick .btn{height:auto;padding:10px 12px;flex-direction:column;align-items:flex-start;white-space:normal;text-align:left;gap:2px}
+.pick-list{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:12px;margin-top:10px}
+.pick-group{position:sticky;top:0;background:var(--panel-2);padding:6px 12px;font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+.pick-row{display:flex;justify-content:space-between;padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--line-2)}
+.pick-row:hover{background:var(--hover)}
 
 /* modal + toast */
-.modal-bg{position:fixed;inset:0;background:rgba(20,30,45,.45);display:grid;place-items:center;z-index:100;padding:16px}
-.modal{background:#fff;border-radius:10px;width:100%;max-width:520px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.modal-bg{position:fixed;inset:0;background:rgba(10,14,24,.5);backdrop-filter:blur(3px);display:grid;place-items:center;z-index:100;padding:16px;animation:fade .15s ease}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:18px;width:100%;max-width:520px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:var(--shadow-lg);animation:modalIn .18s ease}
 .modal.wide{max-width:760px}
-.modal-h{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
-.modal-h h3{margin:0;font-size:16px}
-.modal-h .x{margin-left:auto;border:0;background:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1}
-.modal-b{padding:16px 18px;overflow:auto}
-.modal-f{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.modal-h{display:flex;align-items:center;padding:18px 22px 14px}
+.modal-h h3{margin:0;font-size:17px}
+.modal-h .x{margin-left:auto;border:0;background:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;width:32px;height:32px;border-radius:8px}
+.modal-h .x:hover{background:var(--hover)}
+.modal-b{padding:4px 22px 18px;overflow:auto}
+.modal-f{padding:14px 22px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;background:var(--panel-2);border-radius:0 0 18px 18px}
 .modal-f:empty{display:none}
-#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
-.toast{background:#1f2933;color:#fff;padding:10px 16px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-size:13.5px;animation:pop .2s ease}
-.toast.bad{background:var(--bad)}
-@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes fade{from{opacity:0}}
+@keyframes modalIn{from{opacity:0;transform:translateY(8px) scale(.98)}}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{background:var(--text);color:var(--bg);padding:11px 18px;border-radius:12px;box-shadow:var(--shadow-lg);font-size:13.5px;font-weight:500;animation:pop .2s ease}
+.toast.bad{background:var(--bad);color:#fff}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}}
 .pre{white-space:pre-wrap}
-.file{display:inline-flex;gap:6px;align-items:center;background:#f1f4f8;border-radius:6px;padding:4px 9px;font-size:13px;margin:0 6px 6px 0}
-.feedback{background:var(--ok-l);border-radius:8px;padding:12px 14px}
-.grade{font-size:28px;font-weight:700;color:var(--ok)}
-dl.kv{display:grid;grid-template-columns:170px 1fr;gap:8px 12px;margin:0}
+.file{display:inline-flex;gap:7px;align-items:center;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:13px;margin:0 6px 6px 0}
+.file .ic{width:16px;height:16px;color:var(--brand)}
+.feedback{background:var(--ok-l);border-radius:12px;padding:14px 16px}
+.grade{font-size:30px;font-weight:800;color:var(--ok);letter-spacing:-.02em;min-width:52px}
+dl.kv{display:grid;grid-template-columns:170px 1fr;gap:10px 14px;margin:0}
 dl.kv dt{color:var(--muted)}
 dl.kv dd{margin:0}
+hr.sep{border:0;border-top:1px solid var(--line);margin:18px 0}
 
-@media (max-width:820px){
-  .layout{flex-direction:column}
-  .side{width:auto;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:0;position:sticky;top:54px;z-index:20}
-  .side a{border-left:0;border-bottom:3px solid transparent;white-space:nowrap;padding:11px 14px}
-  .side a.active{border-bottom-color:var(--brand)}
-  .side .foot{display:none}
-  main{padding:16px}
-  .school,.me-txt{display:none}
-  .split{grid-template-columns:1fr}
-  .form-grid{grid-template-columns:1fr}
-  .demo-pick{grid-template-columns:1fr}
-  dl.kv{grid-template-columns:1fr}
-  dl.kv dt{margin-top:6px}
+@media (max-width:860px){
+  .shell{flex-direction:column}
+  .main-col{display:contents}
+  .topbar{order:1;height:58px;padding:0 16px}
+  .side{order:2;position:sticky;top:58px;z-index:25;width:auto;height:auto;flex-direction:row;padding:6px 10px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}
+  .side-brand,.side-foot{display:none}
+  .nav{flex-direction:row}
+  .nav a{white-space:nowrap;padding:8px 12px}
+  main{order:3;padding:18px 16px 48px}
+  .mobile-brand{display:flex}
+  .top-title,.me-txt{display:none}
+  .me{padding:0;border:0;box-shadow:none;background:none}
   .chip span{display:none}
+  .chip{padding:0 10px}
+  .login{grid-template-columns:1fr}
+  .login-hero{padding:24px 20px;gap:18px}
+  .login-hero h1{font-size:28px}
+  .hero-points,.login-hero .hero-small{display:none}
+  .split,.form-grid{grid-template-columns:1fr}
+  .grid2{grid-template-columns:1fr}
+  .demo-pick{grid-template-columns:1fr}
+  dl.kv{grid-template-columns:1fr;gap:2px}
+  dl.kv dt{margin-top:8px}
+  .card.hero h1{font-size:24px}
 }
 </style>
 </head>
@@ -241,8 +412,8 @@ dl.kv dd{margin:0}
    I den rigtige version flyttes DB til en server (fx på jeres VPS).
    ===================================================================== */
 
-const VERSION = 1;
-const KEY = 'skoleportal_db_v1', SKEY = 'skoleportal_session_v1';
+const VERSION = 2;
+const KEY = 'skoleportal_db_v2', SKEY = 'skoleportal_session_v2', KKEY = 'skoleportal_known_v1', TKEY = 'skoleportal_theme';
 const DAYS_SHORT = ['Man','Tir','Ons','Tor','Fre','Lør','Søn'];
 const DAYS_LONG = ['mandag','tirsdag','onsdag','torsdag','fredag','lørdag','søndag'];
 const MONTHS = ['januar','februar','marts','april','maj','juni','juli','august','september','oktober','november','december'];
@@ -253,7 +424,7 @@ const AVAIL = {all:'Hele dagen', am:'Kun formiddag', pm:'Kun eftermiddag', none:
 
 let DB = null;
 const state = {userId:null, method:null, simTime:null, view:'home', params:{}, weekOffset:0,
-  sched:{type:'class', id:null}, regDraft:null, refocus:null};
+  sched:{type:'class', id:null}, regDraft:null, refocus:null, auth:null, authTimer:null, pin:null};
 
 /* ---------------- utils ---------------- */
 const pad = n => String(n).padStart(2,'0');
@@ -271,6 +442,7 @@ const toLocalISO = d => dateKey(d)+'T'+pad(d.getHours())+':'+pad(d.getMinutes())
 const getNow = () => state.simTime ? new Date(state.simTime) : new Date();
 const nowMin = () => { const n = getNow(); return n.getHours()*60+n.getMinutes(); };
 const fmtDate = d => `${DAYS_LONG[weekday(d)]} ${d.getDate()}. ${MONTHS[d.getMonth()]}`;
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
 const fmtDT = iso => { const d = new Date(iso); return `${DAYS_SHORT[weekday(d)].toLowerCase()} ${d.getDate()}/${d.getMonth()+1} kl. ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const pctTxt = p => p.toFixed(1).replace('.',',')+' %';
 const initialsOf = name => name.split(/\s+/).filter(Boolean).map(w=>w[0]).slice(0,2).join('').toUpperCase();
@@ -300,8 +472,17 @@ const IC = {
   grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   magic:'<path d="M4 20L16 8M14 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1zM19 11l.7 1.3L21 13l-1.3.7L19 15l-.7-1.3L17 13l1.3-.7z"/>',
   layers:'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
-  check:'<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>'
+  check:'<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>'
 };
+/* ---------------- tema ---------------- */
+function applyTheme(){ let t = null; try { t = localStorage.getItem(TKEY); } catch(e){} if(t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
+const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t==='dark' : matchMedia('(prefers-color-scheme: dark)').matches; };
+function toggleTheme(){ const n = isDark() ? 'light' : 'dark'; try { localStorage.setItem(TKEY, n); } catch(e){} document.documentElement.dataset.theme = n; render(); }
+applyTheme();
 const icon = n => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
 
 /* ---------------- lookups ---------------- */
@@ -356,61 +537,97 @@ function teacherAvail(t, day, st, en){
   if(a === 'pm') return st >= toMin('12:00');
   return true;
 }
-function runScheduler(baseSeed){
+/* Bygger listen af lektioner, der skal placeres. For modulskemaer med
+   "dobbeltmodul" (2.g/3.g) bliver nogle lektioner slået sammen i par, som
+   altid lægges i dagens to sidste moduler (de lange dage). */
+function buildUnits(rnd){
   const units = [], skipped = [];
-  DB.courses.forEach(c => {
-    if(!classOf(c.classId)) return;
-    if(!user(c.teacherId)){ skipped.push({course:c, count:c.perWeek, reason:'Holdet har ingen lærer'}); return; }
-    for(let i=0;i<c.perWeek;i++) units.push(c);
+  DB.classes.forEach(cl => {
+    const sc = schemeOf(cl), n = sc.slots.length, rem = {}, dbl = {};
+    const valid = DB.courses.filter(c => c.classId===cl.id).filter(c => {
+      if(user(c.teacherId)){ rem[c.id] = c.perWeek; return true; }
+      skipped.push({course:c, count:c.perWeek, reason:'Holdet har ingen lærer'}); return false;
+    });
+    if(sc.doubleLast && n >= 2){
+      const total = valid.reduce((s,c) => s + c.perWeek, 0);
+      let D = Math.max(0, total - 5*(n-1));          // så mange lange dage er nødvendige
+      if(rnd() < .6) D++;                              // og gerne én mere, så ugen bliver jævn
+      D = Math.min(5, D);
+      for(let i=0; i<D; i++){
+        const pool = valid.filter(c => rem[c.id] >= 2).map(c => ({c, k:(dbl[c.id]||0)*10 - rem[c.id] + rnd()*2})).sort((a,b) => a.k-b.k);
+        if(!pool.length) break;
+        const c = pool[0].c; rem[c.id] -= 2; dbl[c.id] = (dbl[c.id]||0) + 1; units.push({c, dbl:true});
+      }
+    }
+    valid.forEach(c => { for(let i=0; i<rem[c.id]; i++) units.push({c, dbl:false}); });
   });
-  const load = {}; units.forEach(c => load[c.teacherId] = (load[c.teacherId]||0)+1);
-  let best = null;
-  for(let a=0; a<150; a++){
-    const r = scheduleAttempt(units, load, mulberry32(baseSeed + a*7919));
-    if(!best || r.unplaced.length < best.unplaced.length || (r.unplaced.length===best.unplaced.length && r.penalty < best.penalty)) best = r;
-    if(best.unplaced.length===0 && best.penalty===0) break;
-    if(best.unplaced.length===0 && a>=40) break;
-  }
-  // grupér ikke-placerede pr. hold
-  const grouped = {};
-  best.unplaced.forEach(u => { const g = grouped[u.course.id] || (grouped[u.course.id] = {courseId:u.course.id, count:0, reason:u.reason}); g.count++; });
-  skipped.forEach(s => grouped[s.course.id] = {courseId:s.course.id, count:s.count, reason:s.reason});
-  const total = units.length + skipped.reduce((s,x)=>s+x.count,0);
-  return {entries:best.entries, unplaced:Object.values(grouped), gaps:best.penalty, total};
+  return {units, skipped};
 }
-function scheduleAttempt(units, load, rnd){
+function runScheduler(baseSeed){
+  let best = null;
+  for(let a=0; a<300; a++){
+    const rnd = mulberry32(baseSeed + a*7919);
+    const {units, skipped} = buildUnits(rnd);
+    const r = scheduleAttempt(units, rnd);
+    r.skipped = skipped;
+    r.total = units.reduce((s,u) => s + (u.dbl ? 2 : 1), 0) + skipped.reduce((s,x) => s + x.count, 0);
+    r.missing = r.unplaced.reduce((s,u) => s + u.n, 0);
+    if(!best || r.missing < best.missing || (r.missing===best.missing && r.penalty < best.penalty)) best = r;
+    if(best.missing===0 && best.penalty===0) break;
+  }
+  const grouped = {};
+  best.unplaced.forEach(u => { const g = grouped[u.course.id] || (grouped[u.course.id] = {courseId:u.course.id, count:0, reason:u.reason}); g.count += u.n; });
+  best.skipped.forEach(s => grouped[s.course.id] = {courseId:s.course.id, count:s.count, reason:s.reason});
+  return {entries:best.entries, unplaced:Object.values(grouped), gaps:best.penalty, total:best.total};
+}
+function scheduleAttempt(units, rnd){
   const S = DB.settings, entries = [], unplaced = [];
-  const classBusy = new Set(), tDay = {}, rDay = {}, cDay = {}, clDay = {}, courseRoom = {};
-  const order = units.map(c => {
-    const t = user(c.teacherId), off = (t.avail||[]).filter(x => x && x!=='all').length;
-    return {c, k: load[c.teacherId] + off*3 + rnd()*5};
+  const classBusy = new Set(), tDay = {}, tCnt = {}, rDay = {}, cDay = {}, clDay = {}, courseRoom = {};
+  const load = {}; units.forEach(u => load[u.c.teacherId] = (load[u.c.teacherId]||0) + (u.dbl ? 2 : 1));
+  const order = units.map(u => {
+    const t = user(u.c.teacherId), off = (t.avail||[]).filter(x => x && x!=='all').length;
+    return {...u, k:(u.dbl ? 100 : 0) + load[u.c.teacherId] + off*3 + rnd()*5};
   }).sort((a,b) => b.k - a.k);
 
-  for(const {c} of order){
-    const cl = classOf(c.classId), slots = schemeOf(cl).slots, t = user(c.teacherId);
+  for(const {c, dbl} of order){
+    const cl = classOf(c.classId), sc = schemeOf(cl), slots = sc.slots, n = slots.length, t = user(c.teacherId);
+    const span = dbl ? 2 : 1;
+    // enkeltlektioner må ikke ligge i sidste modul, når skemaet bruger dobbeltmoduler
+    const sList = dbl ? [n-2] : [...Array(sc.doubleLast && n >= 2 ? n-1 : n).keys()];
     let best = null; const why = {cls:0, same:0, avail:0, teacher:0, room:0};
     for(let d=0; d<5; d++){
-      for(let s=0; s<slots.length; s++){
-        if(classBusy.has(cl.id+'|'+d+'|'+s)){ why.cls++; continue; }
-        if((cDay[c.id+'|'+d]||0) >= S.maxSamePerDay){ why.same++; continue; }
-        const st = toMin(slots[s][0]), en = toMin(slots[s][1]);
+      for(const s of sList){
+        const ck = i => cl.id+'|'+d+'|'+i;
+        if(classBusy.has(ck(s)) || (dbl && classBusy.has(ck(s+1)))){ why.cls++; continue; }
+        const cd = cDay[c.id+'|'+d] || 0;
+        if(dbl ? cd > 0 : cd >= S.maxSamePerDay){ why.same++; continue; }
+        const st = toMin(slots[s][0]), en = toMin(slots[s+span-1][1]);
         if(!teacherAvail(t,d,st,en)){ why.avail++; continue; }
         const td = tDay[t.id+'|'+d] || [];
-        if(td.length >= S.maxPerDay || td.some(x => st < x.end+S.buffer && x.start < en+S.buffer)){ why.teacher++; continue; }
+        if((tCnt[t.id+'|'+d]||0) + span > S.maxPerDay || td.some(x => st < x.end+S.buffer && x.start < en+S.buffer)){ why.teacher++; continue; }
         const room = pickRoom(cl, c, d, st, en, rDay, courseRoom);
         if(!room){ why.room++; continue; }
-        let p = s*1.2 + (clDay[cl.id+'|'+d]||0)*1.6 + (s===slots.length-1 ? 2 : 0) + rnd()*2.5;
-        if(classBusy.has(cl.id+'|'+d+'|'+(s-1)) || classBusy.has(cl.id+'|'+d+'|'+(s+1))) p -= 1;
+        const cld = clDay[cl.id+'|'+d] || 0;
+        let p;
+        if(dbl) p = cld*1.6 + rnd()*3;
+        else {
+          p = s*1.2 + cld*1.6 + (!sc.doubleLast && s===n-1 ? 2 : 0) + rnd()*2.5;
+          if(classBusy.has(ck(s-1)) || classBusy.has(ck(s+1))) p -= 1;
+        }
         if(!best || p < best.p) best = {d, s, st, en, room, p};
       }
     }
-    if(!best){ unplaced.push({course:c, reason:reasonText(why)}); continue; }
-    entries.push({id:uid('e'), courseId:c.id, day:best.d, slot:best.s, room:best.room});
-    classBusy.add(cl.id+'|'+best.d+'|'+best.s);
-    (tDay[t.id+'|'+best.d] = tDay[t.id+'|'+best.d] || []).push({start:best.st, end:best.en});
+    if(!best){ unplaced.push({course:c, reason:reasonText(why), n:span}); continue; }
+    for(let i=0; i<span; i++){
+      entries.push({id:uid('e'), courseId:c.id, day:best.d, slot:best.s+i, room:best.room});
+      classBusy.add(cl.id+'|'+best.d+'|'+(best.s+i));
+    }
+    const tk = t.id+'|'+best.d;
+    (tDay[tk] = tDay[tk] || []).push({start:best.st, end:best.en});
+    tCnt[tk] = (tCnt[tk]||0) + span;
     (rDay[best.room+'|'+best.d] = rDay[best.room+'|'+best.d] || []).push({start:best.st, end:best.en});
-    cDay[c.id+'|'+best.d] = (cDay[c.id+'|'+best.d]||0)+1;
-    clDay[cl.id+'|'+best.d] = (clDay[cl.id+'|'+best.d]||0)+1;
+    cDay[c.id+'|'+best.d] = dbl ? 99 : (cDay[c.id+'|'+best.d]||0) + 1;
+    clDay[cl.id+'|'+best.d] = (clDay[cl.id+'|'+best.d]||0) + span;
     if(!courseRoom[c.id]) courseRoom[c.id] = best.room;
   }
   // straf for huller i klassernes dage
@@ -418,7 +635,7 @@ function scheduleAttempt(units, load, rnd){
   DB.classes.forEach(cl => {
     const n = schemeOf(cl).slots.length;
     for(let d=0; d<5; d++){
-      const occ = []; for(let s=0;s<n;s++) if(classBusy.has(cl.id+'|'+d+'|'+s)) occ.push(s);
+      const occ = []; for(let s=0; s<n; s++) if(classBusy.has(cl.id+'|'+d+'|'+s)) occ.push(s);
       if(occ.length) for(let s=occ[0]; s<=occ[occ.length-1]; s++) if(!classBusy.has(cl.id+'|'+d+'|'+s)) penalty++;
     }
   });
@@ -456,11 +673,16 @@ function findConflicts(entries){
       if(a.c.teacherId && a.c.teacherId === b.c.teacherId){
         const ti = user(a.c.teacherId)?.initials || '?';
         if(ov(0)) add('Lærer', `${ti} er dobbeltbooket: ${lbl(a)} / ${lbl(b)}`, a, b);
-        else if(ov(S.buffer)) add('Pause', `${ti} har under ${S.buffer} min. mellem ${lbl(a)} og ${lbl(b)}`, a, b);
+        else if(ov(S.buffer) && !(a.c.id===b.c.id && Math.abs(a.e.slot-b.e.slot)===1)) add('Pause', `${ti} har under ${S.buffer} min. mellem ${lbl(a)} og ${lbl(b)}`, a, b);
       }
       if(a.e.room && a.e.room === b.e.room && ov(0)) add('Lokale', `Lokale ${a.e.room} er dobbeltbooket: ${lbl(a)} / ${lbl(b)}`, a, b);
     }
   }
+  ex.forEach(a => {
+    const cl = classOf(a.c.classId), sc = schemeOf(cl), n = sc.slots.length;
+    if(sc.doubleLast && n >= 2 && a.e.slot === n-1 && !ex.some(b => b.e.day===a.e.day && b.e.slot===n-2 && b.c.id===a.c.id))
+      add('Dobbeltmodul', `${cl.name}: sidste modul (${subj(a.c.subjectId)?.name || '?'}) skal ligge lige efter samme fag`, a);
+  });
   return {list, ids};
 }
 
@@ -499,7 +721,7 @@ function subStatus(a, sid){
   if(sub) return new Date(sub.submittedAt) > dl ? 'late' : 'done';
   return dl < getNow() ? 'missing' : 'open';
 }
-const STATUS = {done:['Afleveret','ok'], late:['Afleveret for sent','warn'], missing:['Mangler','bad'], open:['Ikke afleveret endnu','muted']};
+const STATUS = {done:['Afleveret','ok'], late:['Afleveret for sent','warn'], missing:['Mangler','bad'], open:['Ikke afleveret','muted']};
 const statusBadge = st => `<span class="badge ${STATUS[st][1]}">${STATUS[st][0]}</span>`;
 function assignmentCounts(a){
   const c = course(a.courseId); const studs = c ? studentsOf(c.classId) : [];
@@ -519,8 +741,8 @@ function seed(){
     version:VERSION,
     settings:{schoolName:'Demo Handelsgymnasium', termStart:'2026-08-10', buffer:10, maxPerDay:4, maxSamePerDay:1},
     schemes:{
-      '1g': {name:'1.g', slots:[['08:15','09:25'],['09:35','10:45'],['10:55','12:05'],['12:35','13:45'],['13:55','15:05']]},
-      '23g':{name:'2.g og 3.g', slots:[['08:15','09:25'],['09:40','10:50'],['11:20','12:30'],['12:40','13:50'],['14:00','15:10']]}
+      '1g': {name:'1.g', doubleLast:false, slots:[['08:15','09:25'],['09:35','10:45'],['10:55','12:05'],['12:35','13:45'],['13:55','15:05']]},
+      '23g':{name:'2.g og 3.g', doubleLast:true, slots:[['08:15','09:25'],['09:40','10:50'],['11:20','12:30'],['12:40','13:50'],['14:00','15:10']]}
     },
     subjects:[
       {id:'da',name:'Dansk A',color:'#fbe3a8'}, {id:'en',name:'Engelsk A',color:'#bcdcf7'},
@@ -650,59 +872,173 @@ const SUB_VIEWS = {assignment:'assignments', 'absence-reg':'absence'};
 
 function render(){
   const app = document.getElementById('app'), me = state.userId && user(state.userId);
-  if(!me){ app.innerHTML = loginView(); return; }
+  if(!me){ app.innerHTML = state.auth ? idpView() : loginView(); focusAuto(app); return; }
   const nav = NAV[me.role];
   const allowed = nav.map(n => n[0]).concat(me.role==='student' ? ['assignment'] : ['assignment','absence-reg']);
   if(!allowed.includes(state.view)){ state.view = 'home'; state.params = {}; }
   const activeKey = SUB_VIEWS[state.view] || state.view;
   let body;
   try { body = VIEWS[state.view](me); } catch(err){ console.error(err); body = `<div class="note bad">Der skete en fejl: ${esc(err.message)}</div>`; }
-  app.innerHTML = topbar(me) + `<div class="layout"><nav class="side">
-    ${nav.map(([v,t,i]) => `<a class="${activeKey===v?'active':''}" onclick="go('${v}')">${icon(i)}<span>${t}</span></a>`).join('')}
-    <div class="foot">Prototype · data gemmes kun i din browser.<br><button onclick="resetDemo()">Nulstil demo-data</button></div>
-  </nav><main id="main">${body}</main></div>`;
+  app.innerHTML = `<div class="shell"><aside class="side">
+      <div class="side-brand"><div class="logo">S</div><div><b>Skoleportal</b><small>${esc(DB.settings.schoolName)}</small></div></div>
+      <nav class="nav">${nav.map(([v,t,i]) => `<a class="${activeKey===v?'active':''}" onclick="go('${v}')">${icon(i)}<span>${t}</span></a>`).join('')}</nav>
+      <div class="side-foot">Prototype · data gemmes kun i din browser.<br><button onclick="resetDemo()">Nulstil demo-data</button></div>
+    </aside><div class="main-col">${topbar(me)}<main id="main">${body}</main></div></div>`;
   if(state.refocus){ const el = document.getElementById(state.refocus); if(el){ el.focus(); const l = el.value.length; try { el.setSelectionRange(l,l); } catch(e){} } state.refocus = null; }
 }
+function focusAuto(app){ const el = app.querySelector('[data-autofocus]'); if(el){ el.focus(); try { const l = el.value.length; el.setSelectionRange(l,l); } catch(e){} } }
 function topbar(me){
   const n = getNow(), cl = me.role==='student' && classOf(me.classId);
   return `<header class="topbar">
-    <div class="brand">Skole<span>portal</span></div>
-    <div class="school">${esc(DB.settings.schoolName)}</div>
+    <div class="mobile-brand"><div class="logo">S</div>Skoleportal</div>
+    <div class="top-title">${esc(DB.settings.schoolName)}</div>
     <div class="top-right">
-      <button class="chip ${state.simTime?'sim':''}" onclick="openSimTime()" title="Simulér et tidspunkt (kun i prototypen)">${icon('clock')}<span>${DAYS_SHORT[weekday(n)]} ${n.getDate()}/${n.getMonth()+1} ${pad(n.getHours())}:${pad(n.getMinutes())}${state.simTime?' · simuleret':''}</span></button>
-      <div class="me"><div class="avatar">${esc(initialsOf(me.name))}</div><div class="me-txt"><b>${esc(me.name)}</b><small>${ROLE_LABEL[me.role]}${cl?' · '+esc(cl.name):''}</small></div></div>
-      <button class="chip" onclick="logout()">Log ud</button>
+      <button class="chip ${state.simTime?'sim':''}" onclick="openSimTime()" title="Simulér et tidspunkt (kun i prototypen)">${icon('clock')}<span>${DAYS_SHORT[weekday(n)]} ${n.getDate()}/${n.getMonth()+1} · ${pad(n.getHours())}:${pad(n.getMinutes())}${state.simTime?' · simuleret':''}</span></button>
+      <button class="icon-btn" onclick="toggleTheme()" title="${isDark()?'Lyst tema':'Mørkt tema'}" aria-label="Skift tema">${icon(isDark()?'sun':'moon')}</button>
+      <div class="me" onclick="go('profile')" style="cursor:pointer"><div class="avatar">${esc(initialsOf(me.name))}</div><div class="me-txt"><b>${esc(me.name)}</b><small>${ROLE_LABEL[me.role]}${cl?' · '+esc(cl.name):''}</small></div></div>
+      <button class="icon-btn" onclick="logout()" title="Log ud" aria-label="Log ud">${icon('logout')}</button>
     </div></header>`;
 }
 
 /* ---------------- login ---------------- */
+function knownUsers(){ try { return JSON.parse(localStorage.getItem(KKEY) || '[]').filter(k => user(k.userId)); } catch(e){ return []; } }
+function setKnown(list){ try { localStorage.setItem(KKEY, JSON.stringify(list.slice(0,4))); } catch(e){} }
+function remember(id, method){ setKnown([{userId:id, method}, ...knownUsers().filter(k => k.userId!==id)]); }
+function forget(id, ev){ if(ev) ev.stopPropagation(); setKnown(knownUsers().filter(k => k.userId!==id)); render(); }
+const userSub = u => ROLE_LABEL[u.role] + (u.role==='student' && classOf(u.classId) ? ' · '+classOf(u.classId).name : '');
+
 function loginView(){
-  return `<div class="login-wrap"><div class="login-card">
-    <div class="brand">Skole<span>portal</span></div>
-    <div class="muted">${esc(DB.settings.schoolName)}</div>
-    <p>Log ind for at se skema, opgaver og fravær.</p>
-    <button class="btn-login uni" onclick="startLogin('UNI-login')">Log ind med UNI-login</button>
-    <button class="btn-login mitid" onclick="startLogin('MitID')">Log ind med MitID</button>
-    <div class="proto">Prototype: login er simuleret. I næste trin vælger du en demobruger i stedet for at logge ind rigtigt.</div>
-  </div></div>`;
+  const known = knownUsers();
+  const points = [['cal','Skema der altid passer','Lagt automatisk, så lærere og lokaler aldrig dobbeltbookes'],['file','Opgaver og afleveringer','Se frister, aflevér og få feedback samme sted'],['clock','Fravær med ét klik','Lærere registrerer direkte fra timen']];
+  return `<div class="login">
+    <section class="login-hero">
+      <div class="hero-brand"><div class="logo">S</div>Skoleportal</div>
+      <div><h1>Hele din skoledag samlet ét sted.</h1><p style="opacity:.88;max-width:430px;margin:0 0 26px;font-size:15px">Skema, opgaver og fravær for elever, lærere og administration.</p>
+        <div class="hero-points">${points.map(([i,b,t]) => `<div class="hero-point">${icon(i)}<div><b>${b}</b><span>${t}</span></div></div>`).join('')}</div></div>
+      <div class="small hero-small" style="opacity:.75">${esc(DB.settings.schoolName)}</div>
+    </section>
+    <section class="login-panel"><div class="login-card">
+      <h2>Log ind</h2><div class="muted">${known.length ? 'Velkommen tilbage.' : 'Vælg hvordan du vil logge ind.'}</div>
+      ${known.length ? `<div class="quick-label">Hurtigt login på denne enhed</div>
+        ${known.map(k => { const u = user(k.userId); return `<div class="quick-user" onclick="quickLogin('${u.id}')"><div class="avatar">${esc(initialsOf(u.name))}</div>
+          <div class="grow"><b>${esc(u.name)}</b><small>${esc(userSub(u))} · ${u.pin ? 'PIN-kode' : 'ét klik'}</small></div>
+          <button class="forget" title="Glem denne bruger på enheden" aria-label="Glem bruger" onclick="forget('${u.id}',event)">×</button></div>`; }).join('')}
+        <div class="divider">eller log ind med</div>` : ''}
+      <button class="btn-login" onclick="startAuth('uni')"><span class="mark uni">UNI</span>UNI-login<span class="go">›</span></button>
+      <button class="btn-login" onclick="startAuth('mitid')"><span class="mark mitid">MitID</span>MitID<span class="go">›</span></button>
+      <button class="linkbtn" onclick="openDemoPicker()">Demo: vælg en bruger direkte</button>
+      <div class="login-foot">Prototype. Login er simuleret, og data gemmes kun i din browser.</div>
+    </div></section></div>`;
 }
-function startLogin(method){
-  const demo = [DB.users.find(u => u.role==='student' && u.classId==='c2a'), user(DB.settings.demoTeacher), DB.users.find(u => u.role==='admin')].filter(Boolean);
+
+/* Simuleret UNI-login / MitID. I den rigtige version sendes man videre til
+   udbyderen (via STIL / en MitID-mægler) og kommer tilbage med et bekræftet ID. */
+function startAuth(p){ clearTimeout(state.authTimer); state.auth = {p, step:'user', username:'', err:'', remember:true, userId:null}; render(); }
+function cancelAuth(){ clearTimeout(state.authTimer); state.auth = null; render(); }
+function authNext(){
+  const a = state.auth; if(!a) return; a.err = '';
+  if(a.step === 'user'){
+    a.username = val('idp-user').trim();
+    const rem = document.getElementById('idp-rem'); if(rem) a.remember = rem.checked;
+    const mit = a.p === 'mitid';
+    if(!a.username){ a.err = mit ? 'Indtast dit bruger-ID.' : 'Indtast dit brugernavn.'; return render(); }
+    const u = DB.users.find(x => x.unilogin.toLowerCase() === a.username.toLowerCase());
+    if(!u){ a.err = mit ? 'Vi kan ikke finde et MitID med det bruger-ID.' : 'Brugernavnet findes ikke. Tjek stavningen.'; return render(); }
+    if(mit && !u.mitid){ a.err = 'Dit MitID er ikke koblet til en bruger på skolen endnu. Log ind med UNI-login, og kobl MitID under "Om mig".'; return render(); }
+    a.userId = u.id;
+    if(!mit) a.step = 'pass';
+    else { a.step = 'approve'; clearTimeout(state.authTimer); state.authTimer = setTimeout(() => { if(state.auth && state.auth.step === 'approve') authFinish(); }, 4000); }
+    return render();
+  }
+  if(a.step === 'pass'){
+    if(!val('idp-pass')){ a.err = 'Indtast din adgangskode.'; return render(); }
+    authFinish();
+  }
+}
+function authFinish(){
+  const a = state.auth; if(!a) return;
+  clearTimeout(state.authTimer); a.step = 'done'; render();
+  setTimeout(() => {
+    if(state.auth !== a) return;
+    const method = a.p === 'mitid' ? 'MitID' : 'UNI-login';
+    if(a.remember) remember(a.userId, method);
+    state.auth = null; login(a.userId, method);
+  }, 900);
+}
+function idpView(){
+  const a = state.auth, mit = a.p === 'mitid';
+  const demo = [DB.users.find(x => x.role==='student' && x.classId==='c2a' && (!mit || x.mitid)), user(DB.settings.demoTeacher), DB.users.find(x => x.role==='admin')].filter(Boolean);
+  const err = a.err ? `<div class="idp-err">${esc(a.err)}</div>` : '';
+  let body;
+  if(a.step === 'user'){
+    body = `<h2>Log ind på Skoleportal</h2><p>${mit ? 'Indtast dit MitID bruger-ID.' : 'Indtast dit UNI-login brugernavn.'}</p>${err}
+      <label class="lbl" for="idp-user">${mit ? 'Bruger-ID' : 'Brugernavn'}</label>
+      <input class="idp-in" id="idp-user" value="${esc(a.username)}" autocomplete="off" spellcheck="false" data-autofocus onkeydown="if(event.key==='Enter')authNext()">
+      <label class="idp-remember"><input type="checkbox" id="idp-rem" ${a.remember ? 'checked' : ''}> Husk mig på denne enhed (hurtigt login)</label>
+      <button class="idp-btn" onclick="authNext()">${mit ? 'Fortsæt' : 'Næste'}</button>
+      <div class="idp-foot">${mit ? `<button class="idp-link" onclick="startAuth('uni')">Log ind med UNI-login i stedet</button>`
+        : `<button class="idp-link" onclick="toast('Har du glemt dit brugernavn, kan kontoret hjælpe dig')">Glemt brugernavn?</button> · <button class="idp-link" onclick="startAuth('mitid')">Brug MitID</button>`}</div>
+      <div class="idp-hint"><b>Demo:</b> klik for at udfylde et brugernavn.<br>${demo.map(x => `<button onclick="document.getElementById('idp-user').value='${esc(x.unilogin)}'">${esc(x.unilogin)} · ${ROLE_LABEL[x.role]}</button>`).join('')}</div>`;
+  } else if(a.step === 'pass'){
+    body = `<h2>Indtast adgangskode</h2><p>Log ind på Skoleportal med UNI-login.</p>
+      <div class="idp-user"><span>${esc(a.username)}</span><button class="idp-link" onclick="state.auth.step='user';state.auth.err='';render()">Skift</button></div>${err}
+      <label class="lbl" for="idp-pass">Adgangskode</label>
+      <input class="idp-in" type="password" id="idp-pass" data-autofocus onkeydown="if(event.key==='Enter')authNext()">
+      <button class="idp-btn" onclick="authNext()">Log ind</button>
+      <div class="idp-hint"><b>Demo:</b> alle adgangskoder virker. Intet bliver sendt nogen steder hen.</div>`;
+  } else if(a.step === 'approve'){
+    body = `<div class="approve"><h2>Godkend i MitID-appen</h2><p>Vi har sendt en anmodning til <b>${esc(a.username)}</b>. Åbn MitID-appen på din telefon og godkend.</p>
+      <div class="ring"><div class="phone"></div></div><div class="countdown"><span></span></div>
+      <button class="idp-btn" onclick="authFinish()">Godkend i appen (simuleret)</button>
+      <div class="idp-foot">I demoen godkendes der automatisk efter 4 sekunder.</div></div>`;
+  } else {
+    body = `<div class="approve"><div class="spinner"></div><h2>Du er godkendt</h2><p>Du sendes tilbage til Skoleportal …</p></div>`;
+  }
+  return `<div class="idp ${mit ? 'mitid' : 'uni'}"><div class="idp-sim">SIMULERET ${mit ? 'MitID' : 'UNI-LOGIN'} · DEMO · BRUG IKKE RIGTIGE OPLYSNINGER</div>
+    <div class="idp-wrap"><div class="idp-card"><div class="idp-head">${mit ? '<span class="wordmark mitid">MitID</span>' : '<span class="wordmark uni">UNI<i>•</i>login</span>'}<span class="idp-tag">Skoleportal</span></div>
+    <div class="idp-body">${body}</div></div>
+    <button class="idp-cancel" onclick="cancelAuth()">Annullér og gå tilbage</button></div></div>`;
+}
+
+/* Hurtigt login: enheden husker brugeren, evt. beskyttet af en 4-cifret PIN */
+function quickLogin(id){
+  const u = user(id); if(!u) return;
+  if(!u.pin) return login(id, 'Hurtigt login');
+  state.pin = {id, val:''};
+  openModal('Hurtigt login', `<div style="text-align:center"><div class="avatar lg" style="margin:4px auto 10px">${esc(initialsOf(u.name))}</div>
+    <b>${esc(u.name)}</b><div class="muted small">Indtast din PIN-kode</div>
+    <div class="pin-dots" id="pin-dots"><span></span><span></span><span></span><span></span></div>
+    <div class="pinpad">${[1,2,3,4,5,6,7,8,9].map(n => `<button onclick="pinKey('${n}')">${n}</button>`).join('')}<span></span><button onclick="pinKey('0')">0</button><button onclick="pinKey('del')" aria-label="Slet">⌫</button></div>
+    <div class="muted small" style="margin-top:16px">Glemt PIN-koden? Log ind med UNI-login eller MitID.</div></div>`);
+}
+function pinKey(k){
+  const p = state.pin; if(!p) return;
+  if(k === 'del') p.val = p.val.slice(0,-1); else if(p.val.length < 4) p.val += k;
+  document.querySelectorAll('#pin-dots span').forEach((s,i) => s.classList.toggle('on', p.val.length > i));
+  if(p.val.length === 4){
+    const u = user(p.id);
+    if(p.val === u.pin){ state.pin = null; setTimeout(() => login(u.id, 'Hurtigt login (PIN)'), 120); }
+    else { const d = document.getElementById('pin-dots'); d.classList.add('shake'); setTimeout(() => { p.val = ''; d.classList.remove('shake'); d.querySelectorAll('span').forEach(s => s.classList.remove('on')); }, 380); }
+  }
+}
+document.addEventListener('keydown', e => { if(state.pin && document.getElementById('pin-dots')){ if(/^[0-9]$/.test(e.key)) pinKey(e.key); else if(e.key === 'Backspace') pinKey('del'); } });
+
+function openDemoPicker(){
   const groups = [['admin','Administration'],['teacher','Lærere'],['student','Elever']];
-  openModal(`Simuleret ${esc(method)}`, `
-    <p class="muted" style="margin-top:0">I den rigtige løsning sendes du videre til ${esc(method)} og kommer tilbage med et bekræftet brugernavn. Skolen slår så brugeren op og giver de rigtige rettigheder.</p>
-    <b>Hurtigt valg</b>
-    <div class="demo-pick">${demo.map(u => `<button class="btn" onclick="login('${u.id}','${method}')"><b>${ROLE_LABEL[u.role]}</b><span class="muted small">${esc(u.name)}</span></button>`).join('')}</div>
+  const demo = [DB.users.find(u => u.role==='student' && u.classId==='c2a'), user(DB.settings.demoTeacher), DB.users.find(u => u.role==='admin')].filter(Boolean);
+  openModal('Vælg demobruger', `
+    <p class="muted" style="margin-top:0">Genvej til test. Du springer login over.</p>
+    <div class="demo-pick">${demo.map(u => `<button class="btn" onclick="login('${u.id}','Demo')"><b>${ROLE_LABEL[u.role]}</b><span class="muted small">${esc(u.name)}</span></button>`).join('')}</div>
     <input class="input" style="width:100%" placeholder="Søg efter navn eller brugernavn" oninput="filterPick(this.value)">
     <div class="pick-list">${groups.map(([r,t]) => `<div class="pick-group">${t}</div>` + DB.users.filter(u => u.role===r).sort(byName).map(u =>
-      `<div class="pick-row" data-k="${esc((u.name+' '+u.unilogin).toLowerCase())}" onclick="login('${u.id}','${method}')"><span>${esc(u.name)}</span><span class="muted small">${esc(u.role==='student' ? (classOf(u.classId)?.name || '') : u.unilogin)}</span></div>`).join('')).join('')}</div>`);
+      `<div class="pick-row" data-k="${esc((u.name+' '+u.unilogin).toLowerCase())}" onclick="login('${u.id}','Demo')"><span>${esc(u.name)}</span><span class="muted small">${esc(u.role==='student' ? (classOf(u.classId)?.name || '') : u.unilogin)}</span></div>`).join('')).join('')}</div>`);
 }
 function filterPick(q){ q = q.toLowerCase(); document.querySelectorAll('.pick-row').forEach(r => r.style.display = r.dataset.k.includes(q) ? '' : 'none'); }
 function login(id, method){
-  state.userId = id; state.method = method; state.view = 'home'; state.params = {}; state.weekOffset = 0;
-  saveSession(); closeModal(); render(); toast(`Logget ind med ${method}`);
+  state.userId = id; state.method = method; state.view = 'home'; state.params = {}; state.weekOffset = 0; state.pin = null;
+  saveSession(); closeModal(); render(); toast(`Logget ind · ${method}`);
 }
-function logout(){ state.userId = null; saveSession(); closeModal(); render(); }
+function logout(){ state.userId = null; state.auth = null; saveSession(); closeModal(); render(); }
 
 /* ---------------- simuleret tid ---------------- */
 function openSimTime(){
@@ -737,7 +1073,7 @@ function weekGrid(items, weekStart){
   const now = getNow(), today = dateKey(now), nm = nowMin();
   let hours = ''; for(let h = ds; h < de; h += 60) hours += `<div class="hourline" style="top:${(h-ds)*ppm}px"></div>`;
   let html = '<div class="week-wrap"><div class="week"><div class="head"></div>';
-  for(let d=0; d<5; d++){ const dt = addDays(weekStart,d); html += `<div class="head ${dateKey(dt)===today?'today':''}">${DAYS_SHORT[d]} ${dt.getDate()}/${dt.getMonth()+1}</div>`; }
+  for(let d=0; d<5; d++){ const dt = addDays(weekStart,d); html += `<div class="head ${dateKey(dt)===today?'today':''}">${DAYS_SHORT[d]}<b>${dt.getDate()}</b></div>`; }
   html += `<div class="timecol" style="height:${H}px">`;
   for(let h = ds; h < de; h += 60) html += `<div class="hourlabel" style="top:${(h-ds)*ppm}px">${fromMin(h)}</div>`;
   html += '</div>';
@@ -745,7 +1081,7 @@ function weekGrid(items, weekStart){
     const isToday = dateKey(addDays(weekStart,d)) === today;
     html += `<div class="daycol ${isToday?'today':''}" style="height:${H}px">${hours}`;
     items.filter(i => i.day===d).forEach(i => {
-      html += `<div class="lesson ${i.cls}" style="top:${(i.start-ds)*ppm}px;height:${(i.end-i.start)*ppm-2}px;background:${i.color}" ${i.onclick?`onclick="${i.onclick}"`:''} title="${esc(i.tip)}">
+      html += `<div class="lesson ${i.cls}" style="top:${(i.start-ds)*ppm}px;height:${(i.end-i.start)*ppm-2}px;--c:${i.color}" ${i.onclick?`onclick="${i.onclick}"`:''} title="${esc(i.tip)}">
         ${i.flag?`<span class="flag">${i.flag}</span>`:''}
         <div class="t">${fromMin(i.start)}–${fromMin(i.end)}</div><div class="s">${esc(i.title)}</div>
         <div class="m"><span>${esc(i.left)}</span><span>${esc(i.right)}</span></div></div>`;
@@ -757,7 +1093,7 @@ function weekGrid(items, weekStart){
 }
 function weekNav(ws){
   return `<div class="weeknav"><button class="btn sm" onclick="shiftWeek(-1)" aria-label="Forrige uge">‹</button>
-    <span class="lbl">Uge ${isoWeek(ws)} · ${ws.getFullYear()}</span>
+    <span class="lbl">Uge ${isoWeek(ws)} · ${MONTHS[ws.getMonth()].slice(0,3)} ${ws.getFullYear()}</span>
     <button class="btn sm" onclick="shiftWeek(1)" aria-label="Næste uge">›</button><button class="btn sm" onclick="shiftWeek(0)">I dag</button></div>`;
 }
 const curWeekStart = () => addDays(mondayOf(getNow()), state.weekOffset*7);
@@ -807,7 +1143,10 @@ function studentHome(me){
   const upcoming = studentAssignments(me).filter(a => new Date(a.deadline) > now && !submissionOf(a.id, me.id)).sort((a,b) => a.deadline.localeCompare(b.deadline)).slice(0,5);
   const ab = absenceStats(me), wr = writtenAbsence(me);
   const fb = DB.submissions.filter(s => s.studentId===me.id && (s.grade || s.feedback)).slice(-3).reverse();
-  return `<div class="page-head"><div><h1>Hej ${esc(firstName(me.name))}</h1><div class="muted">${fmtDate(now)}${cl?' · '+esc(cl.name):''}</div></div></div>
+  const nxt = lessonsOn(now, mine).find(e => entryTime(e).end > nowMin());
+  const nxtTxt = weekday(now) > 4 ? 'God weekend! Dit skema for næste uge er klar.' : nxt ? `${entryTime(nxt).start <= nowMin() ? 'Nu' : 'Næste time'}: ${esc(subj(course(nxt.courseId).subjectId).name)} kl. ${fromMin(entryTime(nxt).start)} i lokale ${esc(nxt.room)}` : 'Ikke flere timer i dag.';
+  return `<div class="card hero"><div class="hero-date">${cap(fmtDate(now))}${cl?' · '+esc(cl.name):''}</div><h1>Hej ${esc(firstName(me.name))}</h1><div class="hero-sub">${nxtTxt}</div>
+    <div class="row" style="margin-top:16px"><button class="btn primary" onclick="go('schedule')">${icon('cal')} Se skema</button><button class="btn" onclick="go('assignments')">${icon('file')} Opgaver</button></div></div>
   <div class="tiles">
     <div class="tile ${ab.pct>=10?'warn':''}"><div class="v">${pctTxt(ab.pct)}</div><div class="l">Fravær (lektioner)</div></div>
     <div class="tile ${wr.pct>=10?'warn':''}"><div class="v">${pctTxt(wr.pct)}</div><div class="l">Skriftligt fravær</div></div>
@@ -851,8 +1190,9 @@ function teacherHome(me){
   const mineA = DB.assignments.filter(a => mc.includes(a.courseId));
   const toGrade = mineA.map(a => ({a, n:assignmentCounts(a)})).filter(x => x.n.toGrade > 0).sort((x,y) => y.n.toGrade - x.n.toGrade).slice(0,6);
   const week = mineA.filter(a => { const d = new Date(a.deadline); return d >= now && d - now < 7*864e5; }).sort((a,b) => a.deadline.localeCompare(b.deadline));
-  return `<div class="page-head"><div><h1>Hej ${esc(firstName(me.name))}</h1><div class="muted">${fmtDate(now)}</div></div>
-    <div class="row"><button class="btn primary" onclick="assignmentModal()">+ Opret opgave</button></div></div>
+  return `<div class="card hero"><div class="hero-date">${cap(fmtDate(now))}</div><h1>Hej ${esc(firstName(me.name))}</h1>
+    <div class="hero-sub">${weekday(now) > 4 ? 'Det er weekend.' : `Du har ${today.length} ${today.length===1?'lektion':'lektioner'} i dag.`} ${mineA.reduce((s,a) => s + assignmentCounts(a).toGrade, 0)} afleveringer venter på rettelse.</div>
+    <div class="row" style="margin-top:16px"><button class="btn primary" onclick="assignmentModal()">${icon('plus')} Opret opgave</button><button class="btn" onclick="go('schedule')">${icon('cal')} Skema</button></div></div>
   ${curCard}
   <div class="grid2">
     <div class="card"><h3>${weekday(now) < 5 ? 'Dine lektioner i dag' : 'Ingen undervisning i dag'}</h3>${lessonRows(today, now, 'teacher', true)}</div>
@@ -881,7 +1221,7 @@ function adminHome(){
     <div class="tile"><div class="v">${activeA}</div><div class="l">Aktive opgaver</div></div>
   </div>
   <div class="grid2">
-    <div class="card"><h3>Modulskemaer</h3><p class="muted" style="margin-top:0">1.g har andre pauser end 2.g og 3.g. Skemalæggeren tjekker lærere og lokaler på klokkeslæt, så de forskellige pauser ikke giver dobbeltbookinger.</p>${schemeTimeline()}</div>
+    <div class="card"><h3>Modulskemaer</h3><p class="muted" style="margin-top:0">1.g har andre pauser end 2.g og 3.g. Skemalæggeren tjekker lærere og lokaler på klokkeslæt, så de forskellige pauser ikke giver dobbeltbookinger. Stribede moduler er dobbeltmoduler på lange dage.</p>${schemeTimeline()}</div>
     <div class="card"><h3>Seneste skemalægning</h3>${lr ? `<dl class="kv"><dt>Tidspunkt</dt><dd>${fmtDT(lr.at)}</dd><dt>Placeret</dt><dd>${lr.placed} af ${lr.total} lektioner</dd><dt>Huller i klasseskemaer</dt><dd>${lr.gaps}</dd><dt>Ikke placeret</dt><dd>${lr.unplaced.length ? lr.unplaced.map(u => `${esc(course(u.courseId) ? courseLabel(course(u.courseId)) : '?')} (${u.count})`).join(', ') : 'Ingen'}</dd></dl>` : '<div class="empty">Skemaet er ikke genereret endnu.</div>'}
       <div class="row" style="margin-top:12px"><button class="btn" onclick="go('schedule')">Se skemaer</button></div></div>
     <div class="card"><h3>Konflikter</h3>${conflictList(conf.list, 6)}</div>
@@ -889,7 +1229,7 @@ function adminHome(){
 }
 function conflictList(list, max=50){
   if(!list.length) return '<div class="empty">Ingen konflikter.</div>';
-  return list.slice(0,max).map(c => `<div class="lrow"><span class="badge ${c.type==='Pause'?'warn':'bad'}">${c.type}</span><span class="small">${DAYS_SHORT[c.day]}: ${esc(c.text)}</span></div>`).join('') + (list.length > max ? `<div class="muted small" style="margin-top:6px">… og ${list.length-max} mere</div>` : '');
+  return list.slice(0,max).map(c => `<div class="lrow"><span class="badge ${['Pause','Dobbeltmodul'].includes(c.type)?'warn':'bad'}">${c.type}</span><span class="small">${DAYS_SHORT[c.day]}: ${esc(c.text)}</span></div>`).join('') + (list.length > max ? `<div class="muted small" style="margin-top:6px">… og ${list.length-max} mere</div>` : '');
 }
 
 /* ---------------- skema: elev/lærer ---------------- */
@@ -1080,7 +1420,7 @@ function openSubmission(aid, sid){
     <div class="row" style="margin-bottom:10px">${statusBadge(st)}<span class="muted small">Afleveret ${fmtDT(sub.submittedAt)}</span></div>
     ${(sub.files||[]).map(f => `<span class="file">${icon('file')} ${esc(f.name)} <span class="muted">${Math.round(f.size/1024)} kB</span></span>`).join('') || '<div class="muted">Ingen filer.</div>'}
     ${sub.text ? `<div class="field" style="margin-top:10px"><label>Elevens kommentar</label><div class="pre">${esc(sub.text)}</div></div>` : ''}
-    <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+    <hr class="sep">
     <div class="field"><label>Karakter</label><select id="sf-grade"><option value="">Ingen karakter</option>${GRADES.map(g => `<option ${sub.grade===g?'selected':''}>${g}</option>`).join('')}</select></div>
     <div class="field"><label>Feedback til eleven</label><textarea id="sf-fb" placeholder="Skriv din feedback…">${esc(sub.feedback || '')}</textarea></div>`
     : `<div class="row">${statusBadge(st)}</div><p class="muted">${esc(firstName(s.name))} har ikke afleveret endnu. Frist: ${fmtDT(a.deadline)}.</p>`,
@@ -1169,7 +1509,7 @@ function absenceReg(me){
   <div class="card"><div class="toolbar"><span class="badge ok">${cnt.present} til stede</span><span class="badge warn">${cnt.late} for sent</span><span class="badge bad">${cnt.absent} fraværende</span>
     <span class="spacer"></span><button class="btn" onclick="regAll()">Alle til stede</button></div>
     <div class="table-wrap"><table class="tbl"><tbody>
-    ${studs.map(st => `<tr><td><div class="row"><div class="avatar" style="background:var(--brand-l);width:28px;height:28px;font-size:11px">${esc(initialsOf(st.name))}</div><b>${esc(st.name)}</b></div></td>
+    ${studs.map(st => `<tr><td><div class="row"><div class="avatar soft" style="width:30px;height:30px;font-size:11px">${esc(initialsOf(st.name))}</div><b>${esc(st.name)}</b></div></td>
       <td class="r"><div class="seg">${[['present','Til stede','p'],['late','For sent','l'],['absent','Fraværende','a']].map(([k,tx,cls]) => `<button class="${cls} ${map[st.id]===k?'on':''}" onclick="setReg('${st.id}','${k}')">${tx}</button>`).join('')}</div></td></tr>`).join('') || '<tr><td class="empty">Ingen elever i klassen.</td></tr>'}
     </tbody></table></div>
     <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn primary" onclick="saveReg()">Gem registrering</button></div></div>`;
@@ -1198,16 +1538,30 @@ function profileView(me){
   } else {
     extra = `<div class="card"><h3>Rettigheder</h3><p style="margin-top:0">Som administrator kan du alt: oprette brugere og klasser, lægge skema, se og oprette alle opgaver og registrere fravær på alle hold.</p></div>`;
   }
+  const known = knownUsers().some(k => k.userId === me.id);
+  const quick = `<div class="card"><h3>Hurtigt login</h3>
+    <dl class="kv"><dt>Denne enhed</dt><dd>${known ? `<span class="badge ok">Husker dig</span> <button class="btn sm" onclick="forget('${me.id}');toast('Enheden husker dig ikke længere')">Glem mig</button>` : `<span class="badge muted">Husker dig ikke</span> <button class="btn sm" onclick="remember('${me.id}','${esc(state.method||'')}');render();toast('Enheden husker dig nu')">Husk mig</button>`}</dd>
+    <dt>PIN-kode</dt><dd>${me.pin ? '<span class="badge ok">Slået til</span>' : '<span class="badge muted">Ikke sat</span>'}</dd></dl>
+    <div class="row" style="margin-top:14px"><input class="input" id="pf-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4 cifre" style="width:120px">
+      <button class="btn" onclick="setPin()">${me.pin ? 'Skift PIN' : 'Sæt PIN'}</button>${me.pin ? '<button class="btn danger" onclick="removePin()">Fjern PIN</button>' : ''}</div>
+    <div class="muted small" style="margin-top:10px">Uden PIN logger du ind med ét klik på denne enhed. Med PIN skal du taste 4 cifre. Brug kun hurtigt login på din egen enhed.</div></div>`;
   return `<div class="page-head"><h1>Om mig</h1></div>
   <div class="grid2"><div class="card"><div class="row" style="margin-bottom:16px"><div class="avatar lg">${esc(initialsOf(me.name))}</div><div><h2 style="margin:0">${esc(me.name)}</h2><div class="muted">${ROLE_LABEL[me.role]}${me.role==='student' && classOf(me.classId) ? ' · '+esc(classOf(me.classId).name) : ''}${me.initials ? ' · '+esc(me.initials) : ''}</div></div></div>
     <dl class="kv"><dt>UNI-login brugernavn</dt><dd>${esc(me.unilogin)}</dd><dt>MitID</dt><dd>${me.mitid ? '<span class="badge ok">Koblet</span>' : `<span class="badge muted">Ikke koblet</span> <button class="btn sm" onclick="linkMitID()">Kobl MitID</button>`}</dd>
     <dt>Logget ind med</dt><dd>${esc(state.method || '—')}</dd></dl>
-    <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+    <hr class="sep">
     <div class="field"><label>E-mail</label><input class="input" id="pf-email" value="${esc(me.email)}"></div>
     <div class="field"><label>Telefon</label><input class="input" id="pf-phone" value="${esc(me.phone)}" placeholder="Fx 12 34 56 78"></div>
     <button class="btn primary" onclick="saveProfile()">Gem oplysninger</button></div>
-    <div class="stack">${extra}</div></div>`;
+    <div class="stack">${quick}${extra}</div></div>`;
 }
+function setPin(){
+  const v = val('pf-pin');
+  if(!/^[0-9]{4}$/.test(v)) return toast('PIN-koden skal være 4 cifre', 'bad');
+  const me = user(state.userId); me.pin = v; remember(me.id, state.method || 'Hurtigt login');
+  save(); render(); toast('PIN-koden er gemt. Enheden husker dig nu.');
+}
+function removePin(){ const me = user(state.userId); delete me.pin; save(); render(); toast('PIN-koden er fjernet'); }
 function saveProfile(){ const me = user(state.userId); me.email = val('pf-email').trim(); me.phone = val('pf-phone').trim(); save(); render(); toast('Dine oplysninger er gemt'); }
 function linkMitID(){ const me = user(state.userId); me.mitid = true; save(); render(); toast('MitID er koblet til din bruger (simuleret)'); }
 
@@ -1215,7 +1569,7 @@ function linkMitID(){ const me = user(state.userId); me.mitid = true; save(); re
 function schemeTimeline(){
   const s0 = toMin('08:00'), s1 = toMin('16:00'), W = s1 - s0;
   return `<div class="tl">${Object.entries(DB.schemes).map(([k,sc],i) => `<div class="tl-row ${i%2?'alt':''}"><div class="tl-label">${esc(sc.name)}</div><div class="tl-track">
-    ${sc.slots.map((sl,j) => `<div class="tl-bar" style="left:${(toMin(sl[0])-s0)/W*100}%;width:${(toMin(sl[1])-toMin(sl[0]))/W*100}%" title="${sl[0]}–${sl[1]}">${j+1}</div>`).join('')}</div></div>`).join('')}
+    ${sc.slots.map((sl,j) => `<div class="tl-bar ${sc.doubleLast && j >= sc.slots.length-2 ? 'dbl' : ''}" style="left:${(toMin(sl[0])-s0)/W*100}%;width:${(toMin(sl[1])-toMin(sl[0]))/W*100}%" title="${sl[0]}–${sl[1]}">${j+1}</div>`).join('')}</div></div>`).join('')}
     <div class="tl-axis">${[8,9,10,11,12,13,14,15,16].map(h => `<span>${pad(h)}</span>`).join('')}</div></div>`;
 }
 function plannerView(){
@@ -1227,7 +1581,7 @@ function plannerView(){
   <div class="card hl"><div class="row"><div style="margin-right:auto"><h3 style="margin-bottom:4px">Automatisk skemalægning</h3>
     <div class="muted">${DB.courses.length} hold · ${need} lektioner pr. uge · ${teachers().length} lærere · ${DB.rooms.length} lokaler</div></div>
     <button class="btn primary" id="gen-btn" onclick="generate()">${icon('magic')} Generér skema</button></div>
-    <div class="note" style="margin:14px 0 0"><b>Sådan løses problemet med forskellige pauser:</b> Hver klasse har sit eget modulskema (1.g eller 2./3.g). Når skemalæggeren tjekker en lærer eller et lokale, sammenligner den <i>klokkeslæt</i> og ikke modulnumre. Den kræver også mindst ${S.buffer} minutters pause/forberedelse mellem en lærers lektioner. En lærer kan derfor ikke få 2.g 09:40–10:50 og 1.g 10:55–12:05 lige efter hinanden.</div>
+    <div class="note" style="margin:14px 0 0"><b>Sådan løses problemet med forskellige pauser:</b> Hver klasse har sit eget modulskema (1.g eller 2./3.g). Når skemalæggeren tjekker en lærer eller et lokale, sammenligner den <i>klokkeslæt</i> og ikke modulnumre. Den kræver også mindst ${S.buffer} minutters pause/forberedelse mellem en lærers lektioner. En lærer kan derfor ikke få 2.g 09:40–10:50 og 1.g 10:55–12:05 lige efter hinanden. Modulskemaer med <i>dobbeltmodul</i> (2.g og 3.g) får på de lange dage altid samme fag i de to sidste moduler.</div>
     ${lr ? `<div style="margin-top:14px"><div class="row"><b>Seneste resultat:</b><span>${lr.placed} af ${lr.total} lektioner placeret</span><span class="muted small">(${fmtDT(lr.at)})</span></div>
       <div style="margin:8px 0">${progress(lr.placed, lr.total, lr.placed < lr.total ? 'warn' : '')}</div>
       <div class="muted small">Huller i klasseskemaer: ${lr.gaps}</div>
@@ -1245,6 +1599,7 @@ function plannerView(){
     <div class="card"><h3>Modulskemaer</h3>${schemeTimeline()}
       ${Object.entries(DB.schemes).map(([k,sc]) => `<div style="margin-top:16px"><div class="row" style="margin-bottom:8px"><input class="input" value="${esc(sc.name)}" onchange="DB.schemes['${k}'].name=this.value;save();render()" style="font-weight:600">
         <span class="muted small">Bruges af: ${esc(DB.classes.filter(c => c.scheme===k).map(c => c.name).join(', ') || 'ingen klasser')}</span></div>
+        <label class="row small" style="margin:0 0 10px"><input type="checkbox" ${sc.doubleLast?'checked':''} onchange="DB.schemes['${k}'].doubleLast=this.checked;DB.dirty=true;save();render()"> Lange dage: de to sidste moduler er altid samme fag (dobbeltmodul)</label>
         ${sc.slots.map((sl,i) => `<div class="slotrow"><span>${i+1}. modul</span><input class="input" type="time" value="${sl[0]}" onchange="setSlot('${k}',${i},0,this.value)"> – <input class="input" type="time" value="${sl[1]}" onchange="setSlot('${k}',${i},1,this.value)">
           <button class="btn sm danger" onclick="removeSlot('${k}',${i})" aria-label="Fjern modul">×</button></div>`).join('')}
         <button class="btn sm" onclick="addSlot('${k}')">+ Tilføj modul</button></div>`).join('')}
