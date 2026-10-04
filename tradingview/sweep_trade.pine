@@ -1,6 +1,11 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v3.6)
+//  Sweep Trade (SMT)  (v3.7)
+//  ---------------------------------------------------------------
+//  NYT I v3.7
+//    - EQ / session liq taget i entry-minuttet goer kun tradet ugyldigt
+//      hvis niveauet ligger paa BE-siden af entry. Ligger det allerede
+//      bag entry (fx en bearish EQ under en long-entry), staar tradet.
 //  ---------------------------------------------------------------
 //  NYT I v3.6
 //    - 'EQ foer open ramt' taeller kun paa BE-siden (short: bullish EQ
@@ -345,6 +350,8 @@ type Hit
     bool   both    = false   // begge indeks har taget niveauet -> ikke SMT
     bool   sHi     = false   // chartet tog et session high i vinduet
     bool   sLo     = false   // chartet tog et session low i vinduet
+    float  sHiV    = na      // hoejeste session high taget paa baren
+    float  sLoV    = na      // laveste session low taget paa baren
     string bothTxt = ""
 
 // ─────────────────────────── FUNKTIONER ───────────────────────────
@@ -404,9 +411,11 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h, float aTg = na, fl
         // Session high/low taget i vinduet (kun foerste gang - et allerede taget niveau taeller ikke)
         if inWin and aSweep and not st.aTook and nm != "15m"
             if isHi
-                h.sHi := true
+                h.sHi  := true
+                h.sHiV := na(h.sHiV) ? aL : math.max(h.sHiV, aL)
             else
-                h.sLo := true
+                h.sLo  := true
+                h.sLoV := na(h.sLoV) ? aL : math.min(h.sLoV, aL)
         if aSweep
             st.aTook := true
         if bSweep
@@ -616,14 +625,17 @@ if use15 and not nOn and tMin < m15E and array.size(lv15) > 0
 // Minuttet hvor chartet sidst tog et session high / low i vinduet
 var int sHiM = na
 var int sLoM = na
-var int sHiT = na    // foerste bar i minuttet hvor det skete
-var int sLoT = na
-if hit.sHi and nz(sHiM, -1) != minB
-    sHiM := minB
-    sHiT := time
-if hit.sLo and nz(sLoM, -1) != minB
-    sLoM := minB
-    sLoT := time
+var float sHiMx = na  // hoejeste session high taget i minuttet
+var float sLoMn = na  // laveste session low taget i minuttet
+// ... tidligere i minuttet, FOER denne bar (entry-candlen selv taeller ikke)
+float sHiPrev = not na(sHiM) and sHiM == minB ? sHiMx : na
+float sLoPrev = not na(sLoM) and sLoM == minB ? sLoMn : na
+if hit.sHi
+    sHiMx := nz(sHiM, -1) != minB ? hit.sHiV : math.max(sHiMx, hit.sHiV)
+    sHiM  := minB
+if hit.sLo
+    sLoMn := nz(sLoM, -1) != minB ? hit.sLoV : math.min(sLoMn, hit.sLoV)
+    sLoM  := minB
 
 // ═════════════ EQ (til BE) - samme regler som EQ-indikatoren ═════════════
 eqBar() =>
@@ -655,17 +667,19 @@ var float dBot = na
 var bool  dAct = false
 var int   dHitM = na        // minuttet hvor en bearish EQ sidst blev ramt
 var int   uHitM = na        // minuttet hvor en bullish EQ sidst blev ramt
-var int   dHitT = na        // foerste bar i minuttet hvor det skete
-var int   uHitT = na
+var float dHitMx = na       // hoejeste bearish EQ ramt i minuttet
+var float uHitMn = na       // laveste bullish EQ ramt i minuttet
+// ... tidligere i minuttet, FOER denne bar
+float dHitPrev = not na(dHitM) and dHitM == minB ? dHitMx : na
+float uHitPrev = not na(uHitM) and uHitM == minB ? uHitMn : na
 if dAct
     // Tjek mod linjen FOER barens egen low flytter den
     float dMid0 = (dTop + dBot) / 2
     if barstate.isconfirmed and high >= dMid0
         dAct := false
         dLastMid := dMid0
-        if nz(dHitM, -1) != minB
-            dHitT := time
-        dHitM := minB
+        dHitMx := nz(dHitM, -1) != minB ? dMid0 : math.max(dHitMx, dMid0)
+        dHitM  := minB
     else
         dBot := math.min(dBot, low)
 if bearE and not dAct
@@ -683,9 +697,8 @@ if uAct
     if barstate.isconfirmed and low <= uMid0
         uAct := false
         uLastMid := uMid0
-        if nz(uHitM, -1) != minB
-            uHitT := time
-        uHitM := minB
+        uHitMn := nz(uHitM, -1) != minB ? uMid0 : math.min(uHitMn, uMid0)
+        uHitM  := minB
     else
         uTop := math.max(uTop, high)
 if bullE and not uAct
@@ -724,9 +737,6 @@ preTaken(float eq, int hm, int ht, float px, bool isShort) =>
     // EQ fra foer open: ogsaa ramt AF entry-candlen taeller
     not na(eq) and not na(hm) and hm == minB and d >= -beMin and d <= beMax
 
-// Ramt i dette minut, men FOER denne bar (entry-candlen selv taeller ikke)
-hitBefore(int hm, int ht) =>
-    not na(hm) and hm == minB and not na(ht) and ht < time
 
 // ═════════════════════ MINUT- OG DAGS-STATUS ═════════════════════
 var int  curM    = na
@@ -1033,9 +1043,9 @@ if ok
         bc.src := "EQ foer open"
     // Liq i trade-retningen taget i entry-minuttet (foer/paa entry-candlen)
     // LONG: bearish EQ eller session high. SHORT: bullish EQ eller session low.
-    bool eqTaken = sh ? (hitBefore(uHitM, uHitT) or hitBefore(preUHitM, preUHitT))
-                      : (hitBefore(dHitM, dHitT) or hitBefore(preDHitM, preDHitT))
-    bool slTaken = sh ? hitBefore(sLoM, sLoT) : hitBefore(sHiM, sHiT)
+    // ... og kun hvis niveauet ligger paa BE-siden af entry (ikke allerede bag entry)
+    bool eqTaken = sh ? (not na(uHitPrev) and px - uHitPrev >= -beMin) : (not na(dHitPrev) and dHitPrev - px >= -beMin)
+    bool slTaken = sh ? (not na(sLoPrev) and px - sLoPrev >= -beMin) : (not na(sHiPrev) and sHiPrev - px >= -beMin)
     if eqTaken or slTaken
         bc.bad := true
         bc.src := eqTaken ? (sh ? "bullish EQ" : "bearish EQ") : (sh ? "session low" : "session high")
