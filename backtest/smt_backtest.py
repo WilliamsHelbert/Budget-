@@ -40,6 +40,7 @@ BE_MIN, BE_MAX = 2.0, 50.0
 USE_369 = True   # kun minutter med tvaersum 3/6/9
 USE_PRE = True   # EQ fra foer market open som BE-kandidat
 USE_TAGET = True # Taget-regel (se scriptet v3.0)
+DOJI_PREV = False  # test: entry-candlen skal ogsaa lukke forbi FORRIGE 15s-close (paa begge indeks)
 
 
 def load(path):
@@ -140,6 +141,8 @@ def run(nq_path, es_path, start, end):
     T = a.t.values
     O, H, L, C = a.open.values, a.high.values, a.low.values, a.close.values
     BO, BH, BL, BC = b.open.values, b.high.values, b.low.values, b.close.values
+    PC = a.close.shift(1).values
+    PBC = b.close.shift(1).values
 
     asia, lon, ny = Sess(), Sess(), Sess()
     lv15, lv05 = [], []
@@ -177,6 +180,7 @@ def run(nq_path, es_path, start, end):
         minB = t // 60
         hi, lo, cl, op = H[i], L[i], C[i], O[i]
         bh, bl, bc, bo = BH[i], BL[i], BC[i], BO[i]
+        pcl, pbc = PC[i], PBC[i]
         bok = not pd.isna(bc)
 
         newMin = lt.minute != prevMn
@@ -341,6 +345,8 @@ def run(nq_path, es_path, start, end):
                 st.bDone = True
             if not h.fired:
                 dirOK = (cl < op and bok and bc < bo) if isHi else (cl > op and bok and bc > bo)
+                if dirOK and DOJI_PREV:
+                    dirOK = (cl < pcl and bc < pbc) if isHi else (cl > pcl and bc > pbc)
                 aBack = not st.aDone and not bTk and st.aM == minB and (cl < aL if isHi else cl > aL)
                 bBack = not st.bDone and not aTk and st.bM == minB and bok and (bc < bL if isHi else bc > bL)
                 if not dirOK and (aBack or bBack):
