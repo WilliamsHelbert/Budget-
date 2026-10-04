@@ -45,6 +45,7 @@ USE_PRE = True   # EQ fra foer market open som BE-kandidat
 USE_TAGET = True # Taget-regel (se scriptet v3.0)
 DBG = None   # saet af datoer ('YYYY-MM-DD') -> LOG faar forklaringer for de dage
 LOG = []
+EQT_MODE = 'all'   # live EQ / session liq taget i entry-minuttet: 'all' = altid ugyldigt, 'dist' = kun hvis niveauet ligger paa BE-siden af entry, 'off' = ignoreres
 CLOSE_BACK = True  # SMT: skal 15s-closet ogsaa lukke tilbage forbi niveauet? (dokumentet kraever det kun for Vergence)
 DOJI_PREV = False  # test: entry-candlen skal ogsaa lukke forbi FORRIGE 15s-close (paa begge indeks)
 
@@ -167,6 +168,7 @@ def run(nq_path, es_path, start, end):
     dLastMid = uLastMid = preD = preU = None
     preDHitM = preUHitM = None
     dHitM = uHitM = sHiM = sLoM = None
+    hitsD, hitsU, hitsSH, hitsSL = [], [], [], []   # (tid, niveau) ramt i vinduet
     dHitT = uHitT = sHiT = sLoT = preDHitT = preUHitT = None
     # minut-status
     curM = None
@@ -310,8 +312,10 @@ def run(nq_path, es_path, start, end):
             if inWin and aSweep and not st.aTook and nm != "15m":
                 if isHi:
                     h.sHi = True
+                    hitsSH.append((t, aL))
                 else:
                     h.sLo = True
+                    hitsSL.append((t, aL))
             if aSweep:
                 st.aTook = True
             if bSweep:
@@ -425,6 +429,9 @@ def run(nq_path, es_path, start, end):
                 if dHitM != minB:
                     dHitT = t
                 dHitM = minB
+                hitsD.append((t, (dTop + dBot) / 2))
+                if DBG is not None and dstr in DBG:
+                    LOG.append((dstr, dk.strftime("%H:%M:%S"), f"BEARISH EQ RAMT: top {dTop} bund {dBot} EQ {(dTop + dBot) / 2}"))
             else:
                 dBot = min(dBot, lo)
         if bearE and not dAct:
@@ -436,6 +443,9 @@ def run(nq_path, es_path, start, end):
                 if uHitM != minB:
                     uHitT = t
                 uHitM = minB
+                hitsU.append((t, (uBot + uTop) / 2))
+                if DBG is not None and dstr in DBG:
+                    LOG.append((dstr, dk.strftime("%H:%M:%S"), f"BULLISH EQ RAMT: bund {uBot} top {uTop} EQ {(uBot + uTop) / 2}"))
             else:
                 uTop = max(uTop, hi)
         if bullE and not uAct:
@@ -538,8 +548,21 @@ def run(nq_path, es_path, start, end):
             if USE_PRE and ((preTaken(preU, preUHitM, preUHitT)) if sh else (preTaken(preD, preDHitM, preDHitT))):
                 beBad, beS = True, "EQ foer open"
             # liq i trade-retningen taget i entry-minuttet (foer entry-candlen)
-            eqT = (hb(uHitM, uHitT) or hb(preUHitM, preUHitT)) if sh else (hb(dHitM, dHitT) or hb(preDHitM, preDHitT))
-            slT = hb(sLoM, sLoT) if sh else hb(sHiM, sHiT)
+            m0 = minB * 60
+            def anyHit(hits):
+                for ht, hv in hits:
+                    if m0 <= ht < t:
+                        if EQT_MODE == 'all':
+                            return True
+                        d = (px - hv) if sh else (hv - px)
+                        if d >= -BE_MIN:
+                            return True
+                return False
+            if EQT_MODE == 'off':
+                eqT = slT = False
+            else:
+                eqT = anyHit(hitsU) if sh else anyHit(hitsD)
+                slT = anyHit(hitsSL) if sh else anyHit(hitsSH)
             if eqT or slT:
                 beBad = True
                 beS = ("bullish EQ" if sh else "bearish EQ") if eqT else ("session low" if sh else "session high")
