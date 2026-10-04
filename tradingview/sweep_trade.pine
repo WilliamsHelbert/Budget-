@@ -1,6 +1,10 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v3.1)
+//  Sweep Trade (SMT)  (v3.2)
+//  ---------------------------------------------------------------
+//  NYT I v3.2
+//    - EQ foer open: kun en EQ der stadig er LIVE ved 15:30. Er alle
+//      EQ'er brugt foer open, er der ingen EQ foer open.
 //  ---------------------------------------------------------------
 //  NYT I v3.1
 //    - Ugyldigt hvis liq i trade-retningen er taget i entry-minuttet
@@ -29,7 +33,7 @@
 //  ---------------------------------------------------------------
 //  NYT I v2.7
 //    - BE-kandidat: EQ fra FOER market open (EQ-linjen paa den bullish og
-//      bearish EQ der stod lige foer 15:30 - live, ellers den sidst brugte).
+//      bearish EQ der stod live lige foer 15:30 - en brugt EQ taeller ikke).
 //    - EQ fra foer open kan kun bruges som BE, saa laenge den ikke er ramt
 //      efter open. Rammes den i SAMME minut som entry (foer/paa entry-
 //      candlen), er tradet UGYLDIGT ("BE allerede ramt").
@@ -173,7 +177,7 @@ beSess  = input.bool(true, "Session liq",              group = g4)
 be15    = input.bool(true, "15m-niveauer",             group = g4)
 be05    = input.bool(true, "5m-niveauer (kun 15:30)",  group = g4)
 bePre   = input.bool(true, "EQ fra foer market open", group = g4,
-     tooltip = "EQ-linjen (0.5) paa den bullish og bearish EQ der stod lige foer 15:30 - live, ellers den sidst brugte. Laases ved open og kan bruges som BE resten af vinduet.")
+     tooltip = "EQ-linjen (0.5) paa den bullish og bearish EQ der stod LIVE lige foer 15:30 (en EQ der allerede er brugt taeller ikke). Laases ved open og kan bruges som BE resten af vinduet.")
 
 g5 = "Visning"
 shortCol = input.color(color.red,    "Short", group = g5)
@@ -633,12 +637,12 @@ if bullE and not uAct
     uTop := math.max(h1, high)
     uAct := true
 
-// EQ foer market open (til BE): live EQ, ellers den sidst brugte. Laases fra 15:30.
+// EQ foer market open (til BE): kun en EQ der stadig er live. Laases fra 15:30.
 var float preDMid = na
 var float preUMid = na
 if tMin < winS
-    preDMid := dAct ? (dTop + dBot) / 2 : dLastMid
-    preUMid := uAct ? (uBot + uTop) / 2 : uLastMid
+    preDMid := dAct ? (dTop + dBot) / 2 : na
+    preUMid := uAct ? (uBot + uTop) / 2 : na
 // Hvornaar blev EQ'en fra foer open ramt efter open? (minuttet, na = ikke ramt)
 // Ramt = brugt op: den kan ikke laengere bruges som BE.
 var int preDHitM = na

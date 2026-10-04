@@ -402,8 +402,8 @@ def run(nq_path, es_path, start, end):
             uBot, uTop, uAct = l1, max(h1, hi), True
         # EQ foer market open (til BE) - laases fra 15:30
         if tMin < WIN_S:
-            preD = (dTop + dBot) / 2 if dAct else dLastMid
-            preU = (uBot + uTop) / 2 if uAct else uLastMid
+            preD = (dTop + dBot) / 2 if dAct else None   # kun en live EQ
+            preU = (uBot + uTop) / 2 if uAct else None
             preDHitM = preUHitM = None
         else:
             if preDHitM is None and preD is not None and lo <= preD <= hi:
