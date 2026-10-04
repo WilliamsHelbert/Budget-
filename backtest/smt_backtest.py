@@ -39,6 +39,7 @@ TP_MIN, TP_MAX = 35.0, 75.0
 BE_MIN, BE_MAX = 2.0, 50.0
 USE_369 = True   # kun minutter med tvaersum 3/6/9
 USE_PRE = True   # EQ fra foer market open som BE-kandidat
+USE_TAGET = True # Taget-regel (se scriptet v3.0)
 
 
 def load(path):
@@ -60,6 +61,8 @@ class St:
     bDone: bool = False
     aTook: bool = False
     bTook: bool = False
+    aTgT: bool = False
+    bTgT: bool = False
 
 
 @dataclass
@@ -70,6 +73,14 @@ class Sess:
     bLo: float = None
     hi: St = None
     lo: St = None
+    aHiM: int = None
+    bHiM: int = None
+    aLoM: int = None
+    bLoM: int = None
+    aTgH: float = None
+    bTgH: float = None
+    aTgL: float = None
+    bTgL: float = None
 
 
 @dataclass
@@ -134,6 +145,7 @@ def run(nq_path, es_path, start, end):
     lastQt = lastFt = None
     prevMn = None
     m1Hi = m1Lo = None
+    bm1Hi = bm1Lo = None
     # EQ (1m)
     lastMin = None
     curMinOHLC = None
@@ -166,6 +178,9 @@ def run(nq_path, es_path, start, end):
         prevMn = lt.minute
         m1Hi = hi if newMin or m1Hi is None else max(m1Hi, hi)
         m1Lo = lo if newMin or m1Lo is None else min(m1Lo, lo)
+        if bok:
+            bm1Hi = bh if newMin or bm1Hi is None else max(bm1Hi, bh)
+            bm1Lo = bl if newMin or bm1Lo is None else min(bm1Lo, bl)
 
         aOn = ASIA[0] <= tMin < ASIA[1]
         lOn = LON[0] <= tMin < LON[1]
@@ -178,11 +193,36 @@ def run(nq_path, es_path, start, end):
                 s.aHi, s.aLo = hi, lo
                 s.bHi, s.bLo = (bh, bl) if bok else (None, None)
                 s.hi, s.lo = St(), St()
+                s.aHiM = s.bHiM = s.aLoM = s.bLoM = minB
+                s.aTgH = s.bTgH = s.aTgL = s.bTgL = None
             else:
+                if hi >= s.aHi:
+                    s.aHiM = minB
+                if lo <= s.aLo:
+                    s.aLoM = minB
+                if bok and (s.bHi is None or bh >= s.bHi):
+                    s.bHiM = minB
+                if bok and (s.bLo is None or bl <= s.bLo):
+                    s.bLoM = minB
                 s.aHi, s.aLo = max(s.aHi, hi), min(s.aLo, lo)
                 if bok:
                     s.bHi = bh if s.bHi is None else max(s.bHi, bh)
                     s.bLo = bl if s.bLo is None else min(s.bLo, bl)
+            if s.aHiM == minB:
+                s.bTgH = bm1Hi
+            if s.bHiM == minB:
+                s.aTgH = m1Hi
+            if s.aLoM == minB:
+                s.bTgL = bm1Lo
+            if s.bLoM == minB:
+                s.aTgL = m1Lo
+
+        def tg(s, isHi):
+            if not USE_TAGET:
+                return None, None
+            if isHi:
+                return (s.aTgH, s.bTgH) if s.aHiM != s.bHiM else (None, None)
+            return (s.aTgL, s.bTgL) if s.aLoM != s.bLoM else (None, None)
 
         if aOn:
             build(asia, aStart)
@@ -234,7 +274,7 @@ def run(nq_path, es_path, start, end):
         # tjek niveauer
         h = Hit()
 
-        def check(st, aL, bL, isHi, nm):
+        def check(st, aL, bL, isHi, nm, aTg=None, bTg=None):
             if st is None or aL is None or bL is None:
                 return
             aSweep = hi >= aL + TICK if isHi else lo <= aL - TICK
@@ -244,6 +284,15 @@ def run(nq_path, es_path, start, end):
                 st.aTook = True
             if bSweep:
                 st.bTook = True
+            newTg = False
+            if inWin and aTg is not None and not st.aTgT and \
+                    ((aTg < aL and hi >= aTg + TICK) if isHi else (aTg > aL and lo <= aTg - TICK)):
+                st.aTgT = newTg = True
+            if inWin and bok and bTg is not None and not st.bTgT and \
+                    ((bTg < bL and bh >= bTg + TICK) if isHi else (bTg > bL and bl <= bTg - TICK)):
+                st.bTgT = newTg = True
+            aTk = st.aTook or st.aTgT
+            bTk = st.bTook or st.bTgT
             if not inWin:
                 if aSweep:
                     st.aDone = True
@@ -259,7 +308,7 @@ def run(nq_path, es_path, start, end):
             if newA or newB:
                 h.swHi = h.swHi or isHi
                 h.swLo = h.swLo or not isHi
-            if (newA or newB) and st.aTook and st.bTook and not (st.aDone and st.bDone):
+            if (newA or newB or newTg) and aTk and bTk and not (st.aDone and st.bDone):
                 h.both = True
                 st.aDone = st.bDone = True
             if not is369:
@@ -273,8 +322,8 @@ def run(nq_path, es_path, start, end):
                 st.bDone = True
             if not h.fired:
                 dirOK = (cl < op and bok and bc < bo) if isHi else (cl > op and bok and bc > bo)
-                aBack = not st.aDone and not st.bTook and st.aM == minB and (cl < aL if isHi else cl > aL)
-                bBack = not st.bDone and not st.aTook and st.bM == minB and bok and (bc < bL if isHi else bc > bL)
+                aBack = not st.aDone and not bTk and st.aM == minB and (cl < aL if isHi else cl > aL)
+                bBack = not st.bDone and not aTk and st.bM == minB and bok and (bc < bL if isHi else bc > bL)
                 if not dirOK and (aBack or bBack):
                     h.noDir = True
                 slOK = (m1Hi - cl <= MAX_SL) if isHi else (cl - m1Lo <= MAX_SL)
@@ -287,14 +336,14 @@ def run(nq_path, es_path, start, end):
                     st.aDone = st.bDone = True
 
         if not nOn:
-            check(ny.hi, ny.aHi, ny.bHi, True, "NY PRE")
-            check(ny.lo, ny.aLo, ny.bLo, False, "NY PRE")
+            check(ny.hi, ny.aHi, ny.bHi, True, "NY PRE", *tg(ny, True))
+            check(ny.lo, ny.aLo, ny.bLo, False, "NY PRE", *tg(ny, False))
         if not lOn:
-            check(lon.hi, lon.aHi, lon.bHi, True, "London")
-            check(lon.lo, lon.aLo, lon.bLo, False, "London")
+            check(lon.hi, lon.aHi, lon.bHi, True, "London", *tg(lon, True))
+            check(lon.lo, lon.aLo, lon.bLo, False, "London", *tg(lon, False))
         if not aOn:
-            check(asia.hi, asia.aHi, asia.bHi, True, "Asia")
-            check(asia.lo, asia.aLo, asia.bLo, False, "Asia")
+            check(asia.hi, asia.aHi, asia.bHi, True, "Asia", *tg(asia, True))
+            check(asia.lo, asia.aLo, asia.bLo, False, "Asia", *tg(asia, False))
         if not nOn and tMin < M15_END:
             for m in lv15:
                 isExt = abs(m.a - (ny.aHi or 0)) < TICK / 2 if m.isHi else abs(m.a - (ny.aLo or 0)) < TICK / 2

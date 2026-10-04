@@ -1,6 +1,13 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v2.9)
+//  Sweep Trade (SMT)  (v3.0)
+//  ---------------------------------------------------------------
+//  NYT I v3.0
+//    - "Taget"-regel: laver det ene indeks sin session high/low (equal
+//      taeller med), og det andet ikke goer, gemmes det andet indeks'
+//      1m high/low i samme minut som "Taget". Sweeper det ene indeks
+//      sit niveau og det andet sin Taget i vinduet, har begge taget den
+//      samme high/low -> ikke SMT. Kan slaas fra under "Sessioner".
 //  ---------------------------------------------------------------
 //  NYT I v2.9
 //    - "Begge sider samme minut" goer kun et trade ugyldigt hvis den
@@ -103,6 +110,8 @@ tz       = input.string("Europe/Copenhagen", "Tidszone", group = g2)
 asiaSess = input.session("0200-0800", "Asia",   group = g2)
 lonSess  = input.session("0800-1400", "London", group = g2)
 nySess   = input.session("1400-1530", "NY PRE", group = g2)
+useTaget = input.bool(true, "Taget-regel", group = g2,
+     tooltip = "Laver det ene indeks sin session high/low og det andet ikke, er det andet indeks' 1m high/low i det minut 'Taget'. Tager det ene indeks sit niveau og det andet sin Taget, er det ikke SMT.")
 useAsia  = input.bool(true, "Asia",   group = g2, inline = "s")
 useLon   = input.bool(true, "London", group = g2, inline = "s")
 useNy    = input.bool(true, "NY PRE", group = g2, inline = "s")
@@ -214,6 +223,11 @@ var float m1Lo = na
 bool newMin = mnow != mnow[1]
 m1Hi := newMin ? high : math.max(nz(m1Hi, high), high)
 m1Lo := newMin ? low  : math.min(nz(m1Lo, low),  low)
+// Samme for det andet indeks (til Taget)
+var float bm1Hi = na
+var float bm1Lo = na
+bm1Hi := na(bHigh) ? bm1Hi : newMin ? bHigh : math.max(nz(bm1Hi, bHigh), bHigh)
+bm1Lo := na(bLow)  ? bm1Lo : newMin ? bLow  : math.min(nz(bm1Lo, bLow),  bLow)
 
 int  aT = time(timeframe.period, asiaSess, tz)
 int  lT = time(timeframe.period, lonSess,  tz)
@@ -237,6 +251,8 @@ type St
     bool bDone = false
     bool aTook = false
     bool bTook = false   // sammenligningssymbolet har taget niveauet
+    bool aTgT  = false   // chartets symbol har taget sin Taget (i vinduet)
+    bool bTgT  = false   // det andet indeks har taget sin Taget (i vinduet)
 
 type Sess
     float aHi = na
@@ -245,6 +261,16 @@ type Sess
     float bLo = na
     St    hi  = na
     St    lo  = na
+    // Taget: minuttet hvor hvert indeks sidst lavede sin high/low,
+    // og det andet indeks' 1m high/low i det minut.
+    int   aHiM = na
+    int   bHiM = na
+    int   aLoM = na
+    int   bLoM = na
+    float aTgH = na      // chartets Taget high (det andet lavede high)
+    float bTgH = na
+    float aTgL = na
+    float bTgL = na
 
 // Eet NY PRE 15m- eller 5m-niveau. a = chartets symbol, b = det andet.
 type Lv
@@ -278,15 +304,47 @@ build(Sess s, bool isStart) =>
         s.bLo := bLow
         s.hi  := St.new()
         s.lo  := St.new()
+        s.aHiM := minB
+        s.bHiM := minB
+        s.aLoM := minB
+        s.bLoM := minB
+        s.aTgH := na
+        s.bTgH := na
+        s.aTgL := na
+        s.bTgL := na
     else
+        // Nyt (eller equal) session high/low -> husk minuttet
+        if high >= s.aHi
+            s.aHiM := minB
+        if low <= s.aLo
+            s.aLoM := minB
+        if not na(bHigh) and bHigh >= nz(s.bHi, bHigh)
+            s.bHiM := minB
+        if not na(bLow) and bLow <= nz(s.bLo, bLow)
+            s.bLoM := minB
         s.aHi := math.max(s.aHi, high)
         s.aLo := math.min(s.aLo, low)
         s.bHi := na(bHigh) ? s.bHi : math.max(nz(s.bHi, bHigh), bHigh)
         s.bLo := na(bLow)  ? s.bLo : math.min(nz(s.bLo, bLow),  bLow)
+    // Det andet indeks' 1m high/low i minuttet hvor indekset lavede sit niveau
+    if s.aHiM == minB
+        s.bTgH := bm1Hi
+    if s.bHiM == minB
+        s.aTgH := m1Hi
+    if s.aLoM == minB
+        s.bTgL := bm1Lo
+    if s.bLoM == minB
+        s.aTgL := m1Lo
     true
 
+// Taget-niveauet for een side (na hvis begge lavede niveauet i samme minut)
+tgA(Sess s, bool isHi) =>
+    not useTaget ? na : isHi ? (s.aHiM != s.bHiM ? s.aTgH : na) : (s.aLoM != s.bLoM ? s.aTgL : na)
+tgB(Sess s, bool isHi) =>
+    not useTaget ? na : isHi ? (s.aHiM != s.bHiM ? s.bTgH : na) : (s.aLoM != s.bLoM ? s.bTgL : na)
+
 // Tjek een side af eet niveau. aL/bL = niveauet paa hvert indeks.
-check(St st, float aL, float bL, bool isHi, string nm, Hit h) =>
+check(St st, float aL, float bL, bool isHi, string nm, Hit h, float aTg = na, float bTg = na) =>
     if not na(st) and not na(aL) and not na(bL)
         bool aSweep = isHi ? high >= aL + tick : low <= aL - tick
         bool bSweep = isHi ? (not na(bHigh) and bHigh >= bL + tick) : (not na(bLow) and bLow <= bL - tick)
@@ -295,6 +353,16 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h) =>
             st.aTook := true
         if bSweep
             st.bTook := true
+        // Taget: kun i vinduet, og kun naar den ligger foran det rigtige niveau
+        bool newTg = false
+        if inWin and not na(aTg) and (isHi ? aTg < aL and high >= aTg + tick : aTg > aL and low <= aTg - tick) and not st.aTgT
+            st.aTgT := true
+            newTg   := true
+        if inWin and not na(bTg) and (isHi ? bTg < bL and not na(bHigh) and bHigh >= bTg + tick : bTg > bL and not na(bLow) and bLow <= bTg - tick) and not st.bTgT
+            st.bTgT := true
+            newTg   := true
+        bool aTk = st.aTook or st.aTgT
+        bool bTk = st.bTook or st.bTgT
         // Foer vinduet: et taget niveau er brugt op (ingen trade).
         if not inWin
             if aSweep
@@ -312,13 +380,13 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h) =>
                 h.swHi  := h.swHi or isHi
                 h.swLo  := h.swLo or not isHi
             // Begge indeks har taget niveauet -> ingen divergens = ikke SMT (det er Vergence)
-            if (newA or newB) and st.aTook and st.bTook and not (st.aDone and st.bDone)
+            if (newA or newB or newTg) and aTk and bTk and not (st.aDone and st.bDone)
                 h.both    := true
-                h.bothTxt := lvlNm
+                h.bothTxt := lvlNm + (st.aTook and st.bTook ? "" : " (Taget)")
                 st.aDone  := true
                 st.bDone  := true
             // Kun det ene indeks har taget det -> mulighed for SMT
-            else if is369 and ((newA and not st.bTook) or (newB and not st.aTook))
+            else if is369 and ((newA and not bTk) or (newB and not aTk))
                 h.swTxt := lvlNm + " (" + (newA ? aName : bName) + ")"
             // Sweep uden for et 3-6-9-minut -> ingen SMT paa det niveau
             if not is369
@@ -336,8 +404,8 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h) =>
                 bool dirOK = not needBoth or (isHi
                      ? (close < open and not na(bClose) and bClose < bOpen)
                      : (close > open and not na(bClose) and bClose > bOpen))
-                bool aBack = not st.aDone and not st.bTook and st.aM == minB and (isHi ? close < aL : close > aL)
-                bool bBack = not st.bDone and not st.aTook and st.bM == minB and not na(bClose) and (isHi ? bClose < bL : bClose > bL)
+                bool aBack = not st.aDone and not bTk and st.aM == minB and (isHi ? close < aL : close > aL)
+                bool bBack = not st.bDone and not aTk and st.bM == minB and not na(bClose) and (isHi ? bClose < bL : bClose > bL)
                 if not dirOK and (aBack or bBack)
                     h.noDir := true
                 bool slOK = not blockMax or (isHi ? m1Hi - close <= maxSL : close - m1Lo <= maxSL)
@@ -470,14 +538,14 @@ if not nOn and array.size(lv05) > 0
 Hit hit = Hit.new()
 
 if useNy and not nOn
-    check(ny.hi, ny.aHi, ny.bHi, true,  "NY PRE", hit)
-    check(ny.lo, ny.aLo, ny.bLo, false, "NY PRE", hit)
+    check(ny.hi, ny.aHi, ny.bHi, true,  "NY PRE", hit, tgA(ny, true),  tgB(ny, true))
+    check(ny.lo, ny.aLo, ny.bLo, false, "NY PRE", hit, tgA(ny, false), tgB(ny, false))
 if useLon and not lOn
-    check(lon.hi, lon.aHi, lon.bHi, true,  "London", hit)
-    check(lon.lo, lon.aLo, lon.bLo, false, "London", hit)
+    check(lon.hi, lon.aHi, lon.bHi, true,  "London", hit, tgA(lon, true),  tgB(lon, true))
+    check(lon.lo, lon.aLo, lon.bLo, false, "London", hit, tgA(lon, false), tgB(lon, false))
 if useAsia and not aOn
-    check(asia.hi, asia.aHi, asia.bHi, true,  "Asia", hit)
-    check(asia.lo, asia.aLo, asia.bLo, false, "Asia", hit)
+    check(asia.hi, asia.aHi, asia.bHi, true,  "Asia", hit, tgA(asia, true),  tgB(asia, true))
+    check(asia.lo, asia.aLo, asia.bLo, false, "Asia", hit, tgA(asia, false), tgB(asia, false))
 if use15 and not nOn and tMin < m15E and array.size(lv15) > 0
     for i = 0 to array.size(lv15) - 1
         Lv m = array.get(lv15, i)
