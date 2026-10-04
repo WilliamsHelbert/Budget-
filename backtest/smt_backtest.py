@@ -156,6 +156,7 @@ def run(nq_path, es_path, start, end):
     dLastMid = uLastMid = preD = preU = None
     preDHitM = preUHitM = None
     dHitM = uHitM = sHiM = sLoM = None
+    dHitT = uHitT = sHiT = sLoT = preDHitT = preUHitT = None
     # minut-status
     curM = None
     mHi = mLo = mBad = False
@@ -359,10 +360,10 @@ def run(nq_path, es_path, start, end):
                 if not m.dead and not isExt:
                     check(m.st, m.a, m.b, m.isHi, "15m")
 
-        if h.sHi:
-            sHiM = minB
-        if h.sLo:
-            sLoM = minB
+        if h.sHi and sHiM != minB:
+            sHiM, sHiT = minB, t
+        if h.sLo and sLoM != minB:
+            sLoM, sLoT = minB, t
         if inWin:
             stats["noDir"] += h.noDir
             stats["slBad"] += h.slBad
@@ -389,6 +390,8 @@ def run(nq_path, es_path, start, end):
             if hi >= (dTop + dBot) / 2:
                 dAct = False
                 dLastMid = (dTop + dBot) / 2
+                if dHitM != minB:
+                    dHitT = t
                 dHitM = minB
         if bearE and not dAct:
             dTop, dBot, dAct = h1, min(l1, lo), True
@@ -397,6 +400,8 @@ def run(nq_path, es_path, start, end):
             if lo <= (uBot + uTop) / 2:
                 uAct = False
                 uLastMid = (uBot + uTop) / 2
+                if uHitM != minB:
+                    uHitT = t
                 uHitM = minB
         if bullE and not uAct:
             uBot, uTop, uAct = l1, max(h1, hi), True
@@ -407,9 +412,9 @@ def run(nq_path, es_path, start, end):
             preDHitM = preUHitM = None
         else:
             if preDHitM is None and preD is not None and lo <= preD <= hi:
-                preDHitM = minB
+                preDHitM, preDHitT = minB, t
             if preUHitM is None and preU is not None and lo <= preU <= hi:
-                preUHitM = minB
+                preUHitM, preUHitT = minB, t
 
         # minut-status
         if minB != curM:
@@ -479,16 +484,21 @@ def run(nq_path, es_path, start, end):
                 if (cv < px if sh else cv > px) and BE_MIN <= d <= BE_MAX and (be is None or d < abs(px - be)):
                     be, beS, beBad = cv, cn, tk
             # EQ fra foer open ramt i entry-minuttet -> BE-spottet er taget
-            def preTaken(eq, hm):
-                if eq is None or hm is None or hm != minB:
+            def hb(hm, ht):
+                # ramt i dette minut, men FOER entry-candlen
+                return hm == minB and ht is not None and ht < t
+
+            def preTaken(eq, hm, ht):
+                # EQ fra foer open: ogsaa ramt AF entry-candlen taeller (5/1)
+                if eq is None or hm != minB:
                     return False
                 d = (px - eq) if sh else (eq - px)
                 return -BE_MIN <= d <= BE_MAX
-            if USE_PRE and (preTaken(preD, preDHitM) or preTaken(preU, preUHitM)):
+            if USE_PRE and (preTaken(preD, preDHitM, preDHitT) or preTaken(preU, preUHitM, preUHitT)):
                 beBad, beS = True, "EQ foer open"
-            # liq i trade-retningen taget i entry-minuttet
-            eqT = (uHitM == minB or preUHitM == minB) if sh else (dHitM == minB or preDHitM == minB)
-            slT = (sLoM == minB) if sh else (sHiM == minB)
+            # liq i trade-retningen taget i entry-minuttet (foer entry-candlen)
+            eqT = (hb(uHitM, uHitT) or hb(preUHitM, preUHitT)) if sh else (hb(dHitM, dHitT) or hb(preDHitM, preDHitT))
+            slT = hb(sLoM, sLoT) if sh else hb(sHiM, sHiT)
             if eqT or slT:
                 beBad = True
                 beS = ("bullish EQ" if sh else "bearish EQ") if eqT else ("session low" if sh else "session high")
