@@ -1,6 +1,13 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v3.8)
+//  Sweep Trade (SMT)  (v3.9)
+//  ---------------------------------------------------------------
+//  NYT I v3.9
+//    - Tager et indeks en tidligere sessions high/low i en senere session
+//      (fx London low i NY PRE), er niveauet ikke brugt. Det flytter med
+//      til den nye high/low ('NY PRE + London'). London low er stadig
+//      gyldig for det andet indeks - indtil det tager det samlede niveau.
+//    - Taget gaelder kun inden for en session, ikke for flyttede niveauer.
 //  ---------------------------------------------------------------
 //  NYT I v3.8
 //    - Kun eet trade pr. minut. Kommer der et nyt signal i samme minut
@@ -330,6 +337,11 @@ type Sess
     float bTgH = na
     float aTgL = na
     float bTgL = na
+    // Taget i en senere session (foer open) -> niveauet flytter med (fx "NY PRE + London")
+    bool  maHi = false   // chartets symbol
+    bool  mbHi = false   // det andet indeks
+    bool  maLo = false
+    bool  mbLo = false
 
 // Eet NY PRE 15m- eller 5m-niveau. a = chartets symbol, b = det andet.
 type Lv
@@ -375,6 +387,10 @@ build(Sess s, bool isStart) =>
         s.bTgH := na
         s.aTgL := na
         s.bTgL := na
+        s.maHi := false
+        s.mbHi := false
+        s.maLo := false
+        s.mbLo := false
     else
         // Nyt (eller equal) session high/low -> husk 15m-candlen
         if high >= s.aHi
@@ -402,9 +418,9 @@ build(Sess s, bool isStart) =>
 
 // Taget-niveauet for een side (na hvis begge lavede niveauet i samme 15m-candle)
 tgA(Sess s, bool isHi) =>
-    not useTaget ? na : isHi ? (s.aHiM != s.bHiM ? s.aTgH : na) : (s.aLoM != s.bLoM ? s.aTgL : na)
+    not useTaget or (isHi ? (s.maHi or s.mbHi) : (s.maLo or s.mbLo)) ? na : isHi ? (s.aHiM != s.bHiM ? s.aTgH : na) : (s.aLoM != s.bLoM ? s.aTgL : na)
 tgB(Sess s, bool isHi) =>
-    not useTaget ? na : isHi ? (s.aHiM != s.bHiM ? s.bTgH : na) : (s.aLoM != s.bLoM ? s.bTgL : na)
+    not useTaget or (isHi ? (s.maHi or s.mbHi) : (s.maLo or s.mbLo)) ? na : isHi ? (s.aHiM != s.bHiM ? s.bTgH : na) : (s.aLoM != s.bLoM ? s.bTgL : na)
 
 // Tjek een side af eet niveau. aL/bL = niveauet paa hvert indeks.
 check(St st, float aL, float bL, bool isHi, string nm, Hit h, float aTg = na, float bTg = na) =>
@@ -554,6 +570,27 @@ var Sess asia = Sess.new()
 var Sess lon  = Sess.new()
 var Sess ny   = Sess.new()
 
+// Tager et indeks en tidligere sessions high/low i en senere session (foer open), er
+// niveauet ikke brugt - det flytter med til den nye high/low (fx "NY PRE + London").
+mergeSess(Sess s, bool on) =>
+    if not on and tMin < winS and not na(s.aHi)
+        if high > s.aHi
+            s.aHi  := high
+            s.maHi := true
+        if low < s.aLo
+            s.aLo  := low
+            s.maLo := true
+        if not na(bHigh) and not na(s.bHi) and bHigh > s.bHi
+            s.bHi  := bHigh
+            s.mbHi := true
+        if not na(bLow) and not na(s.bLo) and bLow < s.bLo
+            s.bLo  := bLow
+            s.mbLo := true
+    true
+
+mergeSess(asia, aOn)
+mergeSess(lon,  lOn)
+
 if aOn
     build(asia, aStart)
 if lOn
@@ -612,12 +649,18 @@ Hit hit = Hit.new()
 if useNy and not nOn
     check(ny.hi, ny.aHi, ny.bHi, true,  "NY PRE", hit, tgA(ny, true),  tgB(ny, true))
     check(ny.lo, ny.aLo, ny.bLo, false, "NY PRE", hit, tgA(ny, false), tgB(ny, false))
+// Har BEGGE indeks taget niveauet i en senere session, er det samme niveau som den
+// senere sessions -> det tjekkes kun dér.
 if useLon and not lOn
-    check(lon.hi, lon.aHi, lon.bHi, true,  "London", hit, tgA(lon, true),  tgB(lon, true))
-    check(lon.lo, lon.aLo, lon.bLo, false, "London", hit, tgA(lon, false), tgB(lon, false))
+    if not (lon.maHi and lon.mbHi)
+        check(lon.hi, lon.aHi, lon.bHi, true,  "London", hit, tgA(lon, true),  tgB(lon, true))
+    if not (lon.maLo and lon.mbLo)
+        check(lon.lo, lon.aLo, lon.bLo, false, "London", hit, tgA(lon, false), tgB(lon, false))
 if useAsia and not aOn
-    check(asia.hi, asia.aHi, asia.bHi, true,  "Asia", hit, tgA(asia, true),  tgB(asia, true))
-    check(asia.lo, asia.aLo, asia.bLo, false, "Asia", hit, tgA(asia, false), tgB(asia, false))
+    if not (asia.maHi and asia.mbHi)
+        check(asia.hi, asia.aHi, asia.bHi, true,  "Asia", hit, tgA(asia, true),  tgB(asia, true))
+    if not (asia.maLo and asia.mbLo)
+        check(asia.lo, asia.aLo, asia.bLo, false, "Asia", hit, tgA(asia, false), tgB(asia, false))
 if use15 and not nOn and tMin < m15E and array.size(lv15) > 0
     for i = 0 to array.size(lv15) - 1
         Lv m = array.get(lv15, i)

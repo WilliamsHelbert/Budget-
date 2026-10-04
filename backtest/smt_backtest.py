@@ -90,6 +90,10 @@ class Sess:
     bTgH: float = None
     aTgL: float = None
     bTgL: float = None
+    maHi: bool = False  # NQ tog high i en senere session -> flyttet med (fx "NY PRE + London")
+    mbHi: bool = False  # ES ditto
+    maLo: bool = False
+    mbLo: bool = False
 
 
 @dataclass
@@ -224,6 +228,7 @@ def run(nq_path, es_path, start, end):
                 s.hi, s.lo = St(), St()
                 s.aHiM = s.bHiM = s.aLoM = s.bLoM = q15B
                 s.aTgH = s.bTgH = s.aTgL = s.bTgL = None
+                s.maHi = s.mbHi = s.maLo = s.mbLo = False
             else:
                 if hi >= s.aHi:
                     s.aHiM = q15B
@@ -247,11 +252,27 @@ def run(nq_path, es_path, start, end):
                 s.aTgL = aq15Lo
 
         def tg(s, isHi):
-            if not USE_TAGET:
+            if not USE_TAGET or ((s.maHi or s.mbHi) if isHi else (s.maLo or s.mbLo)):
                 return None, None
             if isHi:
                 return (s.aTgH, s.bTgH) if s.aHiM != s.bHiM else (None, None)
             return (s.aTgL, s.bTgL) if s.aLoM != s.bLoM else (None, None)
+
+        # Tager et indeks en tidligere sessions high/low i en senere session (foer open),
+        # er niveauet ikke brugt - det flytter med til den nye high/low (fx "NY PRE + London").
+        def merge(s, on):
+            if on or s.aHi is None or tMin >= WIN_S:
+                return
+            if hi > s.aHi:
+                s.aHi, s.maHi = hi, True
+            if lo < s.aLo:
+                s.aLo, s.maLo = lo, True
+            if bok and s.bHi is not None and bh > s.bHi:
+                s.bHi, s.mbHi = bh, True
+            if bok and s.bLo is not None and bl < s.bLo:
+                s.bLo, s.mbLo = bl, True
+        merge(asia, aOn)
+        merge(lon, lOn)
 
         if aOn:
             build(asia, aStart)
@@ -385,12 +406,18 @@ def run(nq_path, es_path, start, end):
         if not nOn:
             check(ny.hi, ny.aHi, ny.bHi, True, "NY PRE", *tg(ny, True))
             check(ny.lo, ny.aLo, ny.bLo, False, "NY PRE", *tg(ny, False))
+        # har BEGGE indeks taget niveauet i en senere session, er det samme niveau som
+        # den senere sessions -> tjekkes kun dér
         if not lOn:
-            check(lon.hi, lon.aHi, lon.bHi, True, "London", *tg(lon, True))
-            check(lon.lo, lon.aLo, lon.bLo, False, "London", *tg(lon, False))
+            if not (lon.maHi and lon.mbHi):
+                check(lon.hi, lon.aHi, lon.bHi, True, "London", *tg(lon, True))
+            if not (lon.maLo and lon.mbLo):
+                check(lon.lo, lon.aLo, lon.bLo, False, "London", *tg(lon, False))
         if not aOn:
-            check(asia.hi, asia.aHi, asia.bHi, True, "Asia", *tg(asia, True))
-            check(asia.lo, asia.aLo, asia.bLo, False, "Asia", *tg(asia, False))
+            if not (asia.maHi and asia.mbHi):
+                check(asia.hi, asia.aHi, asia.bHi, True, "Asia", *tg(asia, True))
+            if not (asia.maLo and asia.mbLo):
+                check(asia.lo, asia.aLo, asia.bLo, False, "Asia", *tg(asia, False))
         if not nOn and tMin < M15_END:
             for m in lv15:
                 isExt = abs(m.a - (ny.aHi or 0)) < TICK / 2 if m.isHi else abs(m.a - (ny.aLo or 0)) < TICK / 2
