@@ -36,6 +36,7 @@ M15_END = 15 * 60 + 31
 MIN_SL, MAX_SL = 10.0, 30.0
 TP_MIN, TP_MAX = 35.0, 75.0
 BE_MIN, BE_MAX = 2.0, 50.0
+USE_369 = True   # kun minutter med tvaersum 3/6/9
 USE_PRE = True   # EQ fra foer market open som BE-kandidat
 
 
@@ -153,6 +154,8 @@ def run(nq_path, es_path, start, end):
         tMin = lt.hour * 60 + lt.minute
         inWin = WIN_S <= tMin < WIN_E
         isOpenM = tMin == WIN_S
+        ds = lt.minute // 10 + lt.minute % 10
+        is369 = (not USE_369) or ds in (3, 6, 9)
         minB = t // 60
         hi, lo, cl, op = H[i], L[i], C[i], O[i]
         bh, bl, bc, bo = BH[i], BL[i], BC[i], BO[i]
@@ -258,6 +261,11 @@ def run(nq_path, es_path, start, end):
             if (newA or newB) and st.aTook and st.bTook and not (st.aDone and st.bDone):
                 h.both = True
                 st.aDone = st.bDone = True
+            if not is369:
+                if newA:
+                    st.aDone = True
+                if newB:
+                    st.bDone = True
             if not st.aDone and st.aM is not None and st.aM != minB:
                 st.aDone = True
             if not st.bDone and st.bM is not None and st.bM != minB:

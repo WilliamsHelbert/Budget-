@@ -1,6 +1,11 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v2.7)
+//  Sweep Trade (SMT)  (v2.8)
+//  ---------------------------------------------------------------
+//  NYT I v2.8
+//    - 3-6-9: SMT kun i minutter med tvaersum 3, 6 eller 9
+//      (15:30, 33, 36, 42, 45, 51, 54). Sweep i andre minutter giver
+//      ingen SMT paa det niveau. Kan slaas fra under "Vindue".
 //  ---------------------------------------------------------------
 //  NYT I v2.7
 //    - BE-kandidat: EQ fra FOER market open (EQ-linjen paa den bullish og
@@ -103,6 +108,8 @@ openMin  = input.int(30, "Start - minut", minval = 0, maxval = 59, group = g3)
 endHour  = input.int(16, "Slut - time (til, ikke med)",  minval = 0, maxval = 23, group = g3)
 endMin   = input.int(0,  "Slut - minut (til, ikke med)", minval = 0, maxval = 59, group = g3)
 m15H     = input.int(15, "15m-niveauer gaelder til - time",  minval = 0, maxval = 23, group = g3)
+use369   = input.bool(true, "Kun paa 3-6-9 minutter", group = g3,
+     tooltip = "SMT kun naar minuttets tvaersum er 3, 6 eller 9: 15:30, 33, 36, 42, 45, 51 og 54. Sweepet og entry skal ske i et af de minutter.")
 m15M     = input.int(31, "15m-niveauer gaelder til - minut", minval = 0, maxval = 59, group = g3,
      tooltip = "Samme som 'Fjern igen' paa Session Levels. Default 15:31.")
 
@@ -188,6 +195,11 @@ bool inWin  = tMin >= winS and tMin < winE
 bool isOpenM = tMin == winS
 int  m15E   = m15H * 60 + m15M
 int  dNow   = dayofmonth(time, tz)
+
+// 3-6-9: minuttets tvaersum skal vaere 3, 6 eller 9 (30, 33, 36, 42, 45, 51, 54)
+int  mn369 = minute(time, tz)
+int  ds369 = int(mn369 / 10) + mn369 % 10
+bool is369 = not use369 or ds369 == 3 or ds369 == 6 or ds369 == 9
 
 // Minuttets high/low (til SL)
 int  mnow = minute(time, tz)
@@ -300,8 +312,14 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h) =>
                 st.aDone  := true
                 st.bDone  := true
             // Kun det ene indeks har taget det -> mulighed for SMT
-            else if (newA and not st.bTook) or (newB and not st.aTook)
+            else if is369 and ((newA and not st.bTook) or (newB and not st.aTook))
                 h.swTxt := lvlNm + " (" + (newA ? aName : bName) + ")"
+            // Sweep uden for et 3-6-9-minut -> ingen SMT paa det niveau
+            if not is369
+                if newA
+                    st.aDone := true
+                if newB
+                    st.bDone := true
             // Minuttet er gaaet uden close tilbage -> brugt op
             if not st.aDone and not na(st.aM) and st.aM != minB
                 st.aDone := true
