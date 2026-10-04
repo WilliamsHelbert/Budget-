@@ -11,7 +11,8 @@ Niveauer : Asia / London / NY PRE high+low og NY PRE 15m highs/lows
 SMT      : kun det ene indeks sweeper (mindst 1 tick), og i SAMME minut
            lukker et 15s-candle tilbage paa den anden side paa det indeks,
            begge indeks lukker i trade-retningen, og SL <= 30 points.
-Ugyldig  : high-side og low-side swept i samme minut -> alt i minuttet slettes.
+Ugyldig  : high-side og low-side swept i samme minut FOER/I entry-candlen -> intet trade.
+           Bliver den anden side taget efter entry, staar tradet.
 SL       : 1m-candlens top/bund ved entry, mindst 10 points.
 TP       : naermeste af EQ / session liq (uroert af NQ) 35-75 points, ellers 75.
 BE       : naermeste af EQ, 0.25/0.75, session liq, 15m, 5m (kun 15:30),
@@ -355,12 +356,8 @@ def run(nq_path, es_path, start, end):
             mLo = mLo or h.swLo
         justBad = mHi and mLo and not mBad
         if justBad:
+            # kun trades FOER den anden side blev taget staar; ingen nye i minuttet
             mBad = True
-            for tr in minTrades:
-                tr["status"] = "UGYLDIG (begge sider samme minut)"
-                stats["ugyldig"] += 1
-            if o is not None and o["minB"] == minB:
-                o = None
 
         # aabent trade
         if o is not None:

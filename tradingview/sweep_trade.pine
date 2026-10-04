@@ -1,6 +1,12 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v2.8)
+//  Sweep Trade (SMT)  (v2.9)
+//  ---------------------------------------------------------------
+//  NYT I v2.9
+//    - "Begge sider samme minut" goer kun et trade ugyldigt hvis den
+//      anden side er taget FOER eller I entry-candlen. Bliver den anden
+//      side taget efter entry (fx prisen loeber mod TP), staar tradet.
+//      Der kan bare ikke komme flere trades i det minut.
 //  ---------------------------------------------------------------
 //  NYT I v2.8
 //    - 3-6-9: SMT kun i minutter med tvaersum 3, 6 eller 9
@@ -563,6 +569,7 @@ var int  curM    = na
 var bool mHi     = false
 var bool mLo     = false
 var bool mBad    = false
+var bool mTraded = false   // der er allerede taget et trade i minuttet
 var bool dayHi   = false
 var bool dayLo   = false
 var int  lastDay = na
@@ -583,6 +590,7 @@ if minB != nz(curM, -1)
     mHi  := false
     mLo  := false
     mBad := false
+    mTraded := false
     array.clear(minLbls)
     array.clear(minLines)
     array.clear(minBoxes)
@@ -596,9 +604,11 @@ if inWin
 bool justBad = mHi and mLo and not mBad
 if justBad
     mBad := true
+// Er tradet allerede taget, staar det - minuttet lukker bare for nye trades
+bool killMin = justBad and not mTraded
 bool dayBad = dayBlock and dayHi and dayLo
 
-if justBad
+if killMin
     while array.size(minLbls) > 0
         label.delete(array.pop(minLbls))
     while array.size(minLines) > 0
@@ -709,7 +719,7 @@ if not na(pendM) and pendM != minB
     bxTime   := tTime
 
 // Minuttet blev ugyldigt -> fjern alt der sagde "mulighed" / trade
-if justBad or (dayBad and not na(pendM))
+if killMin or (dayBad and not na(pendM))
     pendM    := na
     if tM == minB
         tStatus := ""
@@ -746,7 +756,7 @@ var float  oFav   = na     // laengst prisen har vaeret mod TP
 var string oTime  = ""
 
 // Tradet blev slettet fordi minuttet blev ugyldigt
-if oLive and mBad and oM == minB
+if oLive and killMin and oM == minB
     oLive := false
 
 if oLive
@@ -924,6 +934,7 @@ if ok
             label.set_x(oEnLb, time)
             label.set_x(oTpLb, time)
         oLive  := true
+        mTraded := true
         oShort := sh
         oEntry := px
         oSL    := slX
