@@ -1,0 +1,440 @@
+"""
+Backtest af "Helbert's Hjaelpe Indikator (Sweep Trade)" (SMT) - v2.6.
+
+Foelger Pine-scriptet bar for bar paa 15s-data:
+  chart  = NQ  (a)
+  sammenlign = ES (b)
+
+Niveauer : Asia / London / NY PRE high+low og NY PRE 15m highs/lows
+           (samme regler som Session Levels: 15m-niveauer der bliver taget
+           under NY PRE er doede, 15m gaelder til 15:31).
+SMT      : kun det ene indeks sweeper (mindst 1 tick), og i SAMME minut
+           lukker et 15s-candle tilbage paa den anden side paa det indeks,
+           begge indeks lukker i trade-retningen, og SL <= 30 points.
+Ugyldig  : high-side og low-side swept i samme minut -> alt i minuttet slettes.
+SL       : 1m-candlens top/bund ved entry, mindst 10 points.
+TP       : naermeste af EQ / session liq (uroert af NQ) 35-75 points, ellers 75.
+BE       : naermeste af EQ, 0.25/0.75, session liq, 15m, 5m (kun 15:30),
+           2-50 points; aktiv foerst efter 2 lukkede 15s-candles.
+R        : points / 10 (som i journalen).
+"""
+import sys
+from dataclasses import dataclass, field
+from zoneinfo import ZoneInfo
+
+import pandas as pd
+
+TZ = ZoneInfo("Europe/Copenhagen")
+TICK = 0.25
+
+# ── indstillinger (samme som scriptets standard) ──
+ASIA = (2 * 60, 8 * 60)
+LON = (8 * 60, 14 * 60)
+NY = (14 * 60, 15 * 60 + 30)
+WIN_S, WIN_E = 15 * 60 + 30, 16 * 60
+M15_END = 15 * 60 + 31
+MIN_SL, MAX_SL = 10.0, 30.0
+TP_MIN, TP_MAX = 35.0, 75.0
+BE_MIN, BE_MAX = 2.0, 50.0
+
+
+def load(path):
+    df = pd.read_parquet(path)
+    if "ts" in df.columns:
+        df["t"] = df["ts"].astype("int64")
+        for c in ("open", "high", "low", "close"):
+            df[c] = df[c] / 4.0
+    else:
+        df["t"] = df["time"].astype("int64") // 10**9
+    return df[["t", "open", "high", "low", "close"]].sort_values("t").drop_duplicates("t")
+
+
+@dataclass
+class St:
+    aM: int = None
+    bM: int = None
+    aDone: bool = False
+    bDone: bool = False
+    aTook: bool = False
+    bTook: bool = False
+
+
+@dataclass
+class Sess:
+    aHi: float = None
+    aLo: float = None
+    bHi: float = None
+    bLo: float = None
+    hi: St = None
+    lo: St = None
+
+
+@dataclass
+class Lv:
+    a: float
+    b: float
+    isHi: bool
+    dead: bool = False
+    st: St = field(default_factory=St)
+
+
+@dataclass
+class Hit:
+    fired: bool = False
+    isShort: bool = False
+    lvl: float = None
+    src: str = ""
+    who: str = ""
+    swHi: bool = False
+    swLo: bool = False
+    both: bool = False
+    noDir: bool = False
+    slBad: bool = False
+
+
+def run(nq_path, es_path, start, end):
+    a = load(nq_path)
+    b = load(es_path)
+    t0 = int(pd.Timestamp(start, tz=TZ).timestamp()) - 2 * 86400
+    t1 = int(pd.Timestamp(end, tz=TZ).timestamp()) + 86400
+    a = a[(a.t >= t0) & (a.t < t1)].reset_index(drop=True)
+    b = b[(b.t >= t0) & (b.t < t1)]
+    # ES paa NQ's bars, gaps_off = forrige ES-bar
+    b = b.set_index("t").reindex(a.t).ffill()
+
+    # 15m / 5m: forrige afsluttede candle (lookahead_on + [1])
+    def agg(df_t, df, sec):
+        g = df.groupby(df_t // sec * sec).agg(h=("high", "max"), l=("low", "min"))
+        return g
+
+    aa = a.set_index("t")
+    g15a, g15b = agg(aa.index.to_series(), aa, 900), None
+    bb_raw = load(es_path)
+    bb_raw = bb_raw[(bb_raw.t >= t0) & (bb_raw.t < t1)].set_index("t")
+    g15b = agg(bb_raw.index.to_series(), bb_raw, 900)
+    g05a = agg(aa.index.to_series(), aa, 300)
+    g05b = agg(bb_raw.index.to_series(), bb_raw, 300)
+
+    def prev_period(g, p):
+        idx = g.index.searchsorted(p) - 1
+        if idx < 0:
+            return None
+        return g.index[idx]
+
+    T = a.t.values
+    O, H, L, C = a.open.values, a.high.values, a.low.values, a.close.values
+    BO, BH, BL, BC = b.open.values, b.high.values, b.low.values, b.close.values
+
+    asia, lon, ny = Sess(), Sess(), Sess()
+    lv15, lv05 = [], []
+    prevOn = {"a": False, "l": False, "n": False}
+    lastQt = lastFt = None
+    prevMn = None
+    m1Hi = m1Lo = None
+    # EQ (1m)
+    lastMin = None
+    curMinOHLC = None
+    dAct = uAct = False
+    dTop = dBot = uTop = uBot = None
+    # minut-status
+    curM = None
+    mHi = mLo = mBad = False
+    minTrades = []
+    trades = []
+    stats = {"noDir": 0, "slBad": 0, "both": 0, "ugyldig": 0}
+    o = None  # aabent trade
+
+    for i in range(len(T)):
+        t = int(T[i])
+        lt = pd.Timestamp(t, unit="s", tz="UTC").tz_convert(TZ)
+        tMin = lt.hour * 60 + lt.minute
+        inWin = WIN_S <= tMin < WIN_E
+        isOpenM = tMin == WIN_S
+        minB = t // 60
+        hi, lo, cl, op = H[i], L[i], C[i], O[i]
+        bh, bl, bc, bo = BH[i], BL[i], BC[i], BO[i]
+        bok = not pd.isna(bc)
+
+        newMin = lt.minute != prevMn
+        prevMn = lt.minute
+        m1Hi = hi if newMin or m1Hi is None else max(m1Hi, hi)
+        m1Lo = lo if newMin or m1Lo is None else min(m1Lo, lo)
+
+        aOn = ASIA[0] <= tMin < ASIA[1]
+        lOn = LON[0] <= tMin < LON[1]
+        nOn = NY[0] <= tMin < NY[1]
+        aStart, lStart, nStart = aOn and not prevOn["a"], lOn and not prevOn["l"], nOn and not prevOn["n"]
+        prevOn.update(a=aOn, l=lOn, n=nOn)
+
+        def build(s, isStart):
+            if isStart:
+                s.aHi, s.aLo = hi, lo
+                s.bHi, s.bLo = (bh, bl) if bok else (None, None)
+                s.hi, s.lo = St(), St()
+            else:
+                s.aHi, s.aLo = max(s.aHi, hi), min(s.aLo, lo)
+                if bok:
+                    s.bHi = bh if s.bHi is None else max(s.bHi, bh)
+                    s.bLo = bl if s.bLo is None else min(s.bLo, bl)
+
+        if aOn:
+            build(asia, aStart)
+        if lOn:
+            build(lon, lStart)
+        if nOn:
+            build(ny, nStart)
+
+        # 15m / 5m niveauer
+        qT = prev_period(g15a, t // 900 * 900)
+        fT = prev_period(g05a, t // 300 * 300)
+        newM15 = qT is not None and qT != lastQt
+        if newM15:
+            lastQt = qT
+        newM05 = fT is not None and fT != lastFt
+        if newM05:
+            lastFt = fT
+
+        def inNyAt(pt):
+            if pt is None:
+                return False
+            ll = pd.Timestamp(pt, unit="s", tz="UTC").tz_convert(TZ)
+            m = ll.hour * 60 + ll.minute
+            return NY[0] <= m < WIN_S
+
+        if nStart:
+            lv15, lv05 = [], []
+        if newM15 and inNyAt(qT):
+            eT = prev_period(g15b, t // 900 * 900)
+            if eT is not None:
+                qa, qb = g15a.loc[qT], g15b.loc[eT]
+                lv15 += [Lv(qa.h, qb.h, True), Lv(qa.l, qb.l, False)]
+        if newM05 and inNyAt(fT):
+            gT = prev_period(g05b, t // 300 * 300)
+            if gT is not None:
+                fa, fb = g05a.loc[fT], g05b.loc[gT]
+                lv05 += [Lv(fa.h, fb.h, True), Lv(fa.l, fb.l, False)]
+        if nOn:
+            for m in lv15 + lv05:
+                aHit = hi >= m.a if m.isHi else lo <= m.a
+                bHit = bok and (bh >= m.b if m.isHi else bl <= m.b)
+                if aHit or bHit:
+                    m.dead = True
+        else:
+            for m in lv05:
+                if (hi >= m.a) if m.isHi else (lo <= m.a):
+                    m.st.aTook = True
+
+        # tjek niveauer
+        h = Hit()
+
+        def check(st, aL, bL, isHi, nm):
+            if st is None or aL is None or bL is None:
+                return
+            aSweep = hi >= aL + TICK if isHi else lo <= aL - TICK
+            bSweep = bok and (bh >= bL + TICK if isHi else bl <= bL - TICK)
+            lvlNm = nm + (" high" if isHi else " low")
+            if aSweep:
+                st.aTook = True
+            if bSweep:
+                st.bTook = True
+            if not inWin:
+                if aSweep:
+                    st.aDone = True
+                if bSweep:
+                    st.bDone = True
+                return
+            newA = not st.aDone and st.aM is None and aSweep
+            newB = not st.bDone and st.bM is None and bSweep
+            if newA:
+                st.aM = minB
+            if newB:
+                st.bM = minB
+            if newA or newB:
+                h.swHi = h.swHi or isHi
+                h.swLo = h.swLo or not isHi
+            if (newA or newB) and st.aTook and st.bTook and not (st.aDone and st.bDone):
+                h.both = True
+                st.aDone = st.bDone = True
+            if not st.aDone and st.aM is not None and st.aM != minB:
+                st.aDone = True
+            if not st.bDone and st.bM is not None and st.bM != minB:
+                st.bDone = True
+            if not h.fired:
+                dirOK = (cl < op and bok and bc < bo) if isHi else (cl > op and bok and bc > bo)
+                aBack = not st.aDone and not st.bTook and st.aM == minB and (cl < aL if isHi else cl > aL)
+                bBack = not st.bDone and not st.aTook and st.bM == minB and bok and (bc < bL if isHi else bc > bL)
+                if not dirOK and (aBack or bBack):
+                    h.noDir = True
+                slOK = (m1Hi - cl <= MAX_SL) if isHi else (cl - m1Lo <= MAX_SL)
+                if dirOK and (aBack or bBack) and not slOK:
+                    h.slBad = True
+                    st.aDone = st.bDone = True
+                if dirOK and (aBack or bBack) and slOK:
+                    h.fired, h.isShort, h.lvl, h.src = True, isHi, aL, lvlNm
+                    h.who = "NQ + ES" if aBack and bBack else ("NQ" if aBack else "ES")
+                    st.aDone = st.bDone = True
+
+        if not nOn:
+            check(ny.hi, ny.aHi, ny.bHi, True, "NY PRE")
+            check(ny.lo, ny.aLo, ny.bLo, False, "NY PRE")
+        if not lOn:
+            check(lon.hi, lon.aHi, lon.bHi, True, "London")
+            check(lon.lo, lon.aLo, lon.bLo, False, "London")
+        if not aOn:
+            check(asia.hi, asia.aHi, asia.bHi, True, "Asia")
+            check(asia.lo, asia.aLo, asia.bLo, False, "Asia")
+        if not nOn and tMin < M15_END:
+            for m in lv15:
+                isExt = abs(m.a - (ny.aHi or 0)) < TICK / 2 if m.isHi else abs(m.a - (ny.aLo or 0)) < TICK / 2
+                if not m.dead and not isExt:
+                    check(m.st, m.a, m.b, m.isHi, "15m")
+
+        if inWin:
+            stats["noDir"] += h.noDir
+            stats["slBad"] += h.slBad
+            stats["both"] += h.both
+
+        # EQ paa 1m: vurder den netop lukkede minut-candle paa foerste bar i nyt minut
+        new1m = lastMin is not None and minB != lastMin
+        if new1m:
+            o1, h1, l1, c1 = curMinOHLC
+            own = (h1 + l1) / 2
+            bearE = c1 < o1 and c1 < own
+            bullE = c1 > o1 and c1 > own
+        else:
+            bearE = bullE = False
+        if lastMin is None or minB != lastMin:
+            curMinOHLC = [op, hi, lo, cl]
+            lastMin = minB
+        else:
+            curMinOHLC[1] = max(curMinOHLC[1], hi)
+            curMinOHLC[2] = min(curMinOHLC[2], lo)
+            curMinOHLC[3] = cl
+        if dAct:
+            dBot = min(dBot, lo)
+            if hi >= (dTop + dBot) / 2:
+                dAct = False
+        if bearE and not dAct:
+            dTop, dBot, dAct = h1, min(l1, lo), True
+        if uAct:
+            uTop = max(uTop, hi)
+            if lo <= (uBot + uTop) / 2:
+                uAct = False
+        if bullE and not uAct:
+            uBot, uTop, uAct = l1, max(h1, hi), True
+
+        # minut-status
+        if minB != curM:
+            curM, mHi, mLo, mBad = minB, False, False, False
+            minTrades = []
+        if inWin:
+            mHi = mHi or h.swHi
+            mLo = mLo or h.swLo
+        justBad = mHi and mLo and not mBad
+        if justBad:
+            mBad = True
+            for tr in minTrades:
+                tr["status"] = "UGYLDIG (begge sider samme minut)"
+                stats["ugyldig"] += 1
+            if o is not None and o["minB"] == minB:
+                o = None
+
+        # aabent trade
+        if o is not None:
+            hitSL = hi >= o["sl"] if o["short"] else lo <= o["sl"]
+            hitTP = lo <= o["tp"] if o["short"] else hi >= o["tp"]
+            if hitSL or hitTP:
+                tr = o["rec"]
+                if hitSL:
+                    pts = (o["entry"] - o["sl"]) if o["short"] else (o["sl"] - o["entry"])
+                    tr["resultat"] = "BE" if o["beHit"] else "SL"
+                else:
+                    pts = abs(o["tp"] - o["entry"])
+                    tr["resultat"] = "TP"
+                tr["points"] = round(pts, 2)
+                tr["R"] = round(pts / 10, 2)
+                tr["exit"] = lt.strftime("%H:%M:%S")
+                o = None
+            else:
+                if not o["beHit"] and o["be"] is not None and o["bars"] >= 2 and \
+                        (lo <= o["be"] if o["short"] else hi >= o["be"]):
+                    o["beHit"] = True
+                    o["sl"] = o["entry"]
+                o["bars"] += 1
+
+        # nyt trade
+        if h.fired and not mBad:
+            sh, px = h.isShort, cl
+            # BE
+            cands = []
+            elo = (uBot if uAct else None) if sh else (dBot if dAct else None)
+            ehi = (uTop if uAct else None) if sh else (dTop if dAct else None)
+            if elo is not None:
+                cands += [((elo + ehi) / 2, "EQ"), (elo + (0.75 if sh else 0.25) * (ehi - elo), "0.75" if sh else "0.25")]
+            for nm, s in (("Asia", asia), ("London", lon), ("NY PRE", ny)):
+                st = s.lo if sh else s.hi
+                if st is not None and not st.aTook:
+                    cands.append(((s.aLo if sh else s.aHi), nm + (" low" if sh else " high")))
+            for m in lv15:
+                if m.isHi != sh and not m.dead and not m.st.aTook:
+                    cands.append((m.a, "15m low" if sh else "15m high"))
+            if isOpenM:
+                for m in lv05:
+                    if m.isHi != sh and not m.dead and not m.st.aTook:
+                        cands.append((m.a, "5m low" if sh else "5m high"))
+            be, beS = None, "-"
+            for cv, cn in cands:
+                if cv is None:
+                    continue
+                d = abs(px - cv)
+                if (cv < px if sh else cv > px) and BE_MIN <= d <= BE_MAX and (be is None or d < abs(px - be)):
+                    be, beS = cv, cn
+            # SL / TP
+            sl = max(m1Hi, px + MIN_SL) if sh else min(m1Lo, px - MIN_SL)
+            tcs = []
+            if uAct:
+                tcs.append(((uBot + uTop) / 2, "EQ"))
+            if dAct:
+                tcs.append(((dBot + dTop) / 2, "EQ"))
+            for nm, s in (("Asia", asia), ("London", lon), ("NY PRE", ny)):
+                st = s.lo if sh else s.hi
+                if st is not None and not st.aTook:
+                    tcs.append(((s.aLo if sh else s.aHi), nm + (" low" if sh else " high")))
+            tp, tpS = None, "75p"
+            for cv, cn in tcs:
+                if cv is None:
+                    continue
+                d = (px - cv) if sh else (cv - px)
+                if TP_MIN <= d <= TP_MAX and (tp is None or d < abs(px - tp)):
+                    tp, tpS = cv, cn
+            if tp is None:
+                tp = px - TP_MAX if sh else px + TP_MAX
+            if o is not None:
+                o["rec"]["resultat"] = "AFLOEST"
+                o["rec"]["exit"] = lt.strftime("%H:%M:%S")
+            rec = {
+                "dato": lt.strftime("%Y-%m-%d"), "tid": lt.strftime("%H:%M:%S"),
+                "retning": "SHORT" if sh else "LONG", "niveau": h.src, "swept": h.who,
+                "entry": px, "sl": sl, "sl_pts": round(abs(px - sl), 2),
+                "tp": tp, "tp_kilde": tpS, "be": be, "be_kilde": beS,
+                "status": "OK", "resultat": "AABEN", "exit": "", "points": None, "R": None,
+            }
+            trades.append(rec)
+            minTrades.append(rec)
+            o = {"short": sh, "entry": px, "sl": sl, "tp": tp, "be": be, "beHit": False,
+                 "bars": 0, "minB": minB, "rec": rec}
+
+    d0, d1 = pd.Timestamp(start).date(), pd.Timestamp(end).date()
+    out = [r for r in trades if d0 <= pd.Timestamp(r["dato"]).date() <= d1]
+    return out, stats
+
+
+if __name__ == "__main__":
+    nq, es, start, end, csv_out = sys.argv[1:6]
+    tr, stats = run(nq, es, start, end)
+    df = pd.DataFrame(tr)
+    df.to_csv(csv_out, index=False)
+    pd.set_option("display.width", 250)
+    pd.set_option("display.max_rows", 500)
+    print(df.to_string(index=False))
+    print(stats)
