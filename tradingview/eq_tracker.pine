@@ -96,9 +96,9 @@ showPreOpen    = input.bool(true, "Vis EQ'er fra foer market open", group = g4,
      tooltip = "Slaa fra for at holde chartet rent indtil aabningen - saa oprettes der slet ingen EQ'er i timerne foer market open.")
 showOpenMarker = input.bool(true, "Marker nulstillings-baren (blaa baggrund)", group = g4,
      tooltip = "Farver den bar hvor nulstillingen sker. Slaa fra naar du har bekraeftet at den rammer rigtigt.")
-openHour       = input.int(15, "Market open - time",  minval = 0, maxval = 23, group = g4)
-openMin        = input.int(30, "Market open - minut", minval = 0, maxval = 59, group = g4)
-sessTz         = input.string("Europe/Copenhagen", "Tidszone", group = g4,
+openHour       = input.int(9, "Market open - time (NY)",  minval = 0, maxval = 23, group = g4)
+openMin        = input.int(30, "Market open - minut (NY)", minval = 0, maxval = 59, group = g4)
+sessTz         = input.string("America/New_York", "Tidszone (NY)", group = g4,
      tooltip = "Tidszonen som klokkeslettet ovenfor laeses i. Europe/Copenhagen 15:30 = dansk aabning. Vaelg America/New_York 09:30 hvis du vil vaere immun over for at DST skifter paa forskellige datoer i EU og USA.")
 
 g3 = "Udseende"

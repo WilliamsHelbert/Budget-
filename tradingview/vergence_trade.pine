@@ -82,23 +82,26 @@ cmpSym = input.symbol("CME_MINI:ES1!", "Sammenlign med", group = g1,
      tooltip = "Ligger du paa NQ, skal denne staa paa ES - og omvendt.")
 
 g2 = "Sessioner"
-tz       = input.string("Europe/Copenhagen", "Tidszone", group = g2)
-asiaSess = input.session("0200-0800", "Asia",   group = g2)
-lonSess  = input.session("0800-1400", "London", group = g2)
-nySess   = input.session("1400-1530", "NY PRE", group = g2)
+// Tider i New York-tid: market open er altid 09:30 NY (14:30 dansk i ugerne i marts og okt/nov
+// hvor USA og Europa skifter sommertid paa hver sin dato).
+tz       = input.string("America/New_York", "Tidszone (NY)", group = g2)
+dispTz   = input.string("Europe/Copenhagen", "Tidszone til visning", group = g2)
+asiaSess = input.session("2000-0200", "Asia (NY-tid)",   group = g2, tooltip = "= 02:00-08:00 dansk")
+lonSess  = input.session("0200-0800", "London (NY-tid)", group = g2, tooltip = "= 08:00-14:00 dansk")
+nySess   = input.session("0800-0930", "NY PRE (NY-tid)", group = g2, tooltip = "= 14:00-15:30 dansk")
 useAsia  = input.bool(true, "Asia",   group = g2, inline = "s")
 useLon   = input.bool(true, "London", group = g2, inline = "s")
 useNy    = input.bool(true, "NY PRE", group = g2, inline = "s")
 use15    = input.bool(true, "15m",    group = g2, inline = "s")
 
 g3 = "Vindue"
-openHour = input.int(15, "Start - time",  minval = 0, maxval = 23, group = g3)
-openMin  = input.int(30, "Start - minut", minval = 0, maxval = 59, group = g3)
-endHour  = input.int(16, "Slut - time (til, ikke med)",  minval = 0, maxval = 23, group = g3)
-endMin   = input.int(0,  "Slut - minut (til, ikke med)", minval = 0, maxval = 59, group = g3,
+openHour = input.int(9, "Start - time (NY)",  minval = 0, maxval = 23, group = g3)
+openMin  = input.int(30, "Start - minut (NY)", minval = 0, maxval = 59, group = g3)
+endHour  = input.int(10, "Slut - time NY (til, ikke med)",  minval = 0, maxval = 23, group = g3)
+endMin   = input.int(0,  "Slut - minut NY (til, ikke med)", minval = 0, maxval = 59, group = g3,
      tooltip = "16:00 betyder at 15:59 er det sidste minut med.")
-m15H     = input.int(15, "15m-niveauer gaelder til - time",  minval = 0, maxval = 23, group = g3)
-m15M     = input.int(31, "15m-niveauer gaelder til - minut", minval = 0, maxval = 59, group = g3,
+m15H     = input.int(9, "15m-niveauer gaelder til - time (NY)",  minval = 0, maxval = 23, group = g3)
+m15M     = input.int(31, "15m-niveauer gaelder til - minut (NY)", minval = 0, maxval = 59, group = g3,
      tooltip = "Samme som 'Fjern igen' paa Session Levels. Default 15:31.")
 maxGap   = input.int(5, "Max minutter mellem de to sweeps", minval = 0, maxval = 60, group = g3,
      tooltip = "NQ 15:31 og 5 -> ES skal tage niveauet senest 15:36.")
@@ -584,7 +587,7 @@ var string tTime   = ""
 var int    tM      = na
 
 setBox(string st, color c, string lv, string be) =>
-    [st, c, lv, be, str.format_time(time, "HH:mm:ss", tz)]
+    [st, c, lv, be, str.format_time(time, "HH:mm:ss", dispTz)]
 
 if newDay
     bxStatus := ""
@@ -814,7 +817,7 @@ if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
             bxStatus := "Ingen Vergence - BE (" + bc.src + ") allerede ramt"
             bxCol    := color.gray
             bxBE     := ""
-            bxTime   := str.format_time(time, "HH:mm:ss", tz)
+            bxTime   := str.format_time(time, "HH:mm:ss", dispTz)
         if not bc.bad
             entShort := sh
             entLong  := not sh
@@ -920,7 +923,7 @@ if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
                 array.push(minLbls, oSlLb)
                 array.push(minLbls, oEnLb)
                 array.push(minLbls, oTpLb)
-            oTime  := str.format_time(time, "HH:mm:ss", tz)
+            oTime  := str.format_time(time, "HH:mm:ss", dispTz)
             mxDel  := mxLn     // slettes paa naeste candle
             mxDelT := time_close + mxKeepS * 1000
             mxLn   := na
@@ -930,7 +933,7 @@ if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
             bxCol    := c
             bxLvl    := armTxt
             bxBE     := not showBE ? "" : (na(bc.v) ? "-" : bc.src) + "    TP: " + tpS
-            bxTime   := str.format_time(time, "HH:mm:ss", tz)
+            bxTime   := str.format_time(time, "HH:mm:ss", dispTz)
             tStatus  := bxStatus
             tCol     := bxCol
             tLvl     := bxLvl

@@ -1,6 +1,12 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v3.4)
+//  Sweep Trade (SMT)  (v3.5)
+//  ---------------------------------------------------------------
+//  NYT I v3.5
+//    - Alle tider regnes i New York-tid (open 09:30 NY). Foer stod de
+//      fast i dansk tid, saa scriptet ramte forkert i ugerne i marts og
+//      okt/nov hvor USA og Europa skifter sommertid paa hver sin dato
+//      (der er open 14:30 dansk). Tiderne i boksen vises i dansk tid.
 //  ---------------------------------------------------------------
 //  NYT I v3.4
 //    - Taget regnes paa 15m-candles: laver begge indeks deres session
@@ -129,10 +135,13 @@ cmpSym = input.symbol("CME_MINI:ES1!", "Sammenlign med", group = g1,
      tooltip = "Ligger du paa NQ, skal denne staa paa ES - og omvendt.")
 
 g2 = "Sessioner (samme som Session Levels)"
-tz       = input.string("Europe/Copenhagen", "Tidszone", group = g2)
-asiaSess = input.session("0200-0800", "Asia",   group = g2)
-lonSess  = input.session("0800-1400", "London", group = g2)
-nySess   = input.session("1400-1530", "NY PRE", group = g2)
+// Alt regnes i New York-tid, saa market open altid er 09:30 NY - ogsaa i de
+// uger hvor USA og Europa skifter sommertid paa forskellige datoer (saa er open 14:30 dansk).
+tz       = input.string("America/New_York", "Tidszone (NY)", group = g2)
+dispTz   = input.string("Europe/Copenhagen", "Tidszone til visning", group = g2)
+asiaSess = input.session("2000-0200", "Asia (NY-tid)",   group = g2, tooltip = "= 02:00-08:00 dansk")
+lonSess  = input.session("0200-0800", "London (NY-tid)", group = g2, tooltip = "= 08:00-14:00 dansk")
+nySess   = input.session("0800-0930", "NY PRE (NY-tid)", group = g2, tooltip = "= 14:00-15:30 dansk")
 useTaget = input.bool(true, "Taget-regel", group = g2,
      tooltip = "Laver det ene indeks sin session high/low og det andet ikke, er det andet indeks' 1m high/low i det minut 'Taget'. Tager det ene indeks sit niveau og det andet sin Taget, er det ikke SMT.")
 useAsia  = input.bool(true, "Asia",   group = g2, inline = "s")
@@ -141,14 +150,14 @@ useNy    = input.bool(true, "NY PRE", group = g2, inline = "s")
 use15    = input.bool(true, "15m",    group = g2, inline = "s")
 
 g3 = "Vindue"
-openHour = input.int(15, "Start - time",  minval = 0, maxval = 23, group = g3)
-openMin  = input.int(30, "Start - minut", minval = 0, maxval = 59, group = g3)
-endHour  = input.int(16, "Slut - time (til, ikke med)",  minval = 0, maxval = 23, group = g3)
-endMin   = input.int(0,  "Slut - minut (til, ikke med)", minval = 0, maxval = 59, group = g3)
-m15H     = input.int(15, "15m-niveauer gaelder til - time",  minval = 0, maxval = 23, group = g3)
+openHour = input.int(9, "Start - time (NY)",  minval = 0, maxval = 23, group = g3)
+openMin  = input.int(30, "Start - minut (NY)", minval = 0, maxval = 59, group = g3)
+endHour  = input.int(10, "Slut - time NY (til, ikke med)",  minval = 0, maxval = 23, group = g3)
+endMin   = input.int(0,  "Slut - minut NY (til, ikke med)", minval = 0, maxval = 59, group = g3)
+m15H     = input.int(9, "15m-niveauer gaelder til - time (NY)",  minval = 0, maxval = 23, group = g3)
 use369   = input.bool(true, "Kun paa 3-6-9 minutter", group = g3,
      tooltip = "SMT kun naar minuttets tvaersum er 3, 6 eller 9: 15:30, 33, 36, 42, 45, 51 og 54. Sweepet og entry skal ske i et af de minutter.")
-m15M     = input.int(31, "15m-niveauer gaelder til - minut", minval = 0, maxval = 59, group = g3,
+m15M     = input.int(31, "15m-niveauer gaelder til - minut (NY)", minval = 0, maxval = 59, group = g3,
      tooltip = "Samme som 'Fjern igen' paa Session Levels. Default 15:31.")
 
 g6 = "Regler"
@@ -790,7 +799,7 @@ if inWin and hit.swTxt != "" and not mBad and not dayBad
     bxCol    := color.yellow
     bxLvl    := hit.swTxt
     bxBE     := ""
-    bxTime   := str.format_time(time, "HH:mm:ss", tz)
+    bxTime   := str.format_time(time, "HH:mm:ss", dispTz)
     pendM    := minB
 
 // Close tilbage, men ikke begge samme vej -> vis grunden (venter stadig)
@@ -805,7 +814,7 @@ if inWin and hit.both and not hit.fired and not mBad
     bxCol    := color.gray
     bxLvl    := ""
     bxBE     := ""
-    bxTime   := str.format_time(time, "HH:mm:ss", tz)
+    bxTime   := str.format_time(time, "HH:mm:ss", dispTz)
 
 // Close tilbage, men SL ville vaere over max -> ugyldigt
 if not na(pendM) and pendM == minB and hit.slBad and not hit.fired
@@ -854,7 +863,7 @@ if inWin and hit.swTxt != "" and dayBad and not mBad
     bxCol    := color.gray
     bxLvl    := hit.swTxt
     bxBE     := ""
-    bxTime   := str.format_time(time, "HH:mm:ss", tz)
+    bxTime   := str.format_time(time, "HH:mm:ss", dispTz)
 
 // Sweepet gav intet trade i sit minut -> vis sidste trade igen (eller intet)
 if not na(pendM) and pendM != minB
@@ -1027,7 +1036,7 @@ if ok
         bxCol    := color.gray
         bxLvl    := hit.src + " (" + hit.who + ")"
         bxBE     := ""
-        bxTime   := str.format_time(time, "HH:mm:ss", tz)
+        bxTime   := str.format_time(time, "HH:mm:ss", dispTz)
     if not bc.bad
         // ── Lille markering paa chartet ──
         color c = sh ? shortCol : longCol
@@ -1132,14 +1141,14 @@ if ok
             array.push(minLbls, oSlLb)
             array.push(minLbls, oEnLb)
             array.push(minLbls, oTpLb)
-        oTime  := str.format_time(time, "HH:mm:ss", tz)
+        oTime  := str.format_time(time, "HH:mm:ss", dispTz)
 
         // ── Boksen ──
         bxStatus := sh ? "SHORT" : "LONG"
         bxCol    := c
         bxLvl    := hit.src + " (" + hit.who + ")"
         bxBE     := not showBE ? "" : (na(be) ? "-" : beSrc) + "    TP: " + tpS
-        bxTime   := str.format_time(time, "HH:mm:ss", tz)
+        bxTime   := str.format_time(time, "HH:mm:ss", dispTz)
         tStatus  := bxStatus
         tCol     := bxCol
         tLvl     := bxLvl

@@ -25,21 +25,26 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-TZ = ZoneInfo("Europe/Copenhagen")
+# Alt regnes i New York-tid, saa market open altid er 09:30 NY - ogsaa i ugerne
+# hvor USA og Europa skifter sommertid paa forskellige datoer (open = 14:30 dansk).
+# Tider i output vises som "dansk normaltid" (NY + 6 t), dvs. open = 15:30.
+TZ = ZoneInfo("America/New_York")
 TICK = 0.25
 
 # ── indstillinger (samme som scriptets standard) ──
-ASIA = (2 * 60, 8 * 60)
-LON = (8 * 60, 14 * 60)
-NY = (14 * 60, 15 * 60 + 30)
-WIN_S, WIN_E = 15 * 60 + 30, 16 * 60
-M15_END = 15 * 60 + 31
+ASIA = (20 * 60, 2 * 60)          # 02:00-08:00 dansk (krydser midnat i NY-tid)
+LON = (2 * 60, 8 * 60)            # 08:00-14:00 dansk
+NY = (8 * 60, 9 * 60 + 30)        # 14:00-15:30 dansk
+WIN_S, WIN_E = 9 * 60 + 30, 10 * 60
+M15_END = 9 * 60 + 31
 MIN_SL, MAX_SL = 10.0, 30.0
 TP_MIN, TP_MAX = 35.0, 75.0
 BE_MIN, BE_MAX = 2.0, 50.0
 USE_369 = True   # kun minutter med tvaersum 3/6/9
 USE_PRE = True   # EQ fra foer market open som BE-kandidat
 USE_TAGET = True # Taget-regel (se scriptet v3.0)
+DBG = None   # saet af datoer ('YYYY-MM-DD') -> LOG faar forklaringer for de dage
+LOG = []
 DOJI_PREV = False  # test: entry-candlen skal ogsaa lukke forbi FORRIGE 15s-close (paa begge indeks)
 
 
@@ -178,6 +183,8 @@ def run(nq_path, es_path, start, end):
         ds = lt.minute // 10 + lt.minute % 10
         is369 = (not USE_369) or ds in (3, 6, 9)
         minB = t // 60
+        dstr = lt.strftime('%Y-%m-%d')
+        dk = lt + pd.Timedelta(hours=6)   # visning: dansk normaltid
         hi, lo, cl, op = H[i], L[i], C[i], O[i]
         bh, bl, bc, bo = BH[i], BL[i], BC[i], BO[i]
         pcl, pbc = PC[i], PBC[i]
@@ -199,7 +206,7 @@ def run(nq_path, es_path, start, end):
             bq15Hi = bh if newQ15 or bq15Hi is None else max(bq15Hi, bh)
             bq15Lo = bl if newQ15 or bq15Lo is None else min(bq15Lo, bl)
 
-        aOn = ASIA[0] <= tMin < ASIA[1]
+        aOn = tMin >= ASIA[0] or tMin < ASIA[1]
         lOn = LON[0] <= tMin < LON[1]
         nOn = NY[0] <= tMin < NY[1]
         aStart, lStart, nStart = aOn and not prevOn["a"], lOn and not prevOn["l"], nOn and not prevOn["n"]
@@ -316,6 +323,11 @@ def run(nq_path, es_path, start, end):
                 st.bTgT = newTg = True
             aTk = st.aTook or st.aTgT
             bTk = st.bTook or st.bTgT
+            dbgOn = DBG is not None and dstr in DBG and WIN_S <= tMin < WIN_E
+            if dbgOn and isOpenM and lt.second == 0:
+                LOG.append((dstr, dk.strftime("%H:%M:%S"), f"STATUS {lvlNm}: NQ {aL} (taget foer: {st.aDone}) ES {bL} (taget foer: {st.bDone}) TagetNQ {aTg} TagetES {bTg}"))
+            if dbgOn and (aSweep or bSweep or newTg):
+                LOG.append((dstr, dk.strftime("%H:%M:%S"), f"SWEEP {lvlNm}: NQ={'JA' if aSweep else 'nej'} ES={'JA' if bSweep else 'nej'} | NQ taget={aTk} ES taget={bTk} doneA={st.aDone} doneB={st.bDone} 369={is369} TagetSweep={newTg}"))
             if not inWin:
                 if aSweep:
                     st.aDone = True
@@ -351,6 +363,8 @@ def run(nq_path, es_path, start, end):
                 bBack = not st.bDone and not aTk and st.bM == minB and bok and (bc < bL if isHi else bc > bL)
                 if not dirOK and (aBack or bBack):
                     h.noDir = True
+                if dbgOn and (aBack or bBack):
+                    LOG.append((dstr, dk.strftime("%H:%M:%S"), f"CLOSE TILBAGE {lvlNm} ({'NQ' if aBack else 'ES'}): NQ o/c {op}/{cl} ES o/c {bo}/{bc} retning OK={dirOK} SL={(m1Hi - cl) if isHi else (cl - m1Lo)}"))
                 slOK = (m1Hi - cl <= MAX_SL) if isHi else (cl - m1Lo <= MAX_SL)
                 if dirOK and (aBack or bBack) and not slOK:
                     h.slBad = True
@@ -460,7 +474,7 @@ def run(nq_path, es_path, start, end):
                     tr["resultat"] = "TP"
                 tr["points"] = round(pts, 2)
                 tr["R"] = round(pts / 10, 2)
-                tr["exit"] = lt.strftime("%H:%M:%S")
+                tr["exit"] = dk.strftime("%H:%M:%S")
                 o = None
             else:
                 if not o["beHit"] and o["be"] is not None and o["bars"] >= 2 and \
@@ -470,6 +484,10 @@ def run(nq_path, es_path, start, end):
                 o["bars"] += 1
 
         # nyt trade
+        if DBG is not None and dstr in DBG and h.fired and mBad:
+            LOG.append((dstr, dk.strftime("%H:%M:%S"), f"ENTRY BLOKERET: high- og low-side taget i samme minut ({h.src})"))
+        if DBG is not None and dstr in DBG and inWin and h.both:
+            LOG.append((dstr, dk.strftime("%H:%M:%S"), "BEGGE har taget niveauet -> ikke SMT"))
         if h.fired and not mBad:
             sh, px = h.isShort, cl
             # BE
@@ -542,7 +560,7 @@ def run(nq_path, es_path, start, end):
                 tp = px - TP_MAX if sh else px + TP_MAX
             if beBad:
                 trades.append({
-                    "dato": lt.strftime("%Y-%m-%d"), "tid": lt.strftime("%H:%M:%S"),
+                    "dato": lt.strftime("%Y-%m-%d"), "tid": dk.strftime("%H:%M:%S"),
                     "retning": "SHORT" if sh else "LONG", "niveau": h.src, "swept": h.who,
                     "entry": px, "sl": None, "sl_pts": None, "tp": None, "tp_kilde": "", "be": be, "be_kilde": beS,
                     "status": "UGYLDIG (BE allerede ramt)", "resultat": "", "exit": "", "points": None, "R": None,
@@ -551,9 +569,9 @@ def run(nq_path, es_path, start, end):
                 continue
             if o is not None:
                 o["rec"]["resultat"] = "AFLOEST"
-                o["rec"]["exit"] = lt.strftime("%H:%M:%S")
+                o["rec"]["exit"] = dk.strftime("%H:%M:%S")
             rec = {
-                "dato": lt.strftime("%Y-%m-%d"), "tid": lt.strftime("%H:%M:%S"),
+                "dato": lt.strftime("%Y-%m-%d"), "tid": dk.strftime("%H:%M:%S"),
                 "retning": "SHORT" if sh else "LONG", "niveau": h.src, "swept": h.who,
                 "entry": px, "sl": sl, "sl_pts": round(abs(px - sl), 2),
                 "tp": tp, "tp_kilde": tpS, "be": be, "be_kilde": beS,

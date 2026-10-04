@@ -55,14 +55,16 @@ indicator("Helbert's Hjælpe Indikator (Session Levels)", overlay = true, max_li
 
 // ─────────────────────────── INPUTS ───────────────────────────
 g1 = "Sessioner"
-tz       = input.string("Europe/Copenhagen", "Tidszone", group = g1)
-asiaSess = input.session("0200-0800", "Asia",   group = g1)
-lonSess  = input.session("0800-1400", "London", group = g1)
-nySess   = input.session("1400-1530", "NY PRE", group = g1)
+// Tider i New York-tid: market open er altid 09:30 NY (14:30 dansk i ugerne i marts og okt/nov
+// hvor USA og Europa skifter sommertid paa hver sin dato).
+tz       = input.string("America/New_York", "Tidszone (NY)", group = g1)
+asiaSess = input.session("2000-0200", "Asia (NY-tid)",   group = g1, tooltip = "= 02:00-08:00 dansk")
+lonSess  = input.session("0200-0800", "London (NY-tid)", group = g1, tooltip = "= 08:00-14:00 dansk")
+nySess   = input.session("0800-0930", "NY PRE (NY-tid)", group = g1, tooltip = "= 14:00-15:30 dansk")
 
 g2 = "Linjer"
-endHour  = input.int(16, "Linjer stopper - time",  minval = 0, maxval = 23, group = g2)
-endMin   = input.int(0,  "Linjer stopper - minut", minval = 0, maxval = 59, group = g2)
+endHour  = input.int(10, "Linjer stopper - time (NY)",  minval = 0, maxval = 23, group = g2)
+endMin   = input.int(0,  "Linjer stopper - minut (NY)", minval = 0, maxval = 59, group = g2)
 lineW    = input.int(2, "Linjetykkelse", minval = 1, maxval = 4, group = g2)
 showLbl  = input.bool(true, "Vis navn ved linjen", group = g2)
 lblSizeS = input.string("Normal", "Tekststoerrelse", options = ["Lille", "Normal", "Stor", "Kaempe"], group = g2)
@@ -96,13 +98,13 @@ m15TF   = input.timeframe("15", "Timeframe A (15m)", group = g5)
 m05TF   = input.timeframe("5",  "Timeframe B (5m)",  group = g5)
 cmpSym  = input.symbol("CME_MINI:ES1!", "Sammenlign med (gyldighed)", group = g5,
      tooltip = "Et niveau er kun gyldigt hvis det er uroert paa BEGGE symboler. Ligger du paa NQ, skal denne staa paa ES - og omvendt.")
-nyFromH = input.int(14, "NY PRE start - time",  minval = 0, maxval = 23, group = g5)
-nyFromM = input.int(0,  "NY PRE start - minut", minval = 0, maxval = 59, group = g5)
-nyToH   = input.int(15, "Market open - time",   minval = 0, maxval = 23, group = g5)
-nyToM   = input.int(30, "Market open - minut",  minval = 0, maxval = 59, group = g5)
-remH    = input.int(15, "Fjern igen - time",    minval = 0, maxval = 23, group = g5,
+nyFromH = input.int(8, "NY PRE start - time (NY)",  minval = 0, maxval = 23, group = g5)
+nyFromM = input.int(0,  "NY PRE start - minut (NY)", minval = 0, maxval = 59, group = g5)
+nyToH   = input.int(9, "Market open - time (NY)",   minval = 0, maxval = 23, group = g5)
+nyToM   = input.int(30, "Market open - minut (NY)",  minval = 0, maxval = 59, group = g5)
+remH    = input.int(9, "Fjern igen - time (NY)",    minval = 0, maxval = 23, group = g5,
      tooltip = "Niveauerne slettes paa foerste bar fra og med dette klokkeslet. Default 15:31 - altsaa lige efter open-minuttet.")
-remM    = input.int(31, "Fjern igen - minut",   minval = 0, maxval = 59, group = g5)
+remM    = input.int(31, "Fjern igen - minut (NY)",   minval = 0, maxval = 59, group = g5)
 
 // ─────────────────────────── TYPER ───────────────────────────
 type Sess
