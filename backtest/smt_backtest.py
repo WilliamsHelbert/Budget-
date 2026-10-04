@@ -36,6 +36,7 @@ M15_END = 15 * 60 + 31
 MIN_SL, MAX_SL = 10.0, 30.0
 TP_MIN, TP_MAX = 35.0, 75.0
 BE_MIN, BE_MAX = 2.0, 50.0
+USE_PRE = True   # EQ fra foer market open som BE-kandidat
 
 
 def load(path):
@@ -136,6 +137,8 @@ def run(nq_path, es_path, start, end):
     curMinOHLC = None
     dAct = uAct = False
     dTop = dBot = uTop = uBot = None
+    dLastMid = uLastMid = preD = preU = None
+    preDHit = preUHit = False
     # minut-status
     curM = None
     mHi = mLo = mBad = False
@@ -314,14 +317,26 @@ def run(nq_path, es_path, start, end):
             dBot = min(dBot, lo)
             if hi >= (dTop + dBot) / 2:
                 dAct = False
+                dLastMid = (dTop + dBot) / 2
         if bearE and not dAct:
             dTop, dBot, dAct = h1, min(l1, lo), True
         if uAct:
             uTop = max(uTop, hi)
             if lo <= (uBot + uTop) / 2:
                 uAct = False
+                uLastMid = (uBot + uTop) / 2
         if bullE and not uAct:
             uBot, uTop, uAct = l1, max(h1, hi), True
+        # EQ foer market open (til BE) - laases fra 15:30
+        if tMin < WIN_S:
+            preD = (dTop + dBot) / 2 if dAct else dLastMid
+            preU = (uBot + uTop) / 2 if uAct else uLastMid
+            preDHit = preUHit = False
+        else:
+            if preD is not None and lo <= preD <= hi:
+                preDHit = True
+            if preU is not None and lo <= preU <= hi:
+                preUHit = True
 
         # minut-status
         if minB != curM:
@@ -370,25 +385,27 @@ def run(nq_path, es_path, start, end):
             elo = (uBot if uAct else None) if sh else (dBot if dAct else None)
             ehi = (uTop if uAct else None) if sh else (dTop if dAct else None)
             if elo is not None:
-                cands += [((elo + ehi) / 2, "EQ"), (elo + (0.75 if sh else 0.25) * (ehi - elo), "0.75" if sh else "0.25")]
+                cands += [((elo + ehi) / 2, "EQ", False), (elo + (0.75 if sh else 0.25) * (ehi - elo), "0.75" if sh else "0.25", False)]
+            if USE_PRE:
+                cands += [(preD, "EQ foer open", preDHit), (preU, "EQ foer open", preUHit)]
             for nm, s in (("Asia", asia), ("London", lon), ("NY PRE", ny)):
                 st = s.lo if sh else s.hi
-                if st is not None and not st.aTook:
-                    cands.append(((s.aLo if sh else s.aHi), nm + (" low" if sh else " high")))
+                if st is not None:
+                    cands.append(((s.aLo if sh else s.aHi), nm + (" low" if sh else " high"), st.aTook))
             for m in lv15:
                 if m.isHi != sh and not m.dead and not m.st.aTook:
-                    cands.append((m.a, "15m low" if sh else "15m high"))
+                    cands.append((m.a, "15m low" if sh else "15m high", False))
             if isOpenM:
                 for m in lv05:
                     if m.isHi != sh and not m.dead and not m.st.aTook:
-                        cands.append((m.a, "5m low" if sh else "5m high"))
-            be, beS = None, "-"
-            for cv, cn in cands:
+                        cands.append((m.a, "5m low" if sh else "5m high", False))
+            be, beS, beBad = None, "-", False
+            for cv, cn, tk in cands:
                 if cv is None:
                     continue
                 d = abs(px - cv)
                 if (cv < px if sh else cv > px) and BE_MIN <= d <= BE_MAX and (be is None or d < abs(px - be)):
-                    be, beS = cv, cn
+                    be, beS, beBad = cv, cn, tk
             # SL / TP
             sl = max(m1Hi, px + MIN_SL) if sh else min(m1Lo, px - MIN_SL)
             tcs = []
@@ -409,6 +426,15 @@ def run(nq_path, es_path, start, end):
                     tp, tpS = cv, cn
             if tp is None:
                 tp = px - TP_MAX if sh else px + TP_MAX
+            if beBad:
+                trades.append({
+                    "dato": lt.strftime("%Y-%m-%d"), "tid": lt.strftime("%H:%M:%S"),
+                    "retning": "SHORT" if sh else "LONG", "niveau": h.src, "swept": h.who,
+                    "entry": px, "sl": None, "sl_pts": None, "tp": None, "tp_kilde": "", "be": be, "be_kilde": beS,
+                    "status": "UGYLDIG (BE allerede ramt)", "resultat": "", "exit": "", "points": None, "R": None,
+                })
+                stats["beRamt"] = stats.get("beRamt", 0) + 1
+                continue
             if o is not None:
                 o["rec"]["resultat"] = "AFLOEST"
                 o["rec"]["exit"] = lt.strftime("%H:%M:%S")
