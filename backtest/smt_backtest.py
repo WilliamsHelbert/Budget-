@@ -101,6 +101,8 @@ class Hit:
     who: str = ""
     swHi: bool = False
     swLo: bool = False
+    sHi: bool = False
+    sLo: bool = False
     both: bool = False
     noDir: bool = False
     slBad: bool = False
@@ -153,6 +155,7 @@ def run(nq_path, es_path, start, end):
     dTop = dBot = uTop = uBot = None
     dLastMid = uLastMid = preD = preU = None
     preDHitM = preUHitM = None
+    dHitM = uHitM = sHiM = sLoM = None
     # minut-status
     curM = None
     mHi = mLo = mBad = False
@@ -280,6 +283,12 @@ def run(nq_path, es_path, start, end):
             aSweep = hi >= aL + TICK if isHi else lo <= aL - TICK
             bSweep = bok and (bh >= bL + TICK if isHi else bl <= bL - TICK)
             lvlNm = nm + (" high" if isHi else " low")
+            # session high/low taget i vinduet (kun foerste gang - et allerede taget niveau taeller ikke)
+            if inWin and aSweep and not st.aTook and nm != "15m":
+                if isHi:
+                    h.sHi = True
+                else:
+                    h.sLo = True
             if aSweep:
                 st.aTook = True
             if bSweep:
@@ -350,6 +359,10 @@ def run(nq_path, es_path, start, end):
                 if not m.dead and not isExt:
                     check(m.st, m.a, m.b, m.isHi, "15m")
 
+        if h.sHi:
+            sHiM = minB
+        if h.sLo:
+            sLoM = minB
         if inWin:
             stats["noDir"] += h.noDir
             stats["slBad"] += h.slBad
@@ -376,6 +389,7 @@ def run(nq_path, es_path, start, end):
             if hi >= (dTop + dBot) / 2:
                 dAct = False
                 dLastMid = (dTop + dBot) / 2
+                dHitM = minB
         if bearE and not dAct:
             dTop, dBot, dAct = h1, min(l1, lo), True
         if uAct:
@@ -383,6 +397,7 @@ def run(nq_path, es_path, start, end):
             if lo <= (uBot + uTop) / 2:
                 uAct = False
                 uLastMid = (uBot + uTop) / 2
+                uHitM = minB
         if bullE and not uAct:
             uBot, uTop, uAct = l1, max(h1, hi), True
         # EQ foer market open (til BE) - laases fra 15:30
@@ -471,6 +486,12 @@ def run(nq_path, es_path, start, end):
                 return -BE_MIN <= d <= BE_MAX
             if USE_PRE and (preTaken(preD, preDHitM) or preTaken(preU, preUHitM)):
                 beBad, beS = True, "EQ foer open"
+            # liq i trade-retningen taget i entry-minuttet
+            eqT = (uHitM == minB or preUHitM == minB) if sh else (dHitM == minB or preDHitM == minB)
+            slT = (sLoM == minB) if sh else (sHiM == minB)
+            if eqT or slT:
+                beBad = True
+                beS = ("bullish EQ" if sh else "bearish EQ") if eqT else ("session low" if sh else "session high")
             # SL / TP
             sl = max(m1Hi, px + MIN_SL) if sh else min(m1Lo, px - MIN_SL)
             tcs = []
