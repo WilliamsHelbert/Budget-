@@ -148,6 +148,7 @@ def run(nq_path, es_path, start, end):
     prevMn = None
     m1Hi = m1Lo = None
     bm1Hi = bm1Lo = None
+    prevQ15 = aq15Hi = aq15Lo = bq15Hi = bq15Lo = None
     # EQ (1m)
     lastMin = None
     curMinOHLC = None
@@ -185,6 +186,14 @@ def run(nq_path, es_path, start, end):
         if bok:
             bm1Hi = bh if newMin or bm1Hi is None else max(bm1Hi, bh)
             bm1Lo = bl if newMin or bm1Lo is None else min(bm1Lo, bl)
+        q15B = t // 900
+        newQ15 = q15B != prevQ15
+        prevQ15 = q15B
+        aq15Hi = hi if newQ15 or aq15Hi is None else max(aq15Hi, hi)
+        aq15Lo = lo if newQ15 or aq15Lo is None else min(aq15Lo, lo)
+        if bok:
+            bq15Hi = bh if newQ15 or bq15Hi is None else max(bq15Hi, bh)
+            bq15Lo = bl if newQ15 or bq15Lo is None else min(bq15Lo, bl)
 
         aOn = ASIA[0] <= tMin < ASIA[1]
         lOn = LON[0] <= tMin < LON[1]
@@ -197,29 +206,29 @@ def run(nq_path, es_path, start, end):
                 s.aHi, s.aLo = hi, lo
                 s.bHi, s.bLo = (bh, bl) if bok else (None, None)
                 s.hi, s.lo = St(), St()
-                s.aHiM = s.bHiM = s.aLoM = s.bLoM = minB
+                s.aHiM = s.bHiM = s.aLoM = s.bLoM = q15B
                 s.aTgH = s.bTgH = s.aTgL = s.bTgL = None
             else:
                 if hi >= s.aHi:
-                    s.aHiM = minB
+                    s.aHiM = q15B
                 if lo <= s.aLo:
-                    s.aLoM = minB
+                    s.aLoM = q15B
                 if bok and (s.bHi is None or bh >= s.bHi):
-                    s.bHiM = minB
+                    s.bHiM = q15B
                 if bok and (s.bLo is None or bl <= s.bLo):
-                    s.bLoM = minB
+                    s.bLoM = q15B
                 s.aHi, s.aLo = max(s.aHi, hi), min(s.aLo, lo)
                 if bok:
                     s.bHi = bh if s.bHi is None else max(s.bHi, bh)
                     s.bLo = bl if s.bLo is None else min(s.bLo, bl)
-            if s.aHiM == minB:
-                s.bTgH = bm1Hi
-            if s.bHiM == minB:
-                s.aTgH = m1Hi
-            if s.aLoM == minB:
-                s.bTgL = bm1Lo
-            if s.bLoM == minB:
-                s.aTgL = m1Lo
+            if s.aHiM == q15B:
+                s.bTgH = bq15Hi
+            if s.bHiM == q15B:
+                s.aTgH = aq15Hi
+            if s.aLoM == q15B:
+                s.bTgL = bq15Lo
+            if s.bLoM == q15B:
+                s.aTgL = aq15Lo
 
         def tg(s, isHi):
             if not USE_TAGET:
@@ -386,23 +395,26 @@ def run(nq_path, es_path, start, end):
             curMinOHLC[2] = min(curMinOHLC[2], lo)
             curMinOHLC[3] = cl
         if dAct:
-            dBot = min(dBot, lo)
+            # tjek mod linjen FOER barens egen low flytter den
             if hi >= (dTop + dBot) / 2:
                 dAct = False
                 dLastMid = (dTop + dBot) / 2
                 if dHitM != minB:
                     dHitT = t
                 dHitM = minB
+            else:
+                dBot = min(dBot, lo)
         if bearE and not dAct:
             dTop, dBot, dAct = h1, min(l1, lo), True
         if uAct:
-            uTop = max(uTop, hi)
             if lo <= (uBot + uTop) / 2:
                 uAct = False
                 uLastMid = (uBot + uTop) / 2
                 if uHitM != minB:
                     uHitT = t
                 uHitM = minB
+            else:
+                uTop = max(uTop, hi)
         if bullE and not uAct:
             uBot, uTop, uAct = l1, max(h1, hi), True
         # EQ foer market open (til BE) - laases fra 15:30

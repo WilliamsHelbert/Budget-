@@ -1,6 +1,13 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v3.3)
+//  Sweep Trade (SMT)  (v3.4)
+//  ---------------------------------------------------------------
+//  NYT I v3.4
+//    - Taget regnes paa 15m-candles: laver begge indeks deres session
+//      high/low i SAMME 15m-candle, er der ingen Taget. Ellers er Taget
+//      det andet indeks' high/low i den 15m-candle.
+//    - EQ ramt: en bar tjekkes mod EQ-linjen FOER barens egen low/high
+//      flytter den (ellers kan en bar 'ramme' en linje den selv flyttede).
 //  ---------------------------------------------------------------
 //  NYT I v3.3
 //    - EQ / session liq taget i entry-minuttet goer kun tradet ugyldigt
@@ -21,7 +28,7 @@
 //  NYT I v3.0
 //    - "Taget"-regel: laver det ene indeks sin session high/low (equal
 //      taeller med), og det andet ikke goer, gemmes det andet indeks'
-//      1m high/low i samme minut som "Taget". Sweeper det ene indeks
+//      high/low i samme 15m-candle som "Taget" (v3.4: 15m, ikke 1m). Sweeper det ene indeks
 //      sit niveau og det andet sin Taget i vinduet, har begge taget den
 //      samme high/low -> ikke SMT. Kan slaas fra under "Sessioner".
 //  ---------------------------------------------------------------
@@ -244,6 +251,17 @@ var float bm1Hi = na
 var float bm1Lo = na
 bm1Hi := na(bHigh) ? bm1Hi : newMin ? bHigh : math.max(nz(bm1Hi, bHigh), bHigh)
 bm1Lo := na(bLow)  ? bm1Lo : newMin ? bLow  : math.min(nz(bm1Lo, bLow),  bLow)
+// 15m-candlens high/low paa begge indeks (til Taget - samme som et 15m-chart)
+int   q15B   = int(time / 900000)
+bool  newQ15 = q15B != nz(q15B[1], -1)
+var float aq15Hi = na
+var float aq15Lo = na
+var float bq15Hi = na
+var float bq15Lo = na
+aq15Hi := newQ15 ? high : math.max(nz(aq15Hi, high), high)
+aq15Lo := newQ15 ? low  : math.min(nz(aq15Lo, low),  low)
+bq15Hi := na(bHigh) ? bq15Hi : newQ15 ? bHigh : math.max(nz(bq15Hi, bHigh), bHigh)
+bq15Lo := na(bLow)  ? bq15Lo : newQ15 ? bLow  : math.min(nz(bq15Lo, bLow),  bLow)
 
 int  aT = time(timeframe.period, asiaSess, tz)
 int  lT = time(timeframe.period, lonSess,  tz)
@@ -322,40 +340,40 @@ build(Sess s, bool isStart) =>
         s.bLo := bLow
         s.hi  := St.new()
         s.lo  := St.new()
-        s.aHiM := minB
-        s.bHiM := minB
-        s.aLoM := minB
-        s.bLoM := minB
+        s.aHiM := q15B
+        s.bHiM := q15B
+        s.aLoM := q15B
+        s.bLoM := q15B
         s.aTgH := na
         s.bTgH := na
         s.aTgL := na
         s.bTgL := na
     else
-        // Nyt (eller equal) session high/low -> husk minuttet
+        // Nyt (eller equal) session high/low -> husk 15m-candlen
         if high >= s.aHi
-            s.aHiM := minB
+            s.aHiM := q15B
         if low <= s.aLo
-            s.aLoM := minB
+            s.aLoM := q15B
         if not na(bHigh) and bHigh >= nz(s.bHi, bHigh)
-            s.bHiM := minB
+            s.bHiM := q15B
         if not na(bLow) and bLow <= nz(s.bLo, bLow)
-            s.bLoM := minB
+            s.bLoM := q15B
         s.aHi := math.max(s.aHi, high)
         s.aLo := math.min(s.aLo, low)
         s.bHi := na(bHigh) ? s.bHi : math.max(nz(s.bHi, bHigh), bHigh)
         s.bLo := na(bLow)  ? s.bLo : math.min(nz(s.bLo, bLow),  bLow)
-    // Det andet indeks' 1m high/low i minuttet hvor indekset lavede sit niveau
-    if s.aHiM == minB
-        s.bTgH := bm1Hi
-    if s.bHiM == minB
-        s.aTgH := m1Hi
-    if s.aLoM == minB
-        s.bTgL := bm1Lo
-    if s.bLoM == minB
-        s.aTgL := m1Lo
+    // Det andet indeks' high/low i den 15m-candle hvor indekset lavede sit niveau
+    if s.aHiM == q15B
+        s.bTgH := bq15Hi
+    if s.bHiM == q15B
+        s.aTgH := aq15Hi
+    if s.aLoM == q15B
+        s.bTgL := bq15Lo
+    if s.bLoM == q15B
+        s.aTgL := aq15Lo
     true
 
-// Taget-niveauet for een side (na hvis begge lavede niveauet i samme minut)
+// Taget-niveauet for een side (na hvis begge lavede niveauet i samme 15m-candle)
 tgA(Sess s, bool isHi) =>
     not useTaget ? na : isHi ? (s.aHiM != s.bHiM ? s.aTgH : na) : (s.aLoM != s.bLoM ? s.aTgL : na)
 tgB(Sess s, bool isHi) =>
@@ -623,13 +641,16 @@ var int   uHitM = na        // minuttet hvor en bullish EQ sidst blev ramt
 var int   dHitT = na        // foerste bar i minuttet hvor det skete
 var int   uHitT = na
 if dAct
-    dBot := math.min(dBot, low)
-    if barstate.isconfirmed and high >= (dTop + dBot) / 2
+    // Tjek mod linjen FOER barens egen low flytter den
+    float dMid0 = (dTop + dBot) / 2
+    if barstate.isconfirmed and high >= dMid0
         dAct := false
-        dLastMid := (dTop + dBot) / 2
+        dLastMid := dMid0
         if nz(dHitM, -1) != minB
             dHitT := time
         dHitM := minB
+    else
+        dBot := math.min(dBot, low)
 if bearE and not dAct
     dTop := h1
     dBot := math.min(l1, low)
@@ -640,13 +661,16 @@ var float uBot = na
 var float uTop = na
 var bool  uAct = false
 if uAct
-    uTop := math.max(uTop, high)
-    if barstate.isconfirmed and low <= (uBot + uTop) / 2
+    // Tjek mod linjen FOER barens egen high flytter den
+    float uMid0 = (uBot + uTop) / 2
+    if barstate.isconfirmed and low <= uMid0
         uAct := false
-        uLastMid := (uBot + uTop) / 2
+        uLastMid := uMid0
         if nz(uHitM, -1) != minB
             uHitT := time
         uHitM := minB
+    else
+        uTop := math.max(uTop, high)
 if bullE and not uAct
     uBot := l1
     uTop := math.max(h1, high)
