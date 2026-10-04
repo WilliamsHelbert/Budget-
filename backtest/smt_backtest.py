@@ -138,7 +138,7 @@ def run(nq_path, es_path, start, end):
     dAct = uAct = False
     dTop = dBot = uTop = uBot = None
     dLastMid = uLastMid = preD = preU = None
-    preDHit = preUHit = False
+    preDHitM = preUHitM = None
     # minut-status
     curM = None
     mHi = mLo = mBad = False
@@ -331,12 +331,12 @@ def run(nq_path, es_path, start, end):
         if tMin < WIN_S:
             preD = (dTop + dBot) / 2 if dAct else dLastMid
             preU = (uBot + uTop) / 2 if uAct else uLastMid
-            preDHit = preUHit = False
+            preDHitM = preUHitM = None
         else:
-            if preD is not None and lo <= preD <= hi:
-                preDHit = True
-            if preU is not None and lo <= preU <= hi:
-                preUHit = True
+            if preDHitM is None and preD is not None and lo <= preD <= hi:
+                preDHitM = minB
+            if preUHitM is None and preU is not None and lo <= preU <= hi:
+                preUHitM = minB
 
         # minut-status
         if minB != curM:
@@ -387,7 +387,10 @@ def run(nq_path, es_path, start, end):
             if elo is not None:
                 cands += [((elo + ehi) / 2, "EQ", False), (elo + (0.75 if sh else 0.25) * (ehi - elo), "0.75" if sh else "0.25", False)]
             if USE_PRE:
-                cands += [(preD, "EQ foer open", preDHit), (preU, "EQ foer open", preUHit)]
+                if preDHitM is None:
+                    cands.append((preD, "EQ foer open", False))
+                if preUHitM is None:
+                    cands.append((preU, "EQ foer open", False))
             for nm, s in (("Asia", asia), ("London", lon), ("NY PRE", ny)):
                 st = s.lo if sh else s.hi
                 if st is not None:
@@ -406,6 +409,14 @@ def run(nq_path, es_path, start, end):
                 d = abs(px - cv)
                 if (cv < px if sh else cv > px) and BE_MIN <= d <= BE_MAX and (be is None or d < abs(px - be)):
                     be, beS, beBad = cv, cn, tk
+            # EQ fra foer open ramt i entry-minuttet -> BE-spottet er taget
+            def preTaken(eq, hm):
+                if eq is None or hm is None or hm != minB:
+                    return False
+                d = (px - eq) if sh else (eq - px)
+                return -BE_MIN <= d <= BE_MAX
+            if USE_PRE and (preTaken(preD, preDHitM) or preTaken(preU, preUHitM)):
+                beBad, beS = True, "EQ foer open"
             # SL / TP
             sl = max(m1Hi, px + MIN_SL) if sh else min(m1Lo, px - MIN_SL)
             tcs = []

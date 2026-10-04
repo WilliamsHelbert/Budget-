@@ -5,8 +5,11 @@
 //  NYT I v2.7
 //    - BE-kandidat: EQ fra FOER market open (EQ-linjen paa den bullish og
 //      bearish EQ der stod lige foer 15:30 - live, ellers den sidst brugte).
-//    - Er det BE-spot der skulle bruges (EQ fra foer open eller session liq)
-//      allerede ramt foer entry, er tradet UGYLDIGT ("BE allerede ramt").
+//    - EQ fra foer open kan kun bruges som BE, saa laenge den ikke er ramt
+//      efter open. Rammes den i SAMME minut som entry (foer/paa entry-
+//      candlen), er tradet UGYLDIGT ("BE allerede ramt").
+//    - Session liq der skulle have vaeret BE, men allerede er taget foer
+//      entry -> tradet er UGYLDIGT.
 //  ---------------------------------------------------------------
 //  NYT I v2.6
 //    - SMT kraever DIVERGENS: kun det ene indeks maa have taget niveauet.
@@ -517,17 +520,25 @@ var float preUMid = na
 if tMin < winS
     preDMid := dAct ? (dTop + dBot) / 2 : dLastMid
     preUMid := uAct ? (uBot + uTop) / 2 : uLastMid
-// Er EQ'en fra foer open blevet ramt efter open (foer/paa entry)?
-var bool preDHit = false
-var bool preUHit = false
+// Hvornaar blev EQ'en fra foer open ramt efter open? (minuttet, na = ikke ramt)
+// Ramt = brugt op: den kan ikke laengere bruges som BE.
+var int preDHitM = na
+var int preUHitM = na
 if tMin < winS
-    preDHit := false
-    preUHit := false
+    preDHitM := na
+    preUHitM := na
 else
-    if not na(preDMid) and low <= preDMid and high >= preDMid
-        preDHit := true
-    if not na(preUMid) and low <= preUMid and high >= preUMid
-        preUHit := true
+    if na(preDHitM) and not na(preDMid) and low <= preDMid and high >= preDMid
+        preDHitM := minB
+    if na(preUHitM) and not na(preUMid) and low <= preUMid and high >= preUMid
+        preUHitM := minB
+
+// Blev EQ'en fra foer open ramt i SAMME minut som entry (foer/paa entry-candlen),
+// og ligger den paa profit-siden (eller praktisk talt paa entry)? Saa er
+// BE-spottet taget, og tradet er ugyldigt.
+preTaken(float eq, int hm, float px, bool isShort) =>
+    float d = na(eq) ? na : (isShort ? px - eq : eq - px)
+    not na(eq) and not na(hm) and hm == minB and d >= -beMin and d <= beMax
 
 // ═════════════════════ MINUT- OG DAGS-STATUS ═════════════════════
 var int  curM    = na
@@ -792,8 +803,10 @@ if ok
         tryBE(bc, px, sh, mid, "EQ")
         tryBE(bc, px, sh, qt,  sh ? "0.75" : "0.25")
     if bePre
-        tryBEt(bc, px, sh, preDMid, "EQ foer open", preDHit)
-        tryBEt(bc, px, sh, preUMid, "EQ foer open", preUHit)
+        if na(preDHitM)
+            tryBE(bc, px, sh, preDMid, "EQ foer open")
+        if na(preUHitM)
+            tryBE(bc, px, sh, preUMid, "EQ foer open")
 
     // Session liq som chartet ikke har taget (short: lows, long: highs)
     if beSess
@@ -818,6 +831,10 @@ if ok
             if m.isHi != sh and not m.dead and not m.st.aTook
                 tryBE(bc, px, sh, m.a, sh ? "5m low" : "5m high")
 
+    // EQ fra foer open ramt i entry-minuttet -> BE-spottet er taget (endelig afgoerelse)
+    if bePre and (preTaken(preDMid, preDHitM, px, sh) or preTaken(preUMid, preUHitM, px, sh))
+        bc.bad := true
+        bc.src := "EQ foer open"
     float  be    = bc.v
     string beSrc = bc.src
 
