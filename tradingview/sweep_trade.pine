@@ -1,6 +1,12 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v3.5)
+//  Sweep Trade (SMT)  (v3.6)
+//  ---------------------------------------------------------------
+//  NYT I v3.6
+//    - 'EQ foer open ramt' taeller kun paa BE-siden (short: bullish EQ
+//      under prisen, long: bearish EQ over).
+//    - Session liq der er taget FOER open er ikke BE-kandidat (og goer
+//      ikke tradet ugyldigt). Taget i vinduet foer entry -> ugyldigt.
 //  ---------------------------------------------------------------
 //  NYT I v3.5
 //    - Alle tider regnes i New York-tid (open 09:30 NY). Foer stod de
@@ -296,6 +302,7 @@ type St
     bool bTook = false   // sammenligningssymbolet har taget niveauet
     bool aTgT  = false   // chartets symbol har taget sin Taget (i vinduet)
     bool bTgT  = false   // det andet indeks har taget sin Taget (i vinduet)
+    bool aPre  = false   // chartet tog niveauet FOER vinduet (saa er det ikke liq laengere)
 
 type Sess
     float aHi = na
@@ -418,6 +425,7 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h, float aTg = na, fl
         if not inWin
             if aSweep
                 st.aDone := true
+                st.aPre  := true
             if bSweep
                 st.bDone := true
         else
@@ -995,11 +1003,14 @@ if ok
     // Session liq som chartet ikke har taget (short: lows, long: highs)
     if beSess
         if not na(asia.lo)
-            tryBEt(bc, px, sh, sh ? asia.aLo : asia.aHi, sh ? "Asia low" : "Asia high", sh ? asia.lo.aTook : asia.hi.aTook)
+            if not (sh ? asia.lo.aPre : asia.hi.aPre)   // taget foer open -> ikke BE-kandidat
+                tryBEt(bc, px, sh, sh ? asia.aLo : asia.aHi, sh ? "Asia low" : "Asia high", sh ? asia.lo.aTook : asia.hi.aTook)
         if not na(lon.lo)
-            tryBEt(bc, px, sh, sh ? lon.aLo : lon.aHi, sh ? "London low" : "London high", sh ? lon.lo.aTook : lon.hi.aTook)
+            if not (sh ? lon.lo.aPre : lon.hi.aPre)   // taget foer open -> ikke BE-kandidat
+                tryBEt(bc, px, sh, sh ? lon.aLo : lon.aHi, sh ? "London low" : "London high", sh ? lon.lo.aTook : lon.hi.aTook)
         if not na(ny.lo)
-            tryBEt(bc, px, sh, sh ? ny.aLo : ny.aHi, sh ? "NY PRE low" : "NY PRE high", sh ? ny.lo.aTook : ny.hi.aTook)
+            if not (sh ? ny.lo.aPre : ny.hi.aPre)   // taget foer open -> ikke BE-kandidat
+                tryBEt(bc, px, sh, sh ? ny.aLo : ny.aHi, sh ? "NY PRE low" : "NY PRE high", sh ? ny.lo.aTook : ny.hi.aTook)
 
     // 15m-niveauer som chartet ikke har taget
     if be15 and array.size(lv15) > 0
@@ -1016,7 +1027,8 @@ if ok
                 tryBE(bc, px, sh, m.a, sh ? "5m low" : "5m high")
 
     // EQ fra foer open ramt i entry-minuttet -> BE-spottet er taget (endelig afgoerelse)
-    if bePre and (preTaken(preDMid, preDHitM, preDHitT, px, sh) or preTaken(preUMid, preUHitM, preUHitT, px, sh))
+    // kun EQ'en paa BE-siden: short -> bullish (under), long -> bearish (over)
+    if bePre and (sh ? preTaken(preUMid, preUHitM, preUHitT, px, sh) : preTaken(preDMid, preDHitM, preDHitT, px, sh))
         bc.bad := true
         bc.src := "EQ foer open"
     // Liq i trade-retningen taget i entry-minuttet (foer/paa entry-candlen)

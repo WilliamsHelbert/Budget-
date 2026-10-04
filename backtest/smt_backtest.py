@@ -45,6 +45,7 @@ USE_PRE = True   # EQ fra foer market open som BE-kandidat
 USE_TAGET = True # Taget-regel (se scriptet v3.0)
 DBG = None   # saet af datoer ('YYYY-MM-DD') -> LOG faar forklaringer for de dage
 LOG = []
+CLOSE_BACK = True  # SMT: skal 15s-closet ogsaa lukke tilbage forbi niveauet? (dokumentet kraever det kun for Vergence)
 DOJI_PREV = False  # test: entry-candlen skal ogsaa lukke forbi FORRIGE 15s-close (paa begge indeks)
 
 
@@ -69,6 +70,7 @@ class St:
     bTook: bool = False
     aTgT: bool = False
     bTgT: bool = False
+    aPre: bool = False   # chartet tog niveauet FOER vinduet (saa er det ikke liq laengere)
 
 
 @dataclass
@@ -331,6 +333,7 @@ def run(nq_path, es_path, start, end):
             if not inWin:
                 if aSweep:
                     st.aDone = True
+                    st.aPre = True
                 if bSweep:
                     st.bDone = True
                 return
@@ -359,8 +362,8 @@ def run(nq_path, es_path, start, end):
                 dirOK = (cl < op and bok and bc < bo) if isHi else (cl > op and bok and bc > bo)
                 if dirOK and DOJI_PREV:
                     dirOK = (cl < pcl and bc < pbc) if isHi else (cl > pcl and bc > pbc)
-                aBack = not st.aDone and not bTk and st.aM == minB and (cl < aL if isHi else cl > aL)
-                bBack = not st.bDone and not aTk and st.bM == minB and bok and (bc < bL if isHi else bc > bL)
+                aBack = not st.aDone and not bTk and st.aM == minB and (not CLOSE_BACK or (cl < aL if isHi else cl > aL))
+                bBack = not st.bDone and not aTk and st.bM == minB and bok and (not CLOSE_BACK or (bc < bL if isHi else bc > bL))
                 if not dirOK and (aBack or bBack):
                     h.noDir = True
                 if dbgOn and (aBack or bBack):
@@ -503,7 +506,8 @@ def run(nq_path, es_path, start, end):
                     cands.append((preU, "EQ foer open", False))
             for nm, s in (("Asia", asia), ("London", lon), ("NY PRE", ny)):
                 st = s.lo if sh else s.hi
-                if st is not None:
+                # taget foer open -> ikke BE-kandidat. Taget i vinduet foer entry -> ugyldigt
+                if st is not None and not st.aPre:
                     cands.append(((s.aLo if sh else s.aHi), nm + (" low" if sh else " high"), st.aTook))
             for m in lv15:
                 if m.isHi != sh and not m.dead and not m.st.aTook:
@@ -530,7 +534,8 @@ def run(nq_path, es_path, start, end):
                     return False
                 d = (px - eq) if sh else (eq - px)
                 return -BE_MIN <= d <= BE_MAX
-            if USE_PRE and (preTaken(preD, preDHitM, preDHitT) or preTaken(preU, preUHitM, preUHitT)):
+            # kun EQ'en paa BE-siden: short -> bullish (under), long -> bearish (over)
+            if USE_PRE and ((preTaken(preU, preUHitM, preUHitT)) if sh else (preTaken(preD, preDHitM, preDHitT))):
                 beBad, beS = True, "EQ foer open"
             # liq i trade-retningen taget i entry-minuttet (foer entry-candlen)
             eqT = (hb(uHitM, uHitT) or hb(preUHitM, preUHitT)) if sh else (hb(dHitM, dHitT) or hb(preDHitM, preDHitT))
