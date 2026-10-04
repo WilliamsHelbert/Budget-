@@ -168,6 +168,7 @@ def run(nq_path, es_path, start, end):
     dLastMid = uLastMid = preD = preU = None
     preDHitM = preUHitM = None
     dHitM = uHitM = sHiM = sLoM = None
+    lastTradeM = None
     hitsD, hitsU, hitsSH, hitsSL = [], [], [], []   # (tid, niveau) ramt i vinduet
     dHitT = uHitT = sHiT = sLoT = preDHitT = preUHitT = None
     # minut-status
@@ -501,6 +502,9 @@ def run(nq_path, es_path, start, end):
             LOG.append((dstr, dk.strftime("%H:%M:%S"), f"ENTRY BLOKERET: high- og low-side taget i samme minut ({h.src})"))
         if DBG is not None and dstr in DBG and inWin and h.both:
             LOG.append((dstr, dk.strftime("%H:%M:%S"), "BEGGE har taget niveauet -> ikke SMT"))
+        # kun eet trade pr. minut - et nyt signal i samme minut afloeser ikke det foerste
+        if h.fired and lastTradeM == minB:
+            h.fired = False
         if h.fired and not mBad:
             sh, px = h.isShort, cl
             # BE
@@ -607,6 +611,7 @@ def run(nq_path, es_path, start, end):
             }
             trades.append(rec)
             minTrades.append(rec)
+            lastTradeM = minB
             o = {"short": sh, "entry": px, "sl": sl, "tp": tp, "be": be, "beHit": False,
                  "bars": 0, "minB": minB, "rec": rec}
 

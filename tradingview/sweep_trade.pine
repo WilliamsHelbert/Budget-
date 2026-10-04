@@ -1,6 +1,10 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v3.7)
+//  Sweep Trade (SMT)  (v3.8)
+//  ---------------------------------------------------------------
+//  NYT I v3.8
+//    - Kun eet trade pr. minut. Kommer der et nyt signal i samme minut
+//      (fx et 15m high lige efter NY PRE high), afloeser det ikke det foerste.
 //  ---------------------------------------------------------------
 //  NYT I v3.7
 //    - EQ / session liq taget i entry-minuttet goer kun tradet ugyldigt
@@ -983,7 +987,7 @@ if oLive
             oBars += 1
 
 // ═════════════════════ TRADE ═════════════════════
-bool ok      = hit.fired and not mBad and not dayBad
+bool ok      = hit.fired and not mBad and not dayBad and not mTraded   // kun eet trade pr. minut
 bool beBadNow = false   // tradet blev ugyldigt fordi BE allerede var ramt
 bool goShort = ok and hit.isShort
 bool goLong  = ok and not hit.isShort
