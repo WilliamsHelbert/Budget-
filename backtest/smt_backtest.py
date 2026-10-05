@@ -183,6 +183,7 @@ def run(nq_path, es_path, start, end):
     dAct = uAct = False
     dTop = dBot = uTop = uBot = None
     dLastMid = uLastMid = preD = preU = None
+    pDT = pDB = pUB = pUT = None
     preDHitM = preUHitM = None
     dHitM = uHitM = sHiM = sLoM = None
     lastTradeM = None
@@ -546,12 +547,24 @@ def run(nq_path, es_path, start, end):
         if tMin < WIN_S:
             preD = (dTop + dBot) / 2 if dAct else None   # kun en live EQ
             preU = (uBot + uTop) / 2 if uAct else None
+            pDT, pDB = (dTop, dBot) if dAct else (None, None)
+            pUB, pUT = (uBot, uTop) if uAct else (None, None)
             preDHitM = preUHitM = None
         else:
-            if preDHitM is None and preD is not None and lo <= preD <= hi:
-                preDHitM, preDHitT = minB, t
-            if preUHitM is None and preU is not None and lo <= preU <= hi:
-                preUHitM, preUHitT = minB, t
+            # EQ foer open vokser videre efter open (som EQ-indikatoren), indtil den rammes.
+            # Tjek mod linjen FOER barens egen low/high flytter den.
+            if preDHitM is None and pDT is not None:
+                if hi >= (pDT + pDB) / 2:
+                    preDHitM, preDHitT = minB, t
+                else:
+                    pDB = min(pDB, lo)
+                preD = (pDT + pDB) / 2
+            if preUHitM is None and pUB is not None:
+                if lo <= (pUB + pUT) / 2:
+                    preUHitM, preUHitT = minB, t
+                else:
+                    pUT = max(pUT, hi)
+                preU = (pUB + pUT) / 2
 
         # minut-status
         if minB != curM:
