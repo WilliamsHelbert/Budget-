@@ -1,0 +1,17 @@
+key,name,n,tp,be,sl,R,match,ju,same,extra,exR
+base,Alle regler (basis),70,14,16,40,23.29,32,32,30,38,-14.98
+gap,Max 5 min mellem sweeps,100,17,21,62,8.58,32,32,29,68,-20.47
+moved,Kun frisk liq (nye yderpunkter tæller ikke),89,16,19,54,12.33,32,32,30,57,-25.94
+samemin,Entry i samme minut som sweepet,99,21,25,52,49.22,32,32,30,67,10.95
+back,Close tilbage forbi liq,121,20,25,76,12.77,32,32,30,89,-25.5
+bothback,Begge close tilbage når begge tog liq samme minut,75,15,17,43,23.97,32,32,30,43,-14.3
+oneshot,Første fælles close afgør,74,15,18,41,27.11,32,32,30,42,-11.16
+maxsl,SL max 30 point,95,20,23,52,9.94,32,32,30,63,-28.33
+mbad,High + low taget i samme minut,75,17,16,42,38.8,32,32,30,43,0.53
+onemin,Ét trade pr. minut,70,14,16,40,23.29,32,32,30,38,-14.98
+pre,EQ før open taget i entry-minuttet,73,14,17,42,18.73,32,32,30,41,-19.54
+eqt,Live EQ / session-liq taget før entry-candle,72,14,16,42,19.07,32,32,30,40,-19.2
+took,Nærmeste BE (session-liq) allerede taget,70,14,16,40,23.29,32,32,30,38,-14.98
+reset,EQ nulstilles ved open,70,14,11,45,14.95,32,32,27,38,-15.91
+taget,Taget-regel (15m),70,14,16,40,23.29,32,32,30,38,-14.98
+be2,Ingen BE i første 2 15s-candles,70,13,24,33,29.43,32,32,27,38,-15.26
