@@ -56,6 +56,7 @@ EQ_RESET = True    # nulstil live EQ'er ved open (som EQ-indikatoren)
 USE_MBAD = True    # high- og low-side taget i samme minut -> ingen nye trades i minuttet
 ONE_PER_MIN = True # kun eet trade pr. minut (det foerste)
 USE_TOOK = True    # naermeste BE er en session-liq der allerede er taget i vinduet -> ugyldigt
+USE_SESS_BE = True # session-liq som BE-kandidat (ogsaa i Vergence)
 USE_15M_BE = True  # 15m-niveauer som BE-kandidat
 USE_5M = True      # 5m-niveauer som BE-kandidat i aabningsminuttet
 BE2 = True         # ingen BE i de foerste 2 15s-candles efter entry
@@ -711,7 +712,7 @@ def run(nq_path, es_path, start, end):
                     cands.append((preD, "EQ foer open", False))
                 if preUHitM is None:
                     cands.append((preU, "EQ foer open", False))
-            for nm, s in (("Asia", asia), ("London", lon), ("NY PRE", ny)):
+            for nm, s in ((("Asia", asia), ("London", lon), ("NY PRE", ny)) if USE_SESS_BE else ()):
                 st = s.lo if sh else s.hi
                 # taget foer open -> ikke BE-kandidat. Taget i vinduet foer entry -> ugyldigt
                 if st is not None and not st.aPre:
@@ -759,7 +760,7 @@ def run(nq_path, es_path, start, end):
                 eqT = slT = False
             else:
                 eqT = anyHit(hitsU) if sh else anyHit(hitsD)
-                slT = anyHit(hitsSL) if sh else anyHit(hitsSH)
+                slT = USE_SESS_BE and (anyHit(hitsSL) if sh else anyHit(hitsSH))
             if eqT or slT:
                 beBad = True
                 beS = ("bullish EQ" if sh else "bearish EQ") if eqT else ("session low" if sh else "session high")
