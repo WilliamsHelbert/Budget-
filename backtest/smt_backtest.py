@@ -46,6 +46,7 @@ USE_TAGET = True # Taget-regel (se scriptet v3.0)
 DBG = None   # saet af datoer ('YYYY-MM-DD') -> LOG faar forklaringer for de dage
 LOG = []
 EQT_MODE = 'dist'   # live EQ / session liq taget i entry-minuttet: 'all' = altid ugyldigt, 'dist' = kun hvis niveauet ligger paa BE-siden af entry, 'off' = ignoreres
+PRE_INVALID = True  # EQ foer open ramt i entry-minuttet -> ugyldigt (False = test)
 EQ_RESET = True    # nulstil live EQ'er ved open (som EQ-indikatoren)
 CLOSE_BACK = True  # SMT: skal 15s-closet ogsaa lukke tilbage forbi niveauet? (dokumentet kraever det kun for Vergence)
 DOJI_PREV = False  # test: entry-candlen skal ogsaa lukke forbi FORRIGE 15s-close (paa begge indeks)
@@ -586,7 +587,7 @@ def run(nq_path, es_path, start, end):
                 d = (px - eq) if sh else (eq - px)
                 return -BE_MIN <= d <= BE_MAX
             # kun EQ'en paa BE-siden: short -> bullish (under), long -> bearish (over)
-            if USE_PRE and ((preTaken(preU, preUHitM, preUHitT)) if sh else (preTaken(preD, preDHitM, preDHitT))):
+            if USE_PRE and PRE_INVALID and ((preTaken(preU, preUHitM, preUHitT)) if sh else (preTaken(preD, preDHitM, preDHitT))):
                 beBad, beS = True, "EQ foer open"
             # liq i trade-retningen taget i entry-minuttet (foer entry-candlen)
             m0 = minB * 60
