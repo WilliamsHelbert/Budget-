@@ -48,6 +48,7 @@ LOG = []
 EQT_MODE = 'dist'   # live EQ / session liq taget i entry-minuttet: 'all' = altid ugyldigt, 'dist' = kun hvis niveauet ligger paa BE-siden af entry, 'off' = ignoreres
 MODE = 'smt'       # 'smt' = Sweep Trade, 'vrg' = Vergence (begge indeks tager samme niveau)
 VRG_GAP = 5        # Vergence: max minutter mellem de to sweeps
+VRG_FIRST = 'both' # 'both' = foerste close hvor begge lukker i retningen afgoer; 'any' = foerste close hvor bare et af dem goer
 PRE_INVALID = True  # EQ foer open ramt i entry-minuttet -> ugyldigt (False = test)
 EQ_RESET = True    # nulstil live EQ'er ved open (som EQ-indikatoren)
 CLOSE_BACK = True  # SMT: skal 15s-closet ogsaa lukke tilbage forbi niveauet? (dokumentet kraever det kun for Vergence)
@@ -76,7 +77,11 @@ class St:
     aTgT: bool = False
     bTgT: bool = False
     aPre: bool = False   # chartet tog niveauet FOER vinduet (saa er det ikke liq laengere)
-    vDone: bool = False  # Vergence: begge har taget niveauet (afgjort)
+    vDone: bool = False  # Vergence: tradet (eller afvist) - kraever et nyt sweep for at arme igen
+    aOn: bool = False    # (ubrugt)
+    bOn: bool = False
+    aLv: float = None    # Vergence: niveauet efter det er taget i vinduet = NQ's yderpunkt siden
+    bLv: float = None
 
 
 @dataclass
@@ -124,7 +129,7 @@ class Hit:
     both: bool = False
     noDir: bool = False
     slBad: bool = False
-    varm: tuple = None   # Vergence: (short, NQ-niveau, ES-niveau, samme minut, navn)
+    varmList: list = field(default_factory=list)   # Vergence: [(short, NQ-niveau, ES-niveau, samme minut, navn)]
 
 
 def run(nq_path, es_path, start, end):
@@ -179,7 +184,9 @@ def run(nq_path, es_path, start, end):
     preDHitM = preUHitM = None
     dHitM = uHitM = sHiM = sLoM = None
     lastTradeM = None
-    vArm = None
+    vArms = []
+    vSide = {s_: dict(aF=[], bF=[], aE=None, bE=None, new=False) for s_ in (True, False)}
+    vDay = None
     resetDay = None
     hitsD, hitsU, hitsSH, hitsSL = [], [], [], []   # (tid, niveau) ramt i vinduet
     dHitT = uHitT = sHiT = sLoT = preDHitT = preUHitT = None
@@ -330,6 +337,10 @@ def run(nq_path, es_path, start, end):
                     m.st.aTook = True
 
         # tjek niveauer
+        if MODE == 'vrg' and inWin and vDay != dstr:
+            vDay = dstr
+            for s_ in (True, False):
+                vSide[s_].update(aF=[], bF=[], aE=None, bE=None, new=False)
         h = Hit()
 
         def check(st, aL, bL, isHi, nm, aTg=None, bTg=None):
@@ -365,22 +376,33 @@ def run(nq_path, es_path, start, end):
             if dbgOn and (aSweep or bSweep or newTg):
                 LOG.append((dstr, dk.strftime("%H:%M:%S"), f"SWEEP {lvlNm}: NQ={'JA' if aSweep else 'nej'} ES={'JA' if bSweep else 'nej'} | NQ taget={aTk} ES taget={bTk} doneA={st.aDone} doneB={st.bDone} 369={is369} TagetSweep={newTg}"))
             if MODE == 'vrg':
-                # Vergence: begge indeks tager samme niveau, det andet senest VRG_GAP min efter
-                if not inWin or st.vDone:
+                # Vergence: et niveau taget foerste gang i vinduet = FRISK liq. Bagefter flytter
+                # niveauet med til indeksets nye yderpunkt; et nyt yderpunkt = ny liq (ikke frisk).
+                if not inWin:
                     return
-                if aSweep and st.aM is None:
-                    st.aM = minB
-                if bSweep and st.bM is None:
-                    st.bM = minB
-                if aSweep or bSweep:
+                curA = st.aLv if st.aLv is not None else aL
+                curB = st.bLv if st.bLv is not None else bL
+                newA = (hi >= curA + TICK) if isHi else (lo <= curA - TICK)
+                newB = bok and ((bh >= curB + TICK) if isHi else (bl <= curB - TICK))
+                sd = vSide[isHi]
+                ext = max if isHi else min
+                if newA:
+                    if st.aLv is None:      # frisk
+                        sd['aF'].append([minB, aL, lvlNm, False])
+                    st.aLv = hi if isHi else lo
+                    sd['aE'] = minB
+                    sd['new'] = True
+                if newB:
+                    if st.bLv is None:
+                        sd['bF'].append([minB, bL, lvlNm, False])
+                    st.bLv = bh if isHi else bl
+                    sd['bE'] = minB
+                    sd['new'] = True
+                if newA or newB:
                     h.swHi = h.swHi or isHi
                     h.swLo = h.swLo or not isHi
-                if st.aM is not None and st.bM is not None:
-                    st.vDone = True
-                    if abs(st.aM - st.bM) <= VRG_GAP and h.varm is None:
-                        h.varm = (isHi, aL, bL, st.aM == st.bM, lvlNm)
                     if dbgOn:
-                        LOG.append((dstr, dk.strftime("%H:%M:%S"), f"VERGENCE {lvlNm}: NQ {st.aM % 60} ES {st.bM % 60} gap {abs(st.aM - st.bM)}"))
+                        LOG.append((dstr, dk.strftime("%H:%M:%S"), f"NY LIQ {lvlNm}: NQ={'FRISK' if newA and curA == aL else ('ny' if newA else '-')} ES={'FRISK' if newB and curB == bL else ('ny' if newB else '-')}"))
                 return
             if not inWin:
                 if aSweep:
@@ -567,22 +589,59 @@ def run(nq_path, es_path, start, end):
         # i retningen (samme minut) afgoer: NQ skal lukke tilbage forbi niveauet (og ES ogsaa,
         # hvis begge sweepede i samme minut), og SL <= MAX_SL - ellers intet trade.
         if MODE == 'vrg':
-            if vArm is not None and vArm[5] != minB:
-                vArm = None
-            if h.varm is not None and vArm is None and not mBad:
-                vArm = h.varm + (minB,)
-            if vArm is not None and not mBad:
-                vs, va, vb, vsame, vnm, _ = vArm
-                vdir = (cl < op and bok and bc < bo) if vs else (cl > op and bok and bc > bo)
-                if vdir:
-                    vArm = None
-                    backA = cl < va if vs else cl > va
-                    backB = (not vsame) or (bok and (bc < vb if vs else bc > vb))
+            # Vergence pr. side: mindst et indeks har taget FRISK liq, og det andet har taget
+            # liq paa samme side (frisk eller nyt yderpunkt) hoejst VRG_GAP min fra hinanden.
+            for side in (True, False):
+                sd = vSide[side]
+                if sd['new']:
+                    fa = [f for f in sd['aF'] if not f[3] and sd['bE'] is not None and abs(f[0] - sd['bE']) <= VRG_GAP]
+                    fb = [f for f in sd['bF'] if not f[3] and sd['aE'] is not None and abs(f[0] - sd['aE']) <= VRG_GAP]
+                    if fa or fb:
+                        ext = max if side else min
+                        # kun det indeks der tager frisk liq i DETTE minut skal lukke tilbage
+                        faN = [f for f in fa if f[0] == minB]
+                        fbN = [f for f in fb if f[0] == minB]
+                        if faN or fbN:
+                            fa, fb = faN, fbN
+                        aLv = ext(f[1] for f in fa) if fa else None
+                        bLv = ext(f[1] for f in fb) if fb else None
+                        names = sorted({f[2] for f in fa + fb})
+                        for f in fa + fb:
+                            f[3] = True
+                        h.varmList.append((side, aLv, bLv, None, " / ".join(names)))
+                        if DBG is not None and dstr in DBG:
+                            LOG.append((dstr, dk.strftime("%H:%M:%S"), f"VERGENCE {' / '.join(names)}: NQ frisk {aLv} ES frisk {bLv}"))
+                sd['new'] = False
+            # entry skal komme inden for 60 sek. efter det sweep der fuldendte Vergence.
+            # Flere niveauer kan vaere armet samtidig - hvert afgoeres for sig.
+            vArms = [v for v in vArms if t < v[5] + 60]
+            for vv in h.varmList:
+                if not mBad:
+                    vArms.append(vv + (t,))
+            if vArms and not mBad:
+                keep = []
+                for vs, va, vb, vsame, vnm, vt in vArms:
+                    aD = (cl < op) if vs else (cl > op)
+                    bD = bok and ((bc < bo) if vs else (bc > bo))
+                    trig = (aD and bD) if VRG_FIRST == 'both' else ((aD or bD) if VRG_FIRST == 'any' else (aD if VRG_FIRST == 'nq' else True))
+                    if not trig:
+                        keep.append((vs, va, vb, vsame, vnm, vt))
+                        continue
+                    if not (aD and bD):
+                        if DBG is not None and dstr in DBG:
+                            LOG.append((dstr, dk.strftime("%H:%M:%S"), f"VERGENCE AFVIST {vnm}: ikke samme retning"))
+                        continue
+                    # de(t) indeks der tog FRISK liq skal lukke tilbage forbi den
+                    backA = va is None or (cl < va if vs else cl > va)
+                    backB = vb is None or (bok and (bc < vb if vs else bc > vb))
+                    backOK = backA and backB
                     slOK = (m1Hi - cl <= MAX_SL) if vs else (cl - m1Lo <= MAX_SL)
-                    if backA and backB and slOK:
-                        h.fired, h.isShort, h.lvl, h.src, h.who = True, vs, va, vnm, "NQ + ES"
-                    elif DBG is not None and dstr in DBG:
+                    if backOK and slOK and not h.fired:
+                        h.fired, h.isShort, h.lvl, h.src = True, vs, va, vnm
+                        h.who = "Begge" if va is not None and vb is not None else ("NQ" if va is not None else "ES")
+                    elif DBG is not None and dstr in DBG and not (backOK and slOK):
                         LOG.append((dstr, dk.strftime("%H:%M:%S"), f"VERGENCE AFVIST {vnm}: tilbage NQ={backA} ES={backB} SL ok={slOK}"))
+                vArms = keep
 
         # kun eet trade pr. minut - et nyt signal i samme minut afloeser ikke det foerste
         if h.fired and lastTradeM == minB:
