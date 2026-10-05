@@ -173,6 +173,7 @@ def run(nq_path, es_path, start, end):
     preDHitM = preUHitM = None
     dHitM = uHitM = sHiM = sLoM = None
     lastTradeM = None
+    resetDay = None
     hitsD, hitsU, hitsSH, hitsSL = [], [], [], []   # (tid, niveau) ramt i vinduet
     dHitT = uHitT = sHiT = sLoT = preDHitT = preUHitT = None
     # minut-status
@@ -449,6 +450,11 @@ def run(nq_path, es_path, start, end):
             curMinOHLC[1] = max(curMinOHLC[1], hi)
             curMinOHLC[2] = min(curMinOHLC[2], lo)
             curMinOHLC[3] = cl
+        # Market open: alle live EQ'er nulstilles (som EQ-indikatoren). EQ'en der stod
+        # lige foer open er allerede gemt som "EQ foer open".
+        if inWin and resetDay != dstr:
+            resetDay = dstr
+            dAct = uAct = False
         if dAct:
             # tjek mod linjen FOER barens egen low flytter den
             if hi >= (dTop + dBot) / 2:

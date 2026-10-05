@@ -1,6 +1,11 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v3.9)
+//  Sweep Trade (SMT)  (v4.0)
+//  ---------------------------------------------------------------
+//  NYT I v4.0
+//    - Alle live EQ'er nulstilles ved market open, ligesom EQ-indikatoren.
+//      Saa kan der dannes nye EQ'er efter open (til BE). EQ'en der stod
+//      lige foer open bruges stadig som 'EQ foer open'.
 //  ---------------------------------------------------------------
 //  NYT I v3.9
 //    - Tager et indeks en tidligere sessions high/low i en senere session
@@ -719,6 +724,14 @@ var float uHitMn = na       // laveste bullish EQ ramt i minuttet
 // ... tidligere i minuttet, FOER denne bar
 float dHitPrev = not na(dHitM) and dHitM == minB ? dHitMx : na
 float uHitPrev = not na(uHitM) and uHitM == minB ? uHitMn : na
+// Market open: alle live EQ'er nulstilles (som EQ-indikatoren). EQ'en der stod lige
+// foer open er allerede gemt som "EQ foer open".
+var bool uAct = false
+var int  eqResetDay = na
+if inWin and nz(eqResetDay, -1) != dNow
+    eqResetDay := dNow
+    dAct := false
+    uAct := false
 if dAct
     // Tjek mod linjen FOER barens egen low flytter den
     float dMid0 = (dTop + dBot) / 2
@@ -737,7 +750,6 @@ if bearE and not dAct
 // Bullish EQ: anker = low, vokser op
 var float uBot = na
 var float uTop = na
-var bool  uAct = false
 if uAct
     // Tjek mod linjen FOER barens egen high flytter den
     float uMid0 = (uBot + uTop) / 2
