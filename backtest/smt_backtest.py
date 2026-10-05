@@ -48,7 +48,7 @@ LOG = []
 EQT_MODE = 'dist'   # live EQ / session liq taget i entry-minuttet: 'all' = altid ugyldigt, 'dist' = kun hvis niveauet ligger paa BE-siden af entry, 'off' = ignoreres
 MODE = 'smt'       # 'smt' = Sweep Trade, 'vrg' = Vergence (begge indeks tager samme niveau)
 VRG_GAP = 5        # Vergence: max minutter mellem de to sweeps
-VRG_MOVED = False  # Vergence: taeller et nyt yderpunkt efter et taget niveau som ny liq? (nej: kun frisk liq)
+VRG_MOVED = False  # 'until' = nye yderpunkter taeller indtil siden har haft sin foerste Vergence; Vergence: taeller et nyt yderpunkt efter et taget niveau som ny liq? (nej: kun frisk liq)
 VRG_SAMEMIN = True # Vergence: entry skal vaere i samme minut som sweepet
 VRG_FIRST = 'both' # 'both' = foerste close hvor begge lukker i retningen afgoer; 'any' = foerste close hvor bare et af dem goer
 PRE_INVALID = True  # EQ foer open ramt i entry-minuttet -> ugyldigt (False = test)
@@ -56,6 +56,8 @@ EQ_RESET = True    # nulstil live EQ'er ved open (som EQ-indikatoren)
 USE_MBAD = True    # high- og low-side taget i samme minut -> ingen nye trades i minuttet
 ONE_PER_MIN = True # kun eet trade pr. minut (det foerste)
 USE_TOOK = True    # naermeste BE er en session-liq der allerede er taget i vinduet -> ugyldigt
+USE_15M_BE = True  # 15m-niveauer som BE-kandidat
+USE_5M = True      # 5m-niveauer som BE-kandidat i aabningsminuttet
 BE2 = True         # ingen BE i de foerste 2 15s-candles efter entry
 VRG_BACK = True    # Vergence: indekset der tog frisk liq skal lukke tilbage forbi den
 VRG_BOTHBACK = True  # Vergence: tog begge frisk liq i samme minut, skal begge lukke tilbage
@@ -195,7 +197,7 @@ def run(nq_path, es_path, start, end):
     dHitM = uHitM = sHiM = sLoM = None
     lastTradeM = None
     vArms = []
-    vSide = {s_: dict(aF=[], bF=[], aE=None, bE=None, aFL=None, bFL=None, aFM=None, bFM=None, new=False) for s_ in (True, False)}
+    vSide = {s_: dict(aF=[], bF=[], aE=None, bE=None, aFL=None, bFL=None, aFM=None, bFM=None, new=False, had=False) for s_ in (True, False)}
     vDay = None
     resetDay = None
     hitsD, hitsU, hitsSH, hitsSL = [], [], [], []   # (tid, niveau) ramt i vinduet
@@ -350,7 +352,7 @@ def run(nq_path, es_path, start, end):
         if MODE == 'vrg' and inWin and vDay != dstr:
             vDay = dstr
             for s_ in (True, False):
-                vSide[s_].update(aF=[], bF=[], aE=None, bE=None, aFL=None, bFL=None, aFM=None, bFM=None, new=False)
+                vSide[s_].update(aF=[], bF=[], aE=None, bE=None, aFL=None, bFL=None, aFM=None, bFM=None, new=False, had=False)
         h = Hit()
 
         def check(st, aL, bL, isHi, nm, aTg=None, bTg=None):
@@ -401,7 +403,7 @@ def run(nq_path, es_path, start, end):
                         sd['aF'].append([minB, aL, lvlNm, False])
                         sd['aFL'] = aL if sd.get('aFM') != minB or sd['aFL'] is None else (max if isHi else min)(sd['aFL'], aL)
                         sd['aFM'] = minB
-                    if VRG_MOVED or curA == aL:
+                    if VRG_MOVED is True or curA == aL or (VRG_MOVED == 'until' and not sd['had']):
                         sd['aE'] = minB
                         sd['new'] = True
                     st.aLv = hi if isHi else lo
@@ -410,7 +412,7 @@ def run(nq_path, es_path, start, end):
                         sd['bF'].append([minB, bL, lvlNm, False])
                         sd['bFL'] = bL if sd.get('bFM') != minB or sd['bFL'] is None else (max if isHi else min)(sd['bFL'], bL)
                         sd['bFM'] = minB
-                    if VRG_MOVED or curB == bL:
+                    if VRG_MOVED is True or curB == bL or (VRG_MOVED == 'until' and not sd['had']):
                         sd['bE'] = minB
                         sd['new'] = True
                     st.bLv = bh if isHi else bl
@@ -649,6 +651,7 @@ def run(nq_path, es_path, start, end):
                         names = sorted({f[2] for f in fa + fb})
                         for f in fa + fb:
                             f[3] = True
+                        sd['had'] = True
                         h.varmList.append((side, aLv, bLv, None, " / ".join(names)))
                         if DBG is not None and dstr in DBG:
                             LOG.append((dstr, dk.strftime("%H:%M:%S"), f"VERGENCE {' / '.join(names)}: NQ frisk {aLv} ES frisk {bLv}"))
@@ -713,10 +716,10 @@ def run(nq_path, es_path, start, end):
                 # taget foer open -> ikke BE-kandidat. Taget i vinduet foer entry -> ugyldigt
                 if st is not None and not st.aPre:
                     cands.append(((s.aLo if sh else s.aHi), nm + (" low" if sh else " high"), st.aTook))
-            for m in lv15:
+            for m in (lv15 if USE_15M_BE else []):
                 if m.isHi != sh and not m.dead and not m.st.aTook:
                     cands.append((m.a, "15m low" if sh else "15m high", False))
-            if isOpenM:
+            if isOpenM and USE_5M:
                 for m in lv05:
                     if m.isHi != sh and not m.dead and not m.st.aTook:
                         cands.append((m.a, "5m low" if sh else "5m high", False))
