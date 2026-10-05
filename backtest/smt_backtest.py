@@ -48,6 +48,8 @@ LOG = []
 EQT_MODE = 'dist'   # live EQ / session liq taget i entry-minuttet: 'all' = altid ugyldigt, 'dist' = kun hvis niveauet ligger paa BE-siden af entry, 'off' = ignoreres
 MODE = 'smt'       # 'smt' = Sweep Trade, 'vrg' = Vergence (begge indeks tager samme niveau)
 VRG_GAP = 5        # Vergence: max minutter mellem de to sweeps
+VRG_MOVED = False  # Vergence: taeller et nyt yderpunkt efter et taget niveau som ny liq? (nej: kun frisk liq)
+VRG_SAMEMIN = True # Vergence: entry skal vaere i samme minut som sweepet
 VRG_FIRST = 'both' # 'both' = foerste close hvor begge lukker i retningen afgoer; 'any' = foerste close hvor bare et af dem goer
 PRE_INVALID = True  # EQ foer open ramt i entry-minuttet -> ugyldigt (False = test)
 EQ_RESET = True    # nulstil live EQ'er ved open (som EQ-indikatoren)
@@ -185,7 +187,7 @@ def run(nq_path, es_path, start, end):
     dHitM = uHitM = sHiM = sLoM = None
     lastTradeM = None
     vArms = []
-    vSide = {s_: dict(aF=[], bF=[], aE=None, bE=None, new=False) for s_ in (True, False)}
+    vSide = {s_: dict(aF=[], bF=[], aE=None, bE=None, aFL=None, bFL=None, aFM=None, bFM=None, new=False) for s_ in (True, False)}
     vDay = None
     resetDay = None
     hitsD, hitsU, hitsSH, hitsSL = [], [], [], []   # (tid, niveau) ramt i vinduet
@@ -340,7 +342,7 @@ def run(nq_path, es_path, start, end):
         if MODE == 'vrg' and inWin and vDay != dstr:
             vDay = dstr
             for s_ in (True, False):
-                vSide[s_].update(aF=[], bF=[], aE=None, bE=None, new=False)
+                vSide[s_].update(aF=[], bF=[], aE=None, bE=None, aFL=None, bFL=None, aFM=None, bFM=None, new=False)
         h = Hit()
 
         def check(st, aL, bL, isHi, nm, aTg=None, bTg=None):
@@ -389,15 +391,21 @@ def run(nq_path, es_path, start, end):
                 if newA:
                     if st.aLv is None:      # frisk
                         sd['aF'].append([minB, aL, lvlNm, False])
+                        sd['aFL'] = aL if sd.get('aFM') != minB or sd['aFL'] is None else (max if isHi else min)(sd['aFL'], aL)
+                        sd['aFM'] = minB
+                    if VRG_MOVED or curA == aL:
+                        sd['aE'] = minB
+                        sd['new'] = True
                     st.aLv = hi if isHi else lo
-                    sd['aE'] = minB
-                    sd['new'] = True
                 if newB:
                     if st.bLv is None:
                         sd['bF'].append([minB, bL, lvlNm, False])
+                        sd['bFL'] = bL if sd.get('bFM') != minB or sd['bFL'] is None else (max if isHi else min)(sd['bFL'], bL)
+                        sd['bFM'] = minB
+                    if VRG_MOVED or curB == bL:
+                        sd['bE'] = minB
+                        sd['new'] = True
                     st.bLv = bh if isHi else bl
-                    sd['bE'] = minB
-                    sd['new'] = True
                 if newA or newB:
                     h.swHi = h.swHi or isHi
                     h.swLo = h.swLo or not isHi
@@ -614,7 +622,7 @@ def run(nq_path, es_path, start, end):
                 sd['new'] = False
             # entry skal komme inden for 60 sek. efter det sweep der fuldendte Vergence.
             # Flere niveauer kan vaere armet samtidig - hvert afgoeres for sig.
-            vArms = [v for v in vArms if t < v[5] + 60]
+            vArms = [v for v in vArms if ((v[5] // 60 == minB) if VRG_SAMEMIN else (t < v[5] + 60))]
             for vv in h.varmList:
                 if not mBad:
                     vArms.append(vv + (t,))
@@ -631,6 +639,12 @@ def run(nq_path, es_path, start, end):
                         if DBG is not None and dstr in DBG:
                             LOG.append((dstr, dk.strftime("%H:%M:%S"), f"VERGENCE AFVIST {vnm}: ikke samme retning"))
                         continue
+                    # tog begge indeks liq i samme minut, skal begge lukke tilbage forbi hver sin liq
+                    sdv = vSide[vs]
+                    am = vt // 60
+                    if sdv.get('aFM') == am and sdv.get('bFM') == am:
+                        va = va if va is not None else sdv['aFL']
+                        vb = vb if vb is not None else sdv['bFL']
                     # de(t) indeks der tog FRISK liq skal lukke tilbage forbi den
                     backA = va is None or (cl < va if vs else cl > va)
                     backB = vb is None or (bok and (bc < vb if vs else bc > vb))
