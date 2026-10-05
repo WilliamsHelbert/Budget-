@@ -53,6 +53,13 @@ VRG_SAMEMIN = True # Vergence: entry skal vaere i samme minut som sweepet
 VRG_FIRST = 'both' # 'both' = foerste close hvor begge lukker i retningen afgoer; 'any' = foerste close hvor bare et af dem goer
 PRE_INVALID = True  # EQ foer open ramt i entry-minuttet -> ugyldigt (False = test)
 EQ_RESET = True    # nulstil live EQ'er ved open (som EQ-indikatoren)
+USE_MBAD = True    # high- og low-side taget i samme minut -> ingen nye trades i minuttet
+ONE_PER_MIN = True # kun eet trade pr. minut (det foerste)
+USE_TOOK = True    # naermeste BE er en session-liq der allerede er taget i vinduet -> ugyldigt
+BE2 = True         # ingen BE i de foerste 2 15s-candles efter entry
+VRG_BACK = True    # Vergence: indekset der tog frisk liq skal lukke tilbage forbi den
+VRG_BOTHBACK = True  # Vergence: tog begge frisk liq i samme minut, skal begge lukke tilbage
+VRG_ONESHOT = True # Vergence: foerste close hvor begge lukker i retningen afgoer (afvist = faerdigt)
 CLOSE_BACK = True  # SMT: skal 15s-closet ogsaa lukke tilbage forbi niveauet? (dokumentet kraever det kun for Vergence)
 DOJI_PREV = False  # test: entry-candlen skal ogsaa lukke forbi FORRIGE 15s-close (paa begge indeks)
 
@@ -573,7 +580,7 @@ def run(nq_path, es_path, start, end):
         if inWin:
             mHi = mHi or h.swHi
             mLo = mLo or h.swLo
-        justBad = mHi and mLo and not mBad
+        justBad = USE_MBAD and mHi and mLo and not mBad
         if justBad:
             # kun trades FOER den anden side blev taget staar; ingen nye i minuttet
             mBad = True
@@ -600,7 +607,7 @@ def run(nq_path, es_path, start, end):
                 # ellers ingen BE (tradet bliver SL eller TP).
                 if not o["beHit"] and o["be"] is not None and not o.get("noBE"):
                     touch = lo <= o["be"] if o["short"] else hi >= o["be"]
-                    if o["bars"] < 2:
+                    if BE2 and o["bars"] < 2:
                         if touch:
                             o["early"] = True
                         if o["bars"] == 1 and o.get("early"):
@@ -668,23 +675,25 @@ def run(nq_path, es_path, start, end):
                     # tog begge indeks liq i samme minut, skal begge lukke tilbage forbi hver sin liq
                     sdv = vSide[vs]
                     am = vt // 60
-                    if sdv.get('aFM') == am and sdv.get('bFM') == am:
+                    if VRG_BOTHBACK and sdv.get('aFM') == am and sdv.get('bFM') == am:
                         va = va if va is not None else sdv['aFL']
                         vb = vb if vb is not None else sdv['bFL']
                     # de(t) indeks der tog FRISK liq skal lukke tilbage forbi den
-                    backA = va is None or (cl < va if vs else cl > va)
-                    backB = vb is None or (bok and (bc < vb if vs else bc > vb))
+                    backA = not VRG_BACK or va is None or (cl < va if vs else cl > va)
+                    backB = not VRG_BACK or vb is None or (bok and (bc < vb if vs else bc > vb))
                     backOK = backA and backB
                     slOK = (m1Hi - cl <= MAX_SL) if vs else (cl - m1Lo <= MAX_SL)
                     if backOK and slOK and not h.fired:
                         h.fired, h.isShort, h.lvl, h.src = True, vs, va, vnm
                         h.who = "Begge" if va is not None and vb is not None else ("NQ" if va is not None else "ES")
+                    elif not VRG_ONESHOT and not (backOK and slOK):
+                        keep.append((vs, va, vb, vsame, vnm, vt))
                     elif DBG is not None and dstr in DBG and not (backOK and slOK):
                         LOG.append((dstr, dk.strftime("%H:%M:%S"), f"VERGENCE AFVIST {vnm}: tilbage NQ={backA} ES={backB} SL ok={slOK}"))
                 vArms = keep
 
         # kun eet trade pr. minut - et nyt signal i samme minut afloeser ikke det foerste
-        if h.fired and lastTradeM == minB:
+        if ONE_PER_MIN and h.fired and lastTradeM == minB:
             h.fired = False
         if h.fired and not mBad:
             sh, px = h.isShort, cl
@@ -717,7 +726,7 @@ def run(nq_path, es_path, start, end):
                     continue
                 d = abs(px - cv)
                 if (cv < px if sh else cv > px) and BE_MIN <= d <= BE_MAX and (be is None or d < abs(px - be)):
-                    be, beS, beBad = cv, cn, tk
+                    be, beS, beBad = cv, cn, tk and USE_TOOK
             # EQ fra foer open ramt i entry-minuttet -> BE-spottet er taget
             def hb(hm, ht):
                 # ramt i dette minut, men FOER entry-candlen
