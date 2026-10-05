@@ -595,10 +595,23 @@ def run(nq_path, es_path, start, end):
                 tr["exit"] = dk.strftime("%H:%M:%S")
                 o = None
             else:
-                if not o["beHit"] and o["be"] is not None and o["bars"] >= 2 and \
-                        (lo <= o["be"] if o["short"] else hi >= o["be"]):
-                    o["beHit"] = True
-                    o["sl"] = o["entry"]
+                # BE: ikke i de foerste 2 15s-candles efter entry. Er BE-niveauet ramt i dem,
+                # afgoeres det ved 2. close: prisen paa profit-siden af entry -> BE fra 3. candle,
+                # ellers ingen BE (tradet bliver SL eller TP).
+                if not o["beHit"] and o["be"] is not None and not o.get("noBE"):
+                    touch = lo <= o["be"] if o["short"] else hi >= o["be"]
+                    if o["bars"] < 2:
+                        if touch:
+                            o["early"] = True
+                        if o["bars"] == 1 and o.get("early"):
+                            if (cl < o["entry"]) if o["short"] else (cl > o["entry"]):
+                                o["beHit"] = True
+                                o["sl"] = o["entry"]
+                            else:
+                                o["noBE"] = True
+                    elif touch:
+                        o["beHit"] = True
+                        o["sl"] = o["entry"]
                 o["bars"] += 1
 
         # nyt trade
