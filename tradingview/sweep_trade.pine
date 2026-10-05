@@ -4,6 +4,7 @@
 //  ---------------------------------------------------------------
 //  NYT I v4.0
 //    - Alle live EQ'er nulstilles ved market open, ligesom EQ-indikatoren.
+//      15:29-candlen giver ikke en ny EQ efter open.
 //      Saa kan der dannes nye EQ'er efter open (til BE). EQ'en der stod
 //      lige foer open bruges stadig som 'EQ foer open'.
 //  ---------------------------------------------------------------
@@ -708,8 +709,11 @@ if t1Chg
 bool new1m = sameTF ? barstate.isconfirmed : t1Chg
 
 float own   = na(h1) or na(l1) ? na : (h1 + l1) / 2
-bool  bearE = new1m and not na(c1) and c1 < o1 and c1 < own
-bool  bullE = new1m and not na(c1) and c1 > o1 and c1 > own
+// En candle der startede foer open (15:29) giver ikke en ny EQ efter open
+int   t1m   = na(t1) ? na : hour(t1, tz) * 60 + minute(t1, tz)
+bool  preC  = inWin and not na(t1m) and t1m < winS
+bool  bearE = new1m and not preC and not na(c1) and c1 < o1 and c1 < own
+bool  bullE = new1m and not preC and not na(c1) and c1 > o1 and c1 > own
 
 // Bearish EQ: anker = high, vokser ned
 var float dLastMid = na     // EQ-linjen paa den sidst brugte bearish EQ

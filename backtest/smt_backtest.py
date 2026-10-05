@@ -46,6 +46,7 @@ USE_TAGET = True # Taget-regel (se scriptet v3.0)
 DBG = None   # saet af datoer ('YYYY-MM-DD') -> LOG faar forklaringer for de dage
 LOG = []
 EQT_MODE = 'dist'   # live EQ / session liq taget i entry-minuttet: 'all' = altid ugyldigt, 'dist' = kun hvis niveauet ligger paa BE-siden af entry, 'off' = ignoreres
+EQ_RESET = True    # nulstil live EQ'er ved open (som EQ-indikatoren)
 CLOSE_BACK = True  # SMT: skal 15s-closet ogsaa lukke tilbage forbi niveauet? (dokumentet kraever det kun for Vergence)
 DOJI_PREV = False  # test: entry-candlen skal ogsaa lukke forbi FORRIGE 15s-close (paa begge indeks)
 
@@ -441,6 +442,9 @@ def run(nq_path, es_path, start, end):
             own = (h1 + l1) / 2
             bearE = c1 < o1 and c1 < own
             bullE = c1 > o1 and c1 > own
+            # 15:29-candlen (foer open) giver ikke en ny EQ efter open
+            if EQ_RESET and inWin and tMin == WIN_S:
+                bearE = bullE = False
         else:
             bearE = bullE = False
         if lastMin is None or minB != lastMin:
@@ -452,7 +456,7 @@ def run(nq_path, es_path, start, end):
             curMinOHLC[3] = cl
         # Market open: alle live EQ'er nulstilles (som EQ-indikatoren). EQ'en der stod
         # lige foer open er allerede gemt som "EQ foer open".
-        if inWin and resetDay != dstr:
+        if EQ_RESET and inWin and resetDay != dstr:
             resetDay = dstr
             dAct = uAct = False
         if dAct:
