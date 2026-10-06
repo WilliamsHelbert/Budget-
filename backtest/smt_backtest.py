@@ -129,6 +129,7 @@ class Lv:
     isHi: bool
     dead: bool = False
     st: St = field(default_factory=St)
+    tm: int = None     # 15m-candlens start (epoch sek.)
 
 
 @dataclass
@@ -186,6 +187,7 @@ def run(nq_path, es_path, start, end):
 
     asia, lon, ny = Sess(), Sess(), Sess()
     lv15, lv05 = [], []
+    preDead = {}
     prevOn = {"a": False, "l": False, "n": False}
     lastQt = lastFt = None
     prevMn = None
@@ -337,7 +339,7 @@ def run(nq_path, es_path, start, end):
             eT = prev_period(g15b, t // 900 * 900)
             if eT is not None:
                 qa, qb = g15a.loc[qT], g15b.loc[eT]
-                lv15 += [Lv(qa.h, qb.h, True), Lv(qa.l, qb.l, False)]
+                lv15 += [Lv(qa.h, qb.h, True, tm=qT), Lv(qa.l, qb.l, False, tm=qT)]
         if newM05 and inNyAt(fT):
             gT = prev_period(g05b, t // 300 * 300)
             if gT is not None:
@@ -582,10 +584,12 @@ def run(nq_path, es_path, start, end):
                 preU = (pUB + pUT) / 2
 
         # niveauer ved open til charts (SNAP = {} for at slaa til)
+        if SNAP is not None and not inWin:
+            preDead = {id(m): m.dead for m in lv15}
         if SNAP is not None and inWin and tMin == WIN_S and dstr not in SNAP:
             SNAP[dstr] = dict(
                 sess={nm: [x.aHi, x.aLo, x.bHi, x.bLo] for nm, x in (("Asia", asia), ("London", lon), ("NY PRE", ny))},
-                m15=[[m.a, m.b, m.isHi] for m in lv15], preD=preD, preU=preU)
+                m15=[[m.a, m.b, m.isHi, preDead.get(id(m), False), m.tm] for m in lv15], preD=preD, preU=preU)
         # minut-status
         if minB != curM:
             curM, mHi, mLo, mBad = minB, False, False, False
