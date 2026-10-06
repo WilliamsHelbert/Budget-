@@ -50,7 +50,8 @@ EQT_MODE = 'dist'   # live EQ / session liq taget i entry-minuttet: 'all' = alti
 MODE = 'smt'       # 'smt' = Sweep Trade, 'vrg' = Vergence (begge indeks tager samme niveau)
 VRG_GAP = 5        # Vergence: max minutter mellem de to sweeps
 VRG_MOVED = 'until'  # 'until' = nye yderpunkter taeller indtil siden har haft sin foerste Vergence; Vergence: taeller et nyt yderpunkt efter et taget niveau som ny liq? (nej: kun frisk liq)
-TID_CLOSE = 0      # 0 = fra; 2 = entry paa sweep-candlen eller den naeste 15s-candle
+TID_CLOSE = 2      # entry paa sweep-candlen eller den naeste 15s-candle (0 = fra)
+TID_REF = 'last'   # 'first' = fra foerste take af niveauet; 'last' = fra candlen der lavede sweepets yderpunkt
 VRG_ONESIDE = False # Vergence: efter en Vergence uden trade er siden lukket (indtil et trade)
 VRG_ALLBACK = False # Vergence: begge indeks skal staa tilbage forbi niveauet ved entry
 VRG_SAMELVL = True  # Vergence: begge indeks skal have taget samme niveau
@@ -104,6 +105,8 @@ class St:
     aLv: float = None    # Vergence: niveauet efter det er taget i vinduet = NQ's yderpunkt siden
     aT: int = None       # tid (sek.) for sweepet
     bT: int = None
+    aX: float = None     # sweepets yderpunkt indtil nu (til TID_REF='last')
+    bX: float = None
     bLv: float = None
 
 
@@ -443,6 +446,7 @@ def _run(nq_path, es_path, start, end, base):
                         sd['new'] = True
                     st.bLv = bh if isHi else bl
                 if newA or newB:
+                    sd['xT'] = t
                     h.swHi = h.swHi or isHi
                     h.swLo = h.swLo or not isHi
                     if dbgOn:
@@ -458,9 +462,13 @@ def _run(nq_path, es_path, start, end, base):
             newA = not st.aDone and st.aM is None and aSweep
             newB = not st.bDone and st.bM is None and bSweep
             if newA:
-                st.aM, st.aT = minB, t
+                st.aM, st.aT, st.aX = minB, t, (hi if isHi else lo)
             if newB:
-                st.bM, st.bT = minB, t
+                st.bM, st.bT, st.bX = minB, t, (bh if isHi else bl)
+            if TID_REF == 'last' and not newA and st.aX is not None and not st.aDone and ((hi > st.aX) if isHi else (lo < st.aX)):
+                st.aX, st.aT = (hi if isHi else lo), t
+            if TID_REF == 'last' and not newB and st.bX is not None and not st.bDone and bok and ((bh > st.bX) if isHi else (bl < st.bX)):
+                st.bX, st.bT = (bh if isHi else bl), t
             if newA or newB:
                 h.swHi = h.swHi or isHi
                 h.swLo = h.swLo or not isHi
@@ -729,7 +737,8 @@ def _run(nq_path, es_path, start, end, base):
             if vArms and not mBad:
                 keep = []
                 for vs, va, vb, vsame, vnm, vt in vArms:
-                    if TID_CLOSE and t - vt > 15 * (TID_CLOSE - 1):
+                    tref = max(vt, vSide[vs].get('xT') or vt) if TID_REF == 'last' else vt
+                    if TID_CLOSE and t - tref > 15 * (TID_CLOSE - 1):
                         continue   # Tid close: for sent efter sweepet
                     aD = (cl < op) if vs else (cl > op)
                     bD = bok and ((bc < bo) if vs else (bc > bo))
