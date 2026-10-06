@@ -50,6 +50,9 @@ EQT_MODE = 'dist'   # live EQ / session liq taget i entry-minuttet: 'all' = alti
 MODE = 'smt'       # 'smt' = Sweep Trade, 'vrg' = Vergence (begge indeks tager samme niveau)
 VRG_GAP = 5        # Vergence: max minutter mellem de to sweeps
 VRG_MOVED = 'until'  # 'until' = nye yderpunkter taeller indtil siden har haft sin foerste Vergence; Vergence: taeller et nyt yderpunkt efter et taget niveau som ny liq? (nej: kun frisk liq)
+MERGE_EITHER = False  # samlet niveau paa bare eet indeks -> ikke selvstaendigt niveau
+BOTHSIDES = False  # liq taget i begge retninger i vinduet -> ingen entry
+CORR = False       # markedet skal vaere correlated (se Entry Rules)
 TID_CLOSE = 2      # entry paa sweep-candlen eller den naeste 15s-candle (0 = fra)
 TID_REF_SMT = 'first'  # SMT: taelles fra foerste candle der tager niveauet (13/1/26 ugyldig)
 TID_REF = 'first'  # Vergence: samme som SMT - fra foerste candle der tager niveauet ('last' = fra sweepets yderpunkt)
@@ -58,6 +61,7 @@ VRG_ALLBACK = False # Vergence: begge indeks skal staa tilbage forbi niveauet ve
 VRG_SAMELVL = True  # Vergence: begge indeks skal have taget samme niveau
 VRG_SAMEMIN = True # Vergence: entry skal vaere i samme minut som sweepet
 VRG_FIRST = 'both' # 'both' = foerste close hvor begge lukker i retningen afgoer; 'any' = foerste close hvor bare et af dem goer
+PRE_1529 = True  # 15:29-candlens EQ (lukker foer open) taeller som 'EQ foer open'
 PRE_INVALID = True  # EQ foer open ramt i entry-minuttet -> ugyldigt (False = test)
 EQ_RESET = True    # nulstil live EQ'er ved open (som EQ-indikatoren)
 USE_MBAD = True    # high- og low-side taget i samme minut -> ingen nye trades i minuttet
@@ -235,6 +239,7 @@ def _run(nq_path, es_path, start, end, base):
     # minut-status
     curM = None
     mHi = mLo = mBad = False
+    SIDE = {'d': None, 'hi': False, 'lo': False}   # liq taget paa high-/low-siden i vinduet i dag
     minTrades = []
     trades = []
     stats = {"noDir": 0, "slBad": 0, "both": 0, "ugyldig": 0}
@@ -391,6 +396,10 @@ def _run(nq_path, es_path, start, end, base):
             aSweep = hi >= aL + TICK if isHi else lo <= aL - TICK
             bSweep = bok and (bh >= bL + TICK if isHi else bl <= bL - TICK)
             lvlNm = nm + (" high" if isHi else " low")
+            if inWin and (aSweep or bSweep):
+                if SIDE['d'] != dstr:
+                    SIDE.update(d=dstr, hi=False, lo=False)
+                SIDE['hi' if isHi else 'lo'] = True
             # session high/low taget i vinduet (kun foerste gang - et allerede taget niveau taeller ikke)
             if inWin and aSweep and not st.aTook and nm != "15m":
                 if isHi:
@@ -514,15 +523,18 @@ def _run(nq_path, es_path, start, end, base):
             check(ny.lo, ny.aLo, ny.bLo, False, "NY PRE", *tg(ny, False))
         # har BEGGE indeks taget niveauet i en senere session, er det samme niveau som
         # den senere sessions -> tjekkes kun dér
+        # MERGE_EITHER: er niveauet samlet med en senere session paa bare eet af indeksene
+        # (fx NQ "NY PRE + London + Asia"), er det ikke laengere et selvstaendigt niveau (9/4/26)
+        mrg = (lambda x, y: x or y) if MERGE_EITHER else (lambda x, y: x and y)
         if not lOn:
-            if not (lon.maHi and lon.mbHi):
+            if not mrg(lon.maHi, lon.mbHi):
                 check(lon.hi, lon.aHi, lon.bHi, True, "London", *tg(lon, True))
-            if not (lon.maLo and lon.mbLo):
+            if not mrg(lon.maLo, lon.mbLo):
                 check(lon.lo, lon.aLo, lon.bLo, False, "London", *tg(lon, False))
         if not aOn:
-            if not (asia.maHi and asia.mbHi):
+            if not mrg(asia.maHi, asia.mbHi):
                 check(asia.hi, asia.aHi, asia.bHi, True, "Asia", *tg(asia, True))
-            if not (asia.maLo and asia.mbLo):
+            if not mrg(asia.maLo, asia.mbLo):
                 check(asia.lo, asia.aLo, asia.bLo, False, "Asia", *tg(asia, False))
         if not nOn and tMin < M15_END:
             for m in lv15:
@@ -542,6 +554,7 @@ def _run(nq_path, es_path, start, end, base):
         # EQ paa 1m: vurder den netop lukkede minut-candle paa foerste bar i nyt minut
         new1m = lastMin is not None and minB != lastMin
         if new1m:
+            prevMinOHLC = list(curMinOHLC)
             o1, h1, l1, c1 = curMinOHLC
             own = (h1 + l1) / 2
             bearE = c1 < o1 and c1 < own
@@ -622,6 +635,16 @@ def _run(nq_path, es_path, start, end, base):
                 else:
                     pUT = max(pUT, hi)
                 preU = (pUB + pUT) / 2
+            # 15:29-candlen lukker foer open: dens EQ er ogsaa en 'EQ foer open' (30/3-26)
+            if PRE_1529 and new1m and tMin == WIN_S and resetDay == dstr:
+                o1, h1, l1, c1 = prevMinOHLC
+                own = (h1 + l1) / 2
+                if c1 < o1 and c1 < own and (pDT is None or preDHitM is not None):
+                    pDT, pDB, preDHitM = h1, min(l1, lo), None
+                    preD = (pDT + pDB) / 2
+                if c1 > o1 and c1 > own and (pUB is None or preUHitM is not None):
+                    pUB, pUT, preUHitM = l1, max(h1, hi), None
+                    preU = (pUB + pUT) / 2
 
         # niveauer ved open til charts (SNAP = {} for at slaa til)
         if SNAP is not None and not inWin:
@@ -787,6 +810,24 @@ def _run(nq_path, es_path, start, end, base):
         # kun eet trade pr. minut - et nyt signal i samme minut afloeser ikke det foerste
         if ONE_PER_MIN and h.fired and lastTradeM == minB:
             h.fired = False
+        if h.fired and SIDE['d'] == dstr:
+            # liq taget i begge retninger (15:30-liq eller session-liq) -> ingen entry
+            if BOTHSIDES and SIDE['hi'] and SIDE['lo']:
+                h.fired = False
+                stats["begge_sider"] = stats.get("begge_sider", 0) + 1
+        if h.fired and CORR:
+            # markedet skal vaere correlated: long fra fx NY PRE low er ugyldig, hvis et af
+            # indeksene allerede er ved/over samme sessions high (short spejlvendt)
+            nmS = next((k for k in ("NY PRE", "London", "Asia") if k in (h.src or "")), None)
+            if nmS:
+                Sx = {"NY PRE": ny, "London": lon, "Asia": asia}[nmS]
+                if h.isShort:
+                    bad = (Sx.aLo is not None and cl <= Sx.aLo) or (bok and Sx.bLo is not None and bc <= Sx.bLo)
+                else:
+                    bad = (Sx.aHi is not None and cl >= Sx.aHi) or (bok and Sx.bHi is not None and bc >= Sx.bHi)
+                if bad:
+                    h.fired = False
+                    stats["ikke_corr"] = stats.get("ikke_corr", 0) + 1
         if h.fired and not mBad:
             sh, px = h.isShort, cl
             # BE
