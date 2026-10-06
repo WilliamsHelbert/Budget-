@@ -50,7 +50,7 @@ EQT_MODE = 'dist'   # live EQ / session liq taget i entry-minuttet: 'all' = alti
 MODE = 'smt'       # 'smt' = Sweep Trade, 'vrg' = Vergence (begge indeks tager samme niveau)
 VRG_GAP = 5        # Vergence: max minutter mellem de to sweeps
 VRG_MOVED = 'until'  # 'until' = nye yderpunkter taeller indtil siden har haft sin foerste Vergence; Vergence: taeller et nyt yderpunkt efter et taget niveau som ny liq? (nej: kun frisk liq)
-MERGE_EITHER = False  # samlet niveau paa bare eet indeks -> ikke selvstaendigt niveau
+MERGE_EITHER = True  # samlet niveau paa bare eet indeks -> ikke selvstaendigt niveau
 BOTHSIDES = False  # liq taget i begge retninger i vinduet -> ingen entry
 CORR = False       # markedet skal vaere correlated (se Entry Rules)
 TID_CLOSE = 2      # entry paa sweep-candlen eller den naeste 15s-candle (0 = fra)

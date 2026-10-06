@@ -10,6 +10,9 @@ Kun ændringer der hjælper over hele perioden er taget med.
   3. candle eller senere = ugyldig. (`TID_CLOSE = 2`, `TID_REF = 'first'`, `TID_REF_SMT = 'first'`)
 - Ingen BE i de første 2 15s-candles efter entry.
 - EQ før open ramt i entry-minuttet = ugyldig; EQ før open fortsætter med at vokse efter open.
+  EQ'en fra 15:29-candlen (lukker før open) tæller også som EQ før open (`PRE_1529`, 30/3-26).
+- Et session-niveau der kun er samlet med en senere session på det ene indeks, er ikke sit eget
+  niveau (fx London+Asia samlet i NY PRE high på NQ, men ikke på ES → kun NY PRE high). (`MERGE_EITHER`, 9/4-26)
 - Ét trade pr. minut; high og low taget i samme minut før entry = ugyldig.
 
 ## SMT
@@ -29,10 +32,12 @@ Kun ændringer der hjælper over hele perioden er taget med.
 ## Resultater med reglerne (R)
 | | 2023* | 2024 | 2025 | 2026** | I alt | Max DD | Blows (−10R) |
 |---|---|---|---|---|---|---|---|
-| SMT + tid close | +32,6 | −52,2 | +70,0 | +40,2 | +90,6 | −56 | 6 |
-| SMT + tid close + kurvefilter 30 | +32,6 | −9,8 | +55,7 | +40,2 | +118,8 | −19 | 2 |
-| Vergence + tid close | +1,0 | −0,9 | +10,6 | +17,6 | +28,3 | −24 | 8 |
+| SMT + tid close | +34,9 | −53,5 | +62,4 | +44,7 | +88,4 | −60 | 5 |
+| SMT + tid close + kurvefilter 30 | +34,9 | −10,5 | +55,0 | +44,7 | +124,0 | −17 | 1 |
+| Vergence + tid close | +0,0 | +0,1 | +23,4 | +29,8 | +53,4 | −25 | 5 |
+| SMT filter 30 + Vergence | +34,9 | −10,4 | +78,4 | +74,5 | +177,4 | −35 | 5 |
 
+Før EQ 15:29- og samlet-niveau-rettelserne: SMT filter 30 +118,8 (2 blows), Vergence +29,3 (8 blows), samlet +148,2 (10 blows).
 \* fra 20/6. \*\* til 11/9.
 
 ## Testet og forkastet
