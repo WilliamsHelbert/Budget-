@@ -50,6 +50,7 @@ EQT_MODE = 'dist'   # live EQ / session liq taget i entry-minuttet: 'all' = alti
 MODE = 'smt'       # 'smt' = Sweep Trade, 'vrg' = Vergence (begge indeks tager samme niveau)
 VRG_GAP = 5        # Vergence: max minutter mellem de to sweeps
 VRG_MOVED = 'until'  # 'until' = nye yderpunkter taeller indtil siden har haft sin foerste Vergence; Vergence: taeller et nyt yderpunkt efter et taget niveau som ny liq? (nej: kun frisk liq)
+TID_CLOSE = 0      # 0 = fra; 2 = entry paa sweep-candlen eller den naeste 15s-candle
 VRG_ONESIDE = False # Vergence: efter en Vergence uden trade er siden lukket (indtil et trade)
 VRG_ALLBACK = False # Vergence: begge indeks skal staa tilbage forbi niveauet ved entry
 VRG_SAMELVL = True  # Vergence: begge indeks skal have taget samme niveau
@@ -101,6 +102,8 @@ class St:
     aOn: bool = False    # (ubrugt)
     bOn: bool = False
     aLv: float = None    # Vergence: niveauet efter det er taget i vinduet = NQ's yderpunkt siden
+    aT: int = None       # tid (sek.) for sweepet
+    bT: int = None
     bLv: float = None
 
 
@@ -455,9 +458,9 @@ def _run(nq_path, es_path, start, end, base):
             newA = not st.aDone and st.aM is None and aSweep
             newB = not st.bDone and st.bM is None and bSweep
             if newA:
-                st.aM = minB
+                st.aM, st.aT = minB, t
             if newB:
-                st.bM = minB
+                st.bM, st.bT = minB, t
             if newA or newB:
                 h.swHi = h.swHi or isHi
                 h.swLo = h.swLo or not isHi
@@ -479,6 +482,11 @@ def _run(nq_path, es_path, start, end, base):
                     dirOK = (cl < pcl and bc < pbc) if isHi else (cl > pcl and bc > pbc)
                 aBack = not st.aDone and not bTk and st.aM == minB and (not CLOSE_BACK or (cl < aL if isHi else cl > aL))
                 bBack = not st.bDone and not aTk and st.bM == minB and bok and (not CLOSE_BACK or (bc < bL if isHi else bc > bL))
+                # Tid close: entry paa sweep-candlen eller de naeste TID_CLOSE-1 candles
+                if TID_CLOSE and aBack and t - st.aT > 15 * (TID_CLOSE - 1):
+                    aBack = False
+                if TID_CLOSE and bBack and t - st.bT > 15 * (TID_CLOSE - 1):
+                    bBack = False
                 if not dirOK and (aBack or bBack):
                     h.noDir = True
                 if dbgOn and (aBack or bBack):
@@ -721,6 +729,8 @@ def _run(nq_path, es_path, start, end, base):
             if vArms and not mBad:
                 keep = []
                 for vs, va, vb, vsame, vnm, vt in vArms:
+                    if TID_CLOSE and t - vt > 15 * (TID_CLOSE - 1):
+                        continue   # Tid close: for sent efter sweepet
                     aD = (cl < op) if vs else (cl > op)
                     bD = bok and ((bc < bo) if vs else (bc > bo))
                     trig = (aD and bD) if VRG_FIRST == 'both' else ((aD or bD) if VRG_FIRST == 'any' else (aD if VRG_FIRST == 'nq' else True))
