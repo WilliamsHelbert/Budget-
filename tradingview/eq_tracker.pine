@@ -1,7 +1,16 @@
 //@version=6
 // =====================================================================
-//  EQ - Equilibrium Tracker  (v16)
+//  EQ - Equilibrium Tracker  (v17)
 //  ---------------------------------------------------------------
+//  NYT I v17
+//    - "EQ foer open": den live bearish og bullish EQ der staar lige
+//      foer market open, gemmes ved open i stedet for at blive slettet.
+//      Er der ingen live EQ, bruges 15:29-candlens EQ (lukker foer open).
+//      Den vises som lilla linjer (0 / 0.25 / EQ / 0.75 / 1) med labelen
+//      "EQ foer open" og vokser videre efter open, indtil EQ-linjen rammes.
+//      Saa staar den frosset resten af dagen. Bruges som BE-niveau
+//      (samme regel som backtesten). Kan slaas fra.
+//
 //  NYT I v16
 //    - En BRUGT (frossen) EQ fjernes, naar prisen har closet helt
 //      igennem den - altsaa et close over boksens top eller under dens
@@ -94,6 +103,9 @@ resetOnOpen    = input.bool(true, "Nulstil ALLE EQ'er ved market open", group = 
      tooltip = "Paa dagens foerste bar fra og med aabningstiden slettes baade aktive og frosne EQ'er, og dagen starter helt forfra.")
 showPreOpen    = input.bool(true, "Vis EQ'er fra foer market open", group = g4,
      tooltip = "Slaa fra for at holde chartet rent indtil aabningen - saa oprettes der slet ingen EQ'er i timerne foer market open.")
+showPreEq      = input.bool(true, "Vis EQ foer open efter open (til BE)", group = g4,
+     tooltip = "Den live EQ lige foer open (eller 15:29-candlens EQ) beholdes efter open som lilla linjer og vokser videre, indtil den rammes.")
+preCol         = input.color(color.purple, "Farve EQ foer open", group = g4)
 showOpenMarker = input.bool(true, "Marker nulstillings-baren (blaa baggrund)", group = g4,
      tooltip = "Farver den bar hvor nulstillingen sker. Slaa fra naar du har bekraeftet at den rammer rigtigt.")
 openHour       = input.int(9, "Market open - time (NY)",  minval = 0, maxval = 23, group = g4)
@@ -180,9 +192,10 @@ mkLine(int x1, int x2, float y, color c, int w) =>
     line.new(x1, y, x2, y, xloc = xloc.bar_time, color = c, width = w)
 
 setBox(box b, int x2, float top, float bot) =>
-    box.set_top(b, top)
-    box.set_bottom(b, bot)
-    box.set_right(b, x2)
+    if not na(b)
+        box.set_top(b, top)
+        box.set_bottom(b, bot)
+        box.set_right(b, x2)
 
 setLine(line l, int x1, int x2, float y) =>
     if not na(l)
@@ -206,6 +219,21 @@ newDraw(int x1, int x2, float hi, float lo, bool isBull) =>
         d.l25 := mkLine(x1, x2, p25, dnLineCol, qtWidth)
         d.l75 := mkLine(x1, x2, p75, upLineCol, qtWidth)
         d.l1  := mkLine(x1, x2, hi,  upLineCol, qtWidth)
+    d
+
+// EQ foer open: kun linjer (ingen bokse) i een farve + label
+newPreDraw(int x1, int x2, float hi, float lo) =>
+    float rg = hi - lo
+    EqDraw d = EqDraw.new()
+    d.l0  := mkLine(x1, x2, lo, preCol, 1)
+    d.l25 := mkLine(x1, x2, lo + 0.25 * rg, preCol, 1)
+    d.eq  := mkLine(x1, x2, lo + 0.50 * rg, preCol, 3)
+    d.l75 := mkLine(x1, x2, lo + 0.75 * rg, preCol, 1)
+    d.l1  := mkLine(x1, x2, hi, preCol, 1)
+    line.set_style(d.l0,  line.style_dashed)
+    line.set_style(d.l25, line.style_dashed)
+    line.set_style(d.l75, line.style_dashed)
+    line.set_style(d.l1,  line.style_dashed)
     d
 
 updDraw(EqDraw d, int x1, int x2, float hi, float lo) =>
@@ -257,10 +285,49 @@ var float lLHi     = na
 var float lLLo     = na
 var int   lKillT   = na
 
+// ═══════════════════ STATE: EQ FOER OPEN ═══════════════════
+var float  pbHi  = na
+var float  pbLo  = na
+var int    pbT   = na
+var bool   pbOn  = false
+var bool   pbNew = false     // lavet af 15:29-candlen paa open-baren
+var EqDraw pbD   = na
+var label  pbLb  = na
+var float  plHi  = na
+var float  plLo  = na
+var int    plT   = na
+var bool   plOn  = false
+var bool   plNew = false
+var EqDraw plD   = na
+var label  plLb  = na
+
 // ═══════════════ NULSTILLING VED MARKET OPEN ═══════════════
 // Koeres foerst, saa dagens foerste oprettelses-candle tegner paa et
 // helt rent chart. Aktive EQ'er slettes - de fryser IKKE.
+// Undtagelse: den live EQ lige foer open gemmes som "EQ foer open".
 if resetOnOpen and isOpenBar
+    delDraw(pbD)
+    delDraw(plD)
+    label.delete(pbLb)
+    label.delete(plLb)
+    pbD  := na
+    plD  := na
+    pbLb := na
+    plLb := na
+    pbOn := false
+    plOn := false
+    pbNew := false
+    plNew := false
+    if showPreEq and useBear and bActive
+        pbHi := bAnchor
+        pbLo := bLow
+        pbT  := bAnchorT
+        pbOn := true
+    if showPreEq and useBull and lActive
+        plHi := lHigh
+        plLo := lAnchor
+        plT  := lAnchorT
+        plOn := true
     delDraw(bCur)
     delDraw(bLast)
     delDraw(lCur)
@@ -281,6 +348,58 @@ bool  valid = newBar and canCreate and not na(o1) and not na(c1) and not na(eq1)
 bool bearTrig = valid and c1 < o1 and c1 < eq1
 // Bullish: lukkede bullish OG over sin egen EQ.
 bool bullTrig = valid and c1 > o1 and c1 > eq1
+
+// 15:29-candlen lukker foer open: dens EQ bliver "EQ foer open" (hvis der
+// ikke allerede er en), og den starter ikke en almindelig live EQ.
+// Paa et 1m-chart er 15:29-candlen allerede vurderet paa sin egen bar
+// (og gemt ovenfor, hvis den var live) - der er open-barens candle 15:30.
+bool open1529 = resetOnOpen and isOpenBar and not sameTF
+if open1529 and showPreEq
+    if bearTrig and useBear and not pbOn
+        pbHi  := h1
+        pbLo  := math.min(l1, low)
+        pbT   := t1
+        pbOn  := true
+        pbNew := true
+    if bullTrig and useBull and not plOn
+        plHi  := math.max(h1, high)
+        plLo  := l1
+        plT   := t1
+        plOn  := true
+        plNew := true
+if open1529
+    bearTrig := false
+    bullTrig := false
+
+// EQ foer open: tjek mod linjen FOER barens egen low/high flytter den
+// (som backtesten), voks ellers videre. Rammes den, fryser den resten
+// af dagen. En EQ fra 15:29-candlen tjekkes foerst fra naeste bar.
+if pbOn
+    if na(pbD)
+        pbD  := newPreDraw(pbT, time, pbHi, pbLo)
+        pbLb := label.new(time, (pbHi + pbLo) / 2, "EQ foer open", xloc = xloc.bar_time,
+             color = color.new(preCol, 100), textcolor = preCol, style = label.style_label_left, size = size.small)
+    if pbNew
+        pbNew := false
+    else if barstate.isconfirmed and high >= (pbHi + pbLo) / 2
+        pbOn := false
+    else
+        pbLo := math.min(pbLo, low)
+    updDraw(pbD, pbT, time, pbHi, pbLo)
+    label.set_xy(pbLb, time, (pbHi + pbLo) / 2)
+if plOn
+    if na(plD)
+        plD  := newPreDraw(plT, time, plHi, plLo)
+        plLb := label.new(time, (plHi + plLo) / 2, "EQ foer open", xloc = xloc.bar_time,
+             color = color.new(preCol, 100), textcolor = preCol, style = label.style_label_left, size = size.small)
+    if plNew
+        plNew := false
+    else if barstate.isconfirmed and low <= (plHi + plLo) / 2
+        plOn := false
+    else
+        plHi := math.max(plHi, high)
+    updDraw(plD, plT, time, plHi, plLo)
+    label.set_xy(plLb, time, (plHi + plLo) / 2)
 
 // ════════════════════════ BEARISH EQ ══════════════════════════
 // ── VAEKST + FRYS (koeres FOER oprettelse, saa en ny EQ kan starte
