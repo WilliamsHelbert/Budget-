@@ -44,11 +44,14 @@ USE_369 = True   # kun minutter med tvaersum 3/6/9
 USE_PRE = True   # EQ fra foer market open som BE-kandidat
 USE_TAGET = True # Taget-regel (se scriptet v3.0)
 DBG = None   # saet af datoer ('YYYY-MM-DD') -> LOG faar forklaringer for de dage
+SNAP = None  # dict -> niveauer ved open pr. dag (til charts)
 LOG = []
 EQT_MODE = 'dist'   # live EQ / session liq taget i entry-minuttet: 'all' = altid ugyldigt, 'dist' = kun hvis niveauet ligger paa BE-siden af entry, 'off' = ignoreres
 MODE = 'smt'       # 'smt' = Sweep Trade, 'vrg' = Vergence (begge indeks tager samme niveau)
 VRG_GAP = 5        # Vergence: max minutter mellem de to sweeps
 VRG_MOVED = 'until'  # 'until' = nye yderpunkter taeller indtil siden har haft sin foerste Vergence; Vergence: taeller et nyt yderpunkt efter et taget niveau som ny liq? (nej: kun frisk liq)
+VRG_ONESIDE = False # Vergence: efter en Vergence uden trade er siden lukket (indtil et trade)
+VRG_ALLBACK = False # Vergence: begge indeks skal staa tilbage forbi niveauet ved entry
 VRG_SAMELVL = True  # Vergence: begge indeks skal have taget samme niveau
 VRG_SAMEMIN = True # Vergence: entry skal vaere i samme minut som sweepet
 VRG_FIRST = 'both' # 'both' = foerste close hvor begge lukker i retningen afgoer; 'any' = foerste close hvor bare et af dem goer
@@ -200,7 +203,7 @@ def run(nq_path, es_path, start, end):
     dHitM = uHitM = sHiM = sLoM = None
     lastTradeM = None
     vArms = []
-    vSide = {s_: dict(aF=[], bF=[], aE=None, bE=None, aFL=None, bFL=None, aFM=None, bFM=None, new=False, had=False) for s_ in (True, False)}
+    vSide = {s_: dict(aF=[], bF=[], aE=None, bE=None, aFL=None, bFL=None, aFM=None, bFM=None, new=False, had=False, dead=False) for s_ in (True, False)}
     vDay = None
     resetDay = None
     hitsD, hitsU, hitsSH, hitsSL = [], [], [], []   # (tid, niveau) ramt i vinduet
@@ -355,7 +358,7 @@ def run(nq_path, es_path, start, end):
         if MODE == 'vrg' and inWin and vDay != dstr:
             vDay = dstr
             for s_ in (True, False):
-                vSide[s_].update(aF=[], bF=[], aE=None, bE=None, aFL=None, bFL=None, aFM=None, bFM=None, new=False, had=False)
+                vSide[s_].update(aF=[], bF=[], aE=None, bE=None, aFL=None, bFL=None, aFM=None, bFM=None, new=False, had=False, dead=False)
         h = Hit()
 
         def check(st, aL, bL, isHi, nm, aTg=None, bTg=None):
@@ -578,6 +581,11 @@ def run(nq_path, es_path, start, end):
                     pUT = max(pUT, hi)
                 preU = (pUB + pUT) / 2
 
+        # niveauer ved open til charts (SNAP = {} for at slaa til)
+        if SNAP is not None and inWin and tMin == WIN_S and dstr not in SNAP:
+            SNAP[dstr] = dict(
+                sess={nm: [x.aHi, x.aLo, x.bHi, x.bLo] for nm, x in (("Asia", asia), ("London", lon), ("NY PRE", ny))},
+                m15=[[m.a, m.b, m.isHi] for m in lv15], preD=preD, preU=preU)
         # minut-status
         if minB != curM:
             curM, mHi, mLo, mBad = minB, False, False, False
@@ -667,7 +675,13 @@ def run(nq_path, es_path, start, end):
                         sd['had'] = True
                         fm = lambda L: ",".join(f"{x[2]}@{x[0] % 60}" for x in L)
                         vinf = f"NQ[{fm(sd['aF'])}] e{None if sd['aE'] is None else sd['aE'] % 60} ES[{fm(sd['bF'])}] e{None if sd['bE'] is None else sd['bE'] % 60}"
-                        h.varmList.append((side, aLv, bLv, vinf, " / ".join(names)))
+                        if not (VRG_ONESIDE and sd['dead']):
+                            h.varmList.append((side, aLv, bLv, vinf, " / ".join(names)))
+                        elif DBG is not None and dstr in DBG:
+                            LOG.append((dstr, dk.strftime("%H:%M:%S"), f"VERGENCE {' / '.join(names)} IGNORERET: siden har haft en Vergence uden trade"))
+                        # en Vergence uden trade lukker siden; et trade aabner den igen
+                        if VRG_ONESIDE is True:
+                            sd['dead'] = True
                         if DBG is not None and dstr in DBG:
                             LOG.append((dstr, dk.strftime("%H:%M:%S"), f"VERGENCE {' / '.join(names)}: NQ frisk {aLv} ES frisk {bLv}"))
                 sd['new'] = False
@@ -699,11 +713,24 @@ def run(nq_path, es_path, start, end):
                     # de(t) indeks der tog FRISK liq skal lukke tilbage forbi den
                     backA = not VRG_BACK or va is None or (cl < va if vs else cl > va)
                     backB = not VRG_BACK or vb is None or (bok and (bc < vb if vs else bc > vb))
+                    if VRG_ALLBACK:
+                        # begge indeks skal staa tilbage forbi niveauet ved entry (ogsaa det der tog det foerst)
+                        nm_ = set(vnm.split(" / ")); ext_ = max if vs else min
+                        la = [f[1] for f in sdv['aF'] if f[2] in nm_]
+                        lb = [f[1] for f in sdv['bF'] if f[2] in nm_]
+                        if la:
+                            backA = backA and (cl < ext_(la) if vs else cl > ext_(la))
+                        if lb:
+                            backB = backB and bok and (bc < ext_(lb) if vs else bc > ext_(lb))
                     backOK = backA and backB
                     slOK = (m1Hi - cl <= MAX_SL) if vs else (cl - m1Lo <= MAX_SL)
                     if backOK and slOK and not h.fired:
                         h.fired, h.isShort, h.lvl, h.src, h.info = True, vs, va, vnm, vsame or ""
                         h.who = "Begge" if va is not None and vb is not None else ("NQ" if va is not None else "ES")
+                    elif VRG_ONESIDE == 'reject' and not (backOK and slOK) and not h.fired:
+                        vSide[vs]['dead'] = True
+                        if DBG is not None and dstr in DBG:
+                            LOG.append((dstr, dk.strftime("%H:%M:%S"), f"VERGENCE AFVIST {vnm}: tilbage NQ={backA} ES={backB} SL ok={slOK} -> siden lukket"))
                     elif not VRG_ONESHOT and not (backOK and slOK):
                         keep.append((vs, va, vb, vsame, vnm, vt))
                     elif DBG is not None and dstr in DBG and not (backOK and slOK):
@@ -820,6 +847,8 @@ def run(nq_path, es_path, start, end):
             trades.append(rec)
             minTrades.append(rec)
             lastTradeM = minB
+            if MODE == 'vrg':
+                vSide[sh]['dead'] = False
             o = {"short": sh, "entry": px, "sl": sl, "tp": tp, "be": be, "beHit": False,
                  "bars": 0, "minB": minB, "rec": rec}
 
