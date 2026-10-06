@@ -49,6 +49,7 @@ EQT_MODE = 'dist'   # live EQ / session liq taget i entry-minuttet: 'all' = alti
 MODE = 'smt'       # 'smt' = Sweep Trade, 'vrg' = Vergence (begge indeks tager samme niveau)
 VRG_GAP = 5        # Vergence: max minutter mellem de to sweeps
 VRG_MOVED = False  # 'until' = nye yderpunkter taeller indtil siden har haft sin foerste Vergence; Vergence: taeller et nyt yderpunkt efter et taget niveau som ny liq? (nej: kun frisk liq)
+VRG_SAMELVL = False # Vergence: begge indeks skal have taget samme niveau
 VRG_SAMEMIN = True # Vergence: entry skal vaere i samme minut som sweepet
 VRG_FIRST = 'both' # 'both' = foerste close hvor begge lukker i retningen afgoer; 'any' = foerste close hvor bare et af dem goer
 PRE_INVALID = True  # EQ foer open ramt i entry-minuttet -> ugyldigt (False = test)
@@ -141,6 +142,7 @@ class Hit:
     both: bool = False
     noDir: bool = False
     slBad: bool = False
+    info: str = ""
     varmList: list = field(default_factory=list)   # Vergence: [(short, NQ-niveau, ES-niveau, samme minut, navn)]
 
 
@@ -640,6 +642,12 @@ def run(nq_path, es_path, start, end):
                 if sd['new']:
                     fa = [f for f in sd['aF'] if not f[3] and sd['bE'] is not None and abs(f[0] - sd['bE']) <= VRG_GAP]
                     fb = [f for f in sd['bF'] if not f[3] and sd['aE'] is not None and abs(f[0] - sd['aE']) <= VRG_GAP]
+                    if VRG_SAMELVL:
+                        # begge indeks skal have taget det samme niveau (fx begge London low)
+                        nB = {x[2] for x in sd['bF']}
+                        nA = {x[2] for x in sd['aF']}
+                        fa = [f for f in fa if f[2] in nB]
+                        fb = [f for f in fb if f[2] in nA]
                     if fa or fb:
                         ext = max if side else min
                         # kun det indeks der tager frisk liq i DETTE minut skal lukke tilbage
@@ -647,13 +655,19 @@ def run(nq_path, es_path, start, end):
                         fbN = [f for f in fb if f[0] == minB]
                         if faN or fbN:
                             fa, fb = faN, fbN
+                        if VRG_SAMELVL:
+                            # close tilbage maales mod det yderste niveau indekset tog i samme minut
+                            fa = [f for f in sd['aF'] if f[0] in {g[0] for g in fa}]
+                            fb = [f for f in sd['bF'] if f[0] in {g[0] for g in fb}]
                         aLv = ext(f[1] for f in fa) if fa else None
                         bLv = ext(f[1] for f in fb) if fb else None
                         names = sorted({f[2] for f in fa + fb})
                         for f in fa + fb:
                             f[3] = True
                         sd['had'] = True
-                        h.varmList.append((side, aLv, bLv, None, " / ".join(names)))
+                        fm = lambda L: ",".join(f"{x[2]}@{x[0] % 60}" for x in L)
+                        vinf = f"NQ[{fm(sd['aF'])}] e{None if sd['aE'] is None else sd['aE'] % 60} ES[{fm(sd['bF'])}] e{None if sd['bE'] is None else sd['bE'] % 60}"
+                        h.varmList.append((side, aLv, bLv, vinf, " / ".join(names)))
                         if DBG is not None and dstr in DBG:
                             LOG.append((dstr, dk.strftime("%H:%M:%S"), f"VERGENCE {' / '.join(names)}: NQ frisk {aLv} ES frisk {bLv}"))
                 sd['new'] = False
@@ -688,7 +702,7 @@ def run(nq_path, es_path, start, end):
                     backOK = backA and backB
                     slOK = (m1Hi - cl <= MAX_SL) if vs else (cl - m1Lo <= MAX_SL)
                     if backOK and slOK and not h.fired:
-                        h.fired, h.isShort, h.lvl, h.src = True, vs, va, vnm
+                        h.fired, h.isShort, h.lvl, h.src, h.info = True, vs, va, vnm, vsame or ""
                         h.who = "Begge" if va is not None and vb is not None else ("NQ" if va is not None else "ES")
                     elif not VRG_ONESHOT and not (backOK and slOK):
                         keep.append((vs, va, vb, vsame, vnm, vt))
@@ -798,7 +812,7 @@ def run(nq_path, es_path, start, end):
                 o["rec"]["exit"] = dk.strftime("%H:%M:%S")
             rec = {
                 "dato": lt.strftime("%Y-%m-%d"), "tid": dk.strftime("%H:%M:%S"),
-                "retning": "SHORT" if sh else "LONG", "niveau": h.src, "swept": h.who,
+                "retning": "SHORT" if sh else "LONG", "niveau": h.src, "swept": h.who, "vinfo": h.info,
                 "entry": px, "sl": sl, "sl_pts": round(abs(px - sl), 2),
                 "tp": tp, "tp_kilde": tpS, "be": be, "be_kilde": beS,
                 "status": "OK", "resultat": "AABEN", "exit": "", "points": None, "R": None,
