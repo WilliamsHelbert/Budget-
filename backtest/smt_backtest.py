@@ -226,6 +226,7 @@ def _run(nq_path, es_path, start, end, base):
     dAct = uAct = False
     dTop = dBot = uTop = uBot = None
     dLastMid = uLastMid = preD = preU = None
+    dFormT = uFormT = None
     pDT = pDB = pUB = pUT = None
     preDHitM = preUHitM = None
     dHitM = uHitM = sHiM = sLoM = None
@@ -599,6 +600,7 @@ def _run(nq_path, es_path, start, end, base):
                 dBot = min(dBot, lo)
         if bearE and not dAct:
             dTop, dBot, dAct = h1, min(l1, lo), True
+            dFormT = t - 60
         if uAct:
             if lo <= (uBot + uTop) / 2:
                 uAct = False
@@ -613,6 +615,7 @@ def _run(nq_path, es_path, start, end, base):
                 uTop = max(uTop, hi)
         if bullE and not uAct:
             uBot, uTop, uAct = l1, max(h1, hi), True
+            uFormT = t - 60
         # EQ foer market open (til BE) - laases fra 15:30
         if tMin < WIN_S:
             preD = (dTop + dBot) / 2 if dAct else None   # kun en live EQ
@@ -652,7 +655,8 @@ def _run(nq_path, es_path, start, end, base):
         if SNAP is not None and inWin and tMin == WIN_S and dstr not in SNAP:
             SNAP[dstr] = dict(
                 sess={nm: [x.aHi, x.aLo, x.bHi, x.bLo] for nm, x in (("Asia", asia), ("London", lon), ("NY PRE", ny))},
-                m15=[[m.a, m.b, m.isHi, preDead.get(id(m), False), m.tm] for m in lv15], preD=preD, preU=preU)
+                m15=[[m.a, m.b, m.isHi, preDead.get(id(m), False), m.tm] for m in lv15], preD=preD, preU=preU,
+                preDT=(pDT, pDB, dFormT if pDT is not None else None), preUT=(pUB, pUT, uFormT if pUB is not None else None))
         # minut-status
         if minB != curM:
             curM, mHi, mLo, mBad = minB, False, False, False

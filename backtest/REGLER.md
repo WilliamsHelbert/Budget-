@@ -14,6 +14,8 @@ Kun ændringer der hjælper over hele perioden er taget med.
 - Et session-niveau der kun er samlet med en senere session på det ene indeks, er ikke sit eget
   niveau (fx London+Asia samlet i NY PRE high på NQ, men ikke på ES → kun NY PRE high). (`MERGE_EITHER`, 9/4-26)
 - Ét trade pr. minut; high og low taget i samme minut før entry = ugyldig.
+- Max 2 trades pr. dag pr. model, og **stop modellen for dagen efter en vundet trade** (også hvis det er dagens første).
+  BE er ikke en win. Effekt 2023–26: SMT filter 30 +124,0 → +126,8R, Vergence +53,4 → +46,9R, samlet 177,4 → 173,7R, samme DD og blows.
 
 ## SMT
 - 3-6-9-reglen beholdes (uden den: +33R mod +70R).
