@@ -64,6 +64,7 @@ USE_SESS_BE = True # session-liq som BE-kandidat (ogsaa i Vergence)
 USE_15M_BE = True  # 15m-niveauer som BE-kandidat
 USE_5M = True      # 5m-niveauer som BE-kandidat i aabningsminuttet
 PRICE_REF = None   # fx 25000: SL/TP/BE og R skaleres med NQ-prisen (None = faste point)
+KDAY = None        # {dato: faktor} - skaler SL/TP/BE/R pr. dag (fx efter volatilitet)
 NEED_BE = False    # test: tradet kraever et BE der ligger foer TP
 BE2 = True         # ingen BE i de foerste 2 15s-candles efter entry
 VRG_BACK = True    # Vergence: indekset der tog frisk liq skal lukke tilbage forbi den
@@ -542,8 +543,8 @@ def _run(nq_path, es_path, start, end, base):
         # Market open: alle live EQ'er nulstilles (som EQ-indikatoren). EQ'en der stod
         # lige foer open er allerede gemt som "EQ foer open".
         # PRICE_REF: SL/TP/BE-graenser og R skaleres med NQ-prisen ved open (pris / PRICE_REF)
-        if PRICE_REF and inWin and scaleDay != dstr:
-            scaleDay, kScale = dstr, op / PRICE_REF
+        if (PRICE_REF or KDAY) and inWin and scaleDay != dstr:
+            scaleDay, kScale = dstr, (KDAY.get(dstr, 1.0) if KDAY else op / PRICE_REF)
             MIN_SL, MAX_SL, TP_MIN, TP_MAX, BE_MIN, BE_MAX = (v * kScale for v in base)
         if EQ_RESET and inWin and resetDay != dstr:
             resetDay = dstr
