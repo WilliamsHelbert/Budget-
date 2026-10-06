@@ -63,6 +63,8 @@ USE_TOOK = True    # naermeste BE er en session-liq der allerede er taget i vind
 USE_SESS_BE = True # session-liq som BE-kandidat (ogsaa i Vergence)
 USE_15M_BE = True  # 15m-niveauer som BE-kandidat
 USE_5M = True      # 5m-niveauer som BE-kandidat i aabningsminuttet
+PRICE_REF = None   # fx 25000: SL/TP/BE og R skaleres med NQ-prisen (None = faste point)
+NEED_BE = False    # test: tradet kraever et BE der ligger foer TP
 BE2 = True         # ingen BE i de foerste 2 15s-candles efter entry
 VRG_BACK = True    # Vergence: indekset der tog frisk liq skal lukke tilbage forbi den
 VRG_BOTHBACK = True  # Vergence: tog begge frisk liq i samme minut, skal begge lukke tilbage
@@ -151,6 +153,17 @@ class Hit:
 
 
 def run(nq_path, es_path, start, end):
+    global MIN_SL, MAX_SL, TP_MIN, TP_MAX, BE_MIN, BE_MAX
+    base = (MIN_SL, MAX_SL, TP_MIN, TP_MAX, BE_MIN, BE_MAX)
+    try:
+        return _run(nq_path, es_path, start, end, base)
+    finally:
+        MIN_SL, MAX_SL, TP_MIN, TP_MAX, BE_MIN, BE_MAX = base
+
+
+def _run(nq_path, es_path, start, end, base):
+    global MIN_SL, MAX_SL, TP_MIN, TP_MAX, BE_MIN, BE_MAX
+    scaleDay, kScale = None, 1.0
     a = load(nq_path)
     b = load(es_path)
     t0 = int(pd.Timestamp(start, tz=TZ).timestamp()) - 2 * 86400
@@ -528,6 +541,10 @@ def run(nq_path, es_path, start, end):
             curMinOHLC[3] = cl
         # Market open: alle live EQ'er nulstilles (som EQ-indikatoren). EQ'en der stod
         # lige foer open er allerede gemt som "EQ foer open".
+        # PRICE_REF: SL/TP/BE-graenser og R skaleres med NQ-prisen ved open (pris / PRICE_REF)
+        if PRICE_REF and inWin and scaleDay != dstr:
+            scaleDay, kScale = dstr, op / PRICE_REF
+            MIN_SL, MAX_SL, TP_MIN, TP_MAX, BE_MIN, BE_MAX = (v * kScale for v in base)
         if EQ_RESET and inWin and resetDay != dstr:
             resetDay = dstr
             dAct = uAct = False
@@ -615,7 +632,7 @@ def run(nq_path, es_path, start, end):
                     pts = abs(o["tp"] - o["entry"])
                     tr["resultat"] = "TP"
                 tr["points"] = round(pts, 2)
-                tr["R"] = round(pts / 10, 2)
+                tr["R"] = round(pts / (10 * o.get("k", 1.0)), 2)
                 tr["exit"] = dk.strftime("%H:%M:%S")
                 o = None
             else:
@@ -829,12 +846,13 @@ def run(nq_path, es_path, start, end):
                     tp, tpS = cv, cn
             if tp is None:
                 tp = px - TP_MAX if sh else px + TP_MAX
-            if beBad:
+            noBE = NEED_BE and not beBad and (be is None or abs(be - px) >= abs(tp - px))
+            if beBad or noBE:
                 trades.append({
                     "dato": lt.strftime("%Y-%m-%d"), "tid": dk.strftime("%H:%M:%S"),
                     "retning": "SHORT" if sh else "LONG", "niveau": h.src, "swept": h.who,
                     "entry": px, "sl": None, "sl_pts": None, "tp": None, "tp_kilde": "", "be": be, "be_kilde": beS,
-                    "status": "UGYLDIG (BE allerede ramt)", "resultat": "", "exit": "", "points": None, "R": None,
+                    "status": "UGYLDIG (intet BE foer TP)" if noBE else "UGYLDIG (BE allerede ramt)", "resultat": "", "exit": "", "points": None, "R": None,
                 })
                 stats["beRamt"] = stats.get("beRamt", 0) + 1
                 continue
@@ -853,7 +871,7 @@ def run(nq_path, es_path, start, end):
             lastTradeM = minB
             if MODE == 'vrg':
                 vSide[sh]['dead'] = False
-            o = {"short": sh, "entry": px, "sl": sl, "tp": tp, "be": be, "beHit": False,
+            o = {"short": sh, "entry": px, "sl": sl, "tp": tp, "be": be, "beHit": False, "k": kScale,
                  "bars": 0, "minB": minB, "rec": rec}
 
     d0, d1 = pd.Timestamp(start).date(), pd.Timestamp(end).date()
