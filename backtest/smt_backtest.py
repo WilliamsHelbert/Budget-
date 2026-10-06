@@ -52,7 +52,7 @@ VRG_GAP = 5        # Vergence: max minutter mellem de to sweeps
 VRG_MOVED = 'until'  # 'until' = nye yderpunkter taeller indtil siden har haft sin foerste Vergence; Vergence: taeller et nyt yderpunkt efter et taget niveau som ny liq? (nej: kun frisk liq)
 TID_CLOSE = 2      # entry paa sweep-candlen eller den naeste 15s-candle (0 = fra)
 TID_REF_SMT = 'first'  # SMT: taelles fra foerste candle der tager niveauet (13/1/26 ugyldig)
-TID_REF = 'last'   # Vergence: 'last' = fra candlen der lavede sweepets yderpunkt, 'first' = fra foerste take
+TID_REF = 'first'  # Vergence: samme som SMT - fra foerste candle der tager niveauet ('last' = fra sweepets yderpunkt)
 VRG_ONESIDE = False # Vergence: efter en Vergence uden trade er siden lukket (indtil et trade)
 VRG_ALLBACK = False # Vergence: begge indeks skal staa tilbage forbi niveauet ved entry
 VRG_SAMELVL = True  # Vergence: begge indeks skal have taget samme niveau
