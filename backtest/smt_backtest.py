@@ -61,6 +61,7 @@ VRG_ALLBACK = False # Vergence: begge indeks skal staa tilbage forbi niveauet ve
 VRG_SAMELVL = True  # Vergence: begge indeks skal have taget samme niveau
 VRG_SAMEMIN = True # Vergence: entry skal vaere i samme minut som sweepet
 VRG_FIRST = 'both' # 'both' = foerste close hvor begge lukker i retningen afgoer; 'any' = foerste close hvor bare et af dem goer
+PRE_TOL = None   # EQ foer open ramt i entry-minuttet: hvor langt BAG entry den maa ligge og stadig goere tradet ugyldigt (None = BE_MIN)
 PRE_1529 = True  # 15:29-candlens EQ (lukker foer open) taeller som 'EQ foer open'
 PRE_INVALID = True  # EQ foer open ramt i entry-minuttet -> ugyldigt (False = test)
 EQ_RESET = True    # nulstil live EQ'er ved open (som EQ-indikatoren)
@@ -874,7 +875,7 @@ def _run(nq_path, es_path, start, end, base):
                 if eq is None or hm != minB:
                     return False
                 d = (px - eq) if sh else (eq - px)
-                return -BE_MIN <= d <= BE_MAX
+                return -(BE_MIN if PRE_TOL is None else PRE_TOL) <= d <= BE_MAX
             # kun EQ'en paa BE-siden: short -> bullish (under), long -> bearish (over)
             if USE_PRE and PRE_INVALID and ((preTaken(preU, preUHitM, preUHitT)) if sh else (preTaken(preD, preDHitM, preDHitT))):
                 beBad, beS = True, "EQ foer open"
