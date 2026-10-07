@@ -384,7 +384,8 @@ def _run(nq_path, es_path, start, end, base):
                 if aHit or bHit:
                     m.dead = True
         else:
-            for m in lv05:
+            # 5m altid, 15m efter 15:31 (foer det tjekker check() dem): taget -> ikke BE-kandidat
+            for m in lv05 + (lv15 if tMin >= M15_END else []):
                 if (hi >= m.a) if m.isHi else (lo <= m.a):
                     m.st.aTook = True
 

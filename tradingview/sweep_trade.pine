@@ -674,6 +674,12 @@ if not nOn and array.size(lv05) > 0
         Lv m = array.get(lv05, i)
         if m.isHi ? high >= m.a : low <= m.a
             m.st.aTook := true
+// 15m-niveauer efter 15:31 (tjekkes ikke laengere for SMT) - taget -> ikke BE-kandidat
+if not nOn and tMin >= m15E and array.size(lv15) > 0
+    for i = 0 to array.size(lv15) - 1
+        Lv m = array.get(lv15, i)
+        if m.isHi ? high >= m.a : low <= m.a
+            m.st.aTook := true
 
 // ─────────────────── TJEK ALLE NIVEAUER ───────────────────
 Hit hit = Hit.new()
