@@ -1,77 +1,32 @@
 //@version=6
 // =====================================================================
-//  Vergence  (v2.6)
+//  Vergence  (v3.0)  - samme model som backtesten (oktober 2026)
 //  ---------------------------------------------------------------
-//  NYT I v2.6
-//    - BE-kandidat: EQ fra FOER market open (EQ-linjen paa den bullish og
-//      bearish EQ der stod lige foer 15:30 - live, ellers den sidst brugte).
-//    - EQ fra foer open kan kun bruges som BE, saa laenge den ikke er ramt
-//      efter open. Rammes den i SAMME minut som entry (foer/paa entry-
-//      candlen), er tradet UGYLDIGT ("BE allerede ramt").
-//    - Session liq der skulle have vaeret BE, men allerede er taget foer
-//      entry -> tradet er UGYLDIGT.
-//  ---------------------------------------------------------------
-//  NYT I v2.5
-//    - Sweeper begge indeks i SAMME minut, skal BEGGE lukke tilbage
-//      forbi hver sit niveau paa entry-candlen (short: under, long: over).
-//      Sker sweepene i forskellige minutter, er det som foer chartets
-//      symbol der skal lukke tilbage.
-//  ---------------------------------------------------------------
-//  NYT I v2.4
-//    - NY PRE 15m-niveauerne (som Session Levels tegner) er nu ogsaa med
-//      i Vergence - gaelder til 15:31 ligesom paa Session Levels.
-//  ---------------------------------------------------------------
-//  NYT I v2.3
-//    - Position tegnes paa NQ: SL-felt (roed) og TP-felt (groen), som
-//      TradingViews position-vaerktoej. Den del af feltet prisen har
-//      vaeret i, bliver moerkere. Felterne vokser med tiden og stopper
-//      ved SL / TP.
-//    - Max SL-stregen (30p) gaar fra Vergence og frem til tradet.
-//  ---------------------------------------------------------------
-//  NYT I v2.2
-//    - TP: det naermeste af EQ og session liq mellem 35 og 75 points.
-//      Ligger intet inden for, er TP 75 points. TP-linjen tegnes kun paa NQ.
-//    - SL = toppen (short) / bunden (long) af 1m-candlen ved entry - fast.
-//  ---------------------------------------------------------------
-//  NYT I v2.1
-//    - SL (minuttets high/low, min 10p) og TP (naermeste session liq
-//      mellem 3.5R og 7.5R, ellers 7.5R) foelges efter entry.
-//    - Naar SL eller TP rammes, forsvinder boksen, og BE-linjen stopper
-//      paa den candle hvor det skete.
-//    - BE-linjen starter 5 min frem og vokser 1 min pr. minut tradet
-//      er aabent. BE flytter SL til entry (tidligst efter 2 15s-closes).
-//  ---------------------------------------------------------------
-//  NYT I v2 (samme stil som Sweep Trade / SMT)
-//    - Ingen store labels, ingen SL-boks og ingen debug-tabel.
-//      Paa chartet staar kun en lille "VRG" ved tradet (over ved short,
-//      under ved long) + den gule 30-points-streg.
-//    - Lille boks i hjoernet (default nederst MIDT, saa den ikke ligger
-//      oven i Sweep Trade-boksen nederst til hoejre):
-//        "Mulighed for Vergence"  -> det ene indeks har taget et niveau,
-//                                    venter paa det andet (max 5 min)
-//        "Vergence - venter paa close" -> begge har taget det
-//        "SHORT" / "LONG"         -> trade, med BE (kun paa NQ)
-//        Grunde naar det ikke blev til noget:
-//          "> 5 min", "Ingen close tilbage", "SL > 30",
-//          "Ugyldig - begge sider taget"
-//    - UGYLDIG: bliver der i samme minut taget baade en high-side og en
-//      low-side, er alt i det minut ugyldigt og slettes.
-//    - BE = den NAERMESTE af EQ / 0.25 / 0.75, session liq, 15m og
-//      5m (kun 15:30) - samme regler som Sweep Trade.
-//
 //  MODELLEN
-//    BEGGE indeks skal tage SAMME session liq (Asia, London eller
-//    NY PRE high/low), hver sit eget niveau, mindst 1 tick forbi.
-//    Det andet sweep skal ske senest 5 minutter efter det foerste.
+//    - Begge indeks skal tage SAMME niveau (Asia / London / NY PRE
+//      high/low eller et NY PRE 15m-niveau til 15:31), hver sit eget
+//      niveau, mindst 1 tick forbi. Det andet indeks senest 5 min efter.
+//    - Et niveau der tages foerste gang i vinduet = FRISK liq. Bagefter
+//      flytter niveauet med indeksets nye yderpunkt. Nye yderpunkter
+//      taeller som liq, indtil siden har haft sin foerste Vergence.
+//    - Det indeks der tager frisk liq i det minut der fuldender
+//      Vergence, skal lukke tilbage forbi niveauet (begge, hvis begge
+//      tog frisk liq i samme minut).
+//    - ENTRY: den FOERSTE 15s-candle hvor begge indeks lukker i
+//      retningen afgoer. Close tilbage og SL <= 30 -> trade. Ellers ingen.
+//    - TID CLOSE: entry paa den candle der fuldender Vergence eller den
+//      naeste. 3. candle eller senere = intet trade.
+//    - Samme minut som sweepet. High- og low-side taget i samme minut
+//      = ugyldigt. Kun eet trade pr. minut.
+//    - BE kun EQ (EQ, 0.25/0.75, EQ foer open) og session liq - ikke
+//      5m/15m (kan slaas til). Intet BE de foerste 2 candles.
+//    - EQ foer open vokser videre efter open til den rammes; er der
+//      ingen live EQ ved open, bruges 15:29-candlens EQ.
+//    - Samlet niveau paa bare eet indeks (fx London samlet i NY PRE
+//      high paa NQ) er ikke sit eget niveau.
+//    - Max 2 trades pr. dag, stop for dagen efter en vundet trade.
 //
-//  ENTRY (samme minut som det sweep der fuldender Vergence)
-//    Det FOERSTE 15s-candle hvor begge indeks lukker i rigtig retning
-//    afgoer tradet:
-//      * chartets symbol lukker tilbage forbi niveauet -> ENTRY
-//      * ellers                                        -> ugyldigt
-//    SL over 30 points fra minuttets top/bund -> ugyldigt.
-//
-//  VINDUE: 15:30 til og med 15:59. Laeg den paa et 15s-chart.
+//  Laeg den paa et 15s-chart. Vindue 15:30-15:59 dansk (09:30 NY).
 // =====================================================================
 indicator("Helbert's Hjælpe Indikator (Vergence)", overlay = true,
      max_labels_count = 500, max_lines_count = 500, max_boxes_count = 500)
@@ -108,6 +63,11 @@ maxGap   = input.int(5, "Max minutter mellem de to sweeps", minval = 0, maxval =
 
 g6 = "Regler"
 needBack  = input.bool(true, "Kraev luk tilbage forbi niveauet", group = g6)
+tidClose  = input.int(2, "Tid close: entry senest paa candle nr. (0 = fra)", minval = 0, maxval = 4, group = g6,
+     tooltip = "Taelles fra den 15s-candle der fuldender Vergence. 2 = den candle eller den naeste.")
+mergeEither = input.bool(true, "Samlet niveau paa eet indeks er ikke eget niveau", group = g6)
+maxDay    = input.int(2, "Max trades pr. dag", minval = 0, group = g6)
+stopWin   = input.bool(true, "Stop for dagen efter en vundet trade", group = g6)
 dayBlock  = input.bool(false, "Bloker resten af dagen naar begge sider er taget", group = g6,
      tooltip = "Fra (standard): kun SAMME minut goer det ugyldigt. Til: er der siden open taget baade en high-side og en low-side, kommer der ikke flere trades den dag.")
 minSL     = input.float(10, "Minimum SL (points) - 1R", minval = 0, group = g6)
@@ -136,8 +96,8 @@ showPx   = input.bool(true, "Skriv prisen ved entry / SL / TP", group = g8)
 pxCol    = input.color(color.gray, "Entry-pris", group = g8)
 beEq    = input.bool(true, "EQ og 0.25 / 0.75",        group = g4)
 beSess  = input.bool(true, "Session liq",              group = g4)
-be15    = input.bool(true, "15m-niveauer",             group = g4)
-be05    = input.bool(true, "5m-niveauer (kun 15:30)",  group = g4)
+be15    = input.bool(false, "15m-niveauer",             group = g4)
+be05    = input.bool(false, "5m-niveauer (kun 15:30)",  group = g4)
 bePre   = input.bool(true, "EQ fra foer market open", group = g4,
      tooltip = "EQ-linjen (0.5) paa den bullish og bearish EQ der stod lige foer 15:30 - live, ellers den sidst brugte. Laases ved open og kan bruges som BE resten af vinduet.")
 
@@ -215,15 +175,13 @@ fmtM(int m) =>
     na(m) ? "-" : str.format_time(m * 60000, "HH:mm", tz)
 
 // ─────────────────────────── TYPER ───────────────────────────
-// Status for EEN side (high eller low) af eet session-niveau.
-//   aM/bM = minuttet hvor hvert indeks tog niveauet (na = uroert)
-//   done  = Vergence-tjekket er afgjort for denne side
-//   aTook = chartets symbol har taget niveauet (kan ikke bruges som BE)
+// Status for EEN side (high eller low) af eet niveau.
+//   aLv/bLv = niveauet efter det er taget i vinduet (indeksets yderpunkt siden)
+//   aTook   = chartets symbol har taget niveauet (kan ikke bruges som BE)
 type St
-    int  aM    = na
-    int  bM    = na
-    bool done  = false
-    bool aTook = false
+    float aLv   = na
+    float bLv   = na
+    bool  aTook = false
 
 type Sess
     float aHi = na
@@ -232,36 +190,67 @@ type Sess
     float bLo = na
     St    hi  = na
     St    lo  = na
+    // Taget i en senere session (foer open) -> niveauet flytter med
+    bool  maHi = false   // chartets symbol
+    bool  maLo = false
+    bool  mbHi = false   // det andet indeks
+    bool  mbLo = false
 
-// Eet NY PRE 15m- eller 5m-niveau (kun til BE).
+// Eet NY PRE 15m- eller 5m-niveau.
 type Lv
     float a     = na
     float b     = na
     bool  isHi  = false
     bool  dead  = false
     bool  aTook = false
-    St    st    = na      // Vergence-status (bruges for 15m-niveauerne)
+    St    st    = na
+
+// Frisk liq: minut, niveau, navn, brugt i en Vergence
+type Fr
+    int    m = na
+    float  l = na
+    string n = ""
+    bool   u = false
+
+// Status for een side (true = high-siden / short) i dag
+type Side
+    array<Fr> aF
+    array<Fr> bF
+    int   aE    = na     // minuttet chartets symbol sidst tog liq der taeller
+    int   bE    = na
+    bool  had   = false  // siden har haft sin foerste Vergence
+    bool  isNew = false  // ny liq paa denne bar
+    float aFL   = na     // yderste friske niveau i minuttet aFM
+    float bFL   = na
+    int   aFM   = na
+    int   bFM   = na
+
+// En fuldendt Vergence der venter paa close
+type Arm
+    bool   sh = false
+    float  a  = na       // chartets friske niveau (na = tog ikke frisk liq)
+    float  b  = na
+    string nm = ""
+    int    t  = na       // tid for candlen der fuldendte den
 
 // Hvad skete der paa denne bar?
 type Hit
-    bool   fired   = false   // Vergence fuldendt (begge har taget niveauet)
-    bool   isShort = false
-    float  lvl     = na
-    float  lvlB    = na      // niveauet paa sammenligningssymbolet
-    bool   same    = false   // begge sweepede i samme minut
-    string src     = ""
-    string txt     = ""
-    bool   tooLate = false   // begge tog det, men > maxGap min imellem
-    string lateTxt = ""
-    bool   first   = false   // det foerste indeks tog et niveau
+    bool   first   = false   // det ene indeks tog et niveau
     string firstTx = ""
-    bool   swHi    = false   // et high-niveau blev swept i vinduet
-    bool   swLo    = false   // et low-niveau blev swept i vinduet
+    bool   swHi    = false   // et high-niveau blev taget i vinduet
+    bool   swLo    = false
+    bool   sHi     = false   // chartet tog et session high (foerste gang) i vinduet
+    float  sHiV    = na
+    bool   sLo     = false
+    float  sLoV    = na
 
 type BeC
     float  v   = na
     string src = ""
     bool   bad = false   // den valgte BE er allerede ramt -> tradet er ugyldigt
+
+newSide() =>
+    Side.new(array.new<Fr>(), array.new<Fr>())
 
 // ─────────────────────────── FUNKTIONER ───────────────────────────
 build(Sess s, bool isStart) =>
@@ -272,6 +261,10 @@ build(Sess s, bool isStart) =>
         s.bLo := bLow
         s.hi  := St.new()
         s.lo  := St.new()
+        s.maHi := false
+        s.maLo := false
+        s.mbHi := false
+        s.mbLo := false
     else
         s.aHi := math.max(s.aHi, high)
         s.aLo := math.min(s.aLo, low)
@@ -279,45 +272,121 @@ build(Sess s, bool isStart) =>
         s.bLo := na(bLow)  ? s.bLo : math.min(nz(s.bLo, bLow),  bLow)
     true
 
-// Tjek een side af eet niveau for Vergence.
-check(St st, float aL, float bL, bool isHi, string nm, Hit h) =>
+// Tjek een side af eet niveau. Kun i vinduet.
+check(St st, float aL, float bL, bool isHi, string nm, Hit h, Side sd) =>
     if not na(st) and not na(aL) and not na(bL)
         bool aSweep = isHi ? high >= aL + tick : low <= aL - tick
-        bool bSweep = isHi ? (not na(bHigh) and bHigh >= bL + tick) : (not na(bLow) and bLow <= bL - tick)
         string lvlNm = nm + (isHi ? " high" : " low")
+        // Session high/low taget i vinduet (kun foerste gang)
+        if inWin and aSweep and not st.aTook and nm != "15m"
+            if isHi
+                h.sHi  := true
+                h.sHiV := na(h.sHiV) ? aL : math.max(h.sHiV, aL)
+            else
+                h.sLo  := true
+                h.sLoV := na(h.sLoV) ? aL : math.min(h.sLoV, aL)
         if aSweep
             st.aTook := true
-        if not st.done
-            bool newA = na(st.aM) and aSweep
-            bool newB = na(st.bM) and bSweep
+        if inWin
+            float curA = na(st.aLv) ? aL : st.aLv
+            float curB = na(st.bLv) ? bL : st.bLv
+            bool newA = isHi ? high >= curA + tick : low <= curA - tick
+            bool newB = not na(bHigh) and not na(bLow) and (isHi ? bHigh >= curB + tick : bLow <= curB - tick)
+            bool frA = newA and na(st.aLv)
+            bool frB = newB and na(st.bLv)
             if newA
-                st.aM := minB
+                if frA
+                    array.push(sd.aF, Fr.new(minB, aL, lvlNm, false))
+                    sd.aFL := nz(sd.aFM, -1) != minB or na(sd.aFL) ? aL : (isHi ? math.max(sd.aFL, aL) : math.min(sd.aFL, aL))
+                    sd.aFM := minB
+                if frA or not sd.had
+                    sd.aE    := minB
+                    sd.isNew := true
+                st.aLv := isHi ? high : low
             if newB
-                st.bM := minB
-            if inWin and (newA or newB)
+                if frB
+                    array.push(sd.bF, Fr.new(minB, bL, lvlNm, false))
+                    sd.bFL := nz(sd.bFM, -1) != minB or na(sd.bFL) ? bL : (isHi ? math.max(sd.bFL, bL) : math.min(sd.bFL, bL))
+                    sd.bFM := minB
+                if frB or not sd.had
+                    sd.bE    := minB
+                    sd.isNew := true
+                st.bLv := isHi ? bHigh : bLow
+            if newA or newB
                 h.swHi := h.swHi or isHi
                 h.swLo := h.swLo or not isHi
-            if not na(st.aM) and not na(st.bM)
-                st.done := true
-                int gap = math.abs(st.aM - st.bM)
-                string tx = lvlNm + "  (" + aName + " " + fmtM(st.aM) + " / " + bName + " " + fmtM(st.bM) + ")"
-                if inWin and gap <= maxGap and not h.fired
-                    h.fired   := true
-                    h.isShort := isHi
-                    h.lvl     := aL
-                    h.lvlB    := bL
-                    h.same    := st.aM == st.bM
-                    h.src     := lvlNm
-                    h.txt     := tx
-                else if inWin and gap > maxGap
-                    h.tooLate := true
-                    h.lateTxt := tx
-            else if inWin and (newA or newB)
-                // Kun det ene indeks har taget det - mulighed for Vergence
+            if (frA and na(st.bLv)) or (frB and na(st.aLv))
                 h.first   := true
-                h.firstTx := lvlNm + "  (" + (newA ? aName : bName) + " " + fmtM(minB)
-                     + ", venter paa " + (newA ? bName : aName) + " til " + fmtM(minB + maxGap) + ")"
+                h.firstTx := lvlNm + "  (" + (frA ? aName : bName) + " " + fmtM(minB)
+                     + ", venter paa " + (frA ? bName : aName) + " til " + fmtM(minB + maxGap) + ")"
     true
+
+hasName(array<Fr> L, string n) =>
+    bool f = false
+    for x in L
+        if x.n == n
+            f := true
+    f
+
+hasMin(array<Fr> L, int m) =>
+    bool f = false
+    for x in L
+        if x.m == m
+            f := true
+    f
+
+// Er Vergence fuldendt paa denne side? Begge indeks har taget samme niveau, mindst
+// eet af dem frisk, hoejst maxGap min fra hinanden. Returnerer en Arm (ellers na).
+resolve(Side sd, bool isHi) =>
+    Arm out = na
+    if sd.isNew
+        array<Fr> fa = array.new<Fr>()
+        array<Fr> fb = array.new<Fr>()
+        for f in sd.aF
+            if not f.u and not na(sd.bE) and math.abs(f.m - sd.bE) <= maxGap and hasName(sd.bF, f.n)
+                array.push(fa, f)
+        for f in sd.bF
+            if not f.u and not na(sd.aE) and math.abs(f.m - sd.aE) <= maxGap and hasName(sd.aF, f.n)
+                array.push(fb, f)
+        if array.size(fa) > 0 or array.size(fb) > 0
+            // kun det indeks der tager frisk liq i DETTE minut skal lukke tilbage
+            array<Fr> faN = array.new<Fr>()
+            array<Fr> fbN = array.new<Fr>()
+            for f in fa
+                if f.m == minB
+                    array.push(faN, f)
+            for f in fb
+                if f.m == minB
+                    array.push(fbN, f)
+            if array.size(faN) > 0 or array.size(fbN) > 0
+                fa := faN
+                fb := fbN
+            // close tilbage maales mod det yderste niveau indekset tog i samme minut
+            array<Fr> fa2 = array.new<Fr>()
+            array<Fr> fb2 = array.new<Fr>()
+            for f in sd.aF
+                if hasMin(fa, f.m)
+                    array.push(fa2, f)
+            for f in sd.bF
+                if hasMin(fb, f.m)
+                    array.push(fb2, f)
+            float aLv = na
+            float bLv = na
+            string nms = ""
+            for f in fa2
+                aLv := na(aLv) ? f.l : (isHi ? math.max(aLv, f.l) : math.min(aLv, f.l))
+                f.u := true
+                if not str.contains(nms, f.n)
+                    nms := nms == "" ? f.n : nms + " / " + f.n
+            for f in fb2
+                bLv := na(bLv) ? f.l : (isHi ? math.max(bLv, f.l) : math.min(bLv, f.l))
+                f.u := true
+                if not str.contains(nms, f.n)
+                    nms := nms == "" ? f.n : nms + " / " + f.n
+            sd.had := true
+            out := Arm.new(isHi, aLv, bLv, nms, time)
+        sd.isNew := false
+    out
 
 pushLv(array<Lv> arr, float ah, float al, float bh, float bl) =>
     Lv h = Lv.new()
@@ -379,6 +448,27 @@ var Sess asia = Sess.new()
 var Sess lon  = Sess.new()
 var Sess ny   = Sess.new()
 
+// Tager et indeks en tidligere sessions high/low i en senere session (foer open), er
+// niveauet ikke brugt - det flytter med til den nye high/low (fx "NY PRE + London").
+mergeSess(Sess s, bool on) =>
+    if not on and tMin < winS and not na(s.aHi)
+        if high > s.aHi
+            s.aHi  := high
+            s.maHi := true
+        if low < s.aLo
+            s.aLo  := low
+            s.maLo := true
+        if not na(bHigh) and not na(s.bHi) and bHigh > s.bHi
+            s.bHi  := bHigh
+            s.mbHi := true
+        if not na(bLow) and not na(s.bLo) and bLow < s.bLo
+            s.bLo  := bLow
+            s.mbLo := true
+    true
+
+mergeSess(asia, aOn)
+mergeSess(lon,  lOn)
+
 if aOn
     build(asia, aStart)
 if lOn
@@ -426,17 +516,35 @@ else
     markTook(lv05)
 
 // ─────────────────── TJEK ALLE NIVEAUER ───────────────────
+// Ny dag: begge sider starter forfra
+var Side sideHi = newSide()
+var Side sideLo = newSide()
+var array<Arm> arms = array.new<Arm>()
+var int vDay = na
+if inWin and nz(vDay, -1) != dNow
+    vDay   := dNow
+    sideHi := newSide()
+    sideLo := newSide()
+    array.clear(arms)
+
 Hit hit = Hit.new()
 
+mrgOK(bool ma, bool mb) =>
+    not (mergeEither ? (ma or mb) : (ma and mb))
+
 if useNy and not nOn
-    check(ny.hi, ny.aHi, ny.bHi, true,  "NY PRE", hit)
-    check(ny.lo, ny.aLo, ny.bLo, false, "NY PRE", hit)
+    check(ny.hi, ny.aHi, ny.bHi, true,  "NY PRE", hit, sideHi)
+    check(ny.lo, ny.aLo, ny.bLo, false, "NY PRE", hit, sideLo)
 if useLon and not lOn
-    check(lon.hi, lon.aHi, lon.bHi, true,  "London", hit)
-    check(lon.lo, lon.aLo, lon.bLo, false, "London", hit)
+    if mrgOK(lon.maHi, lon.mbHi)
+        check(lon.hi, lon.aHi, lon.bHi, true,  "London", hit, sideHi)
+    if mrgOK(lon.maLo, lon.mbLo)
+        check(lon.lo, lon.aLo, lon.bLo, false, "London", hit, sideLo)
 if useAsia and not aOn
-    check(asia.hi, asia.aHi, asia.bHi, true,  "Asia", hit)
-    check(asia.lo, asia.aLo, asia.bLo, false, "Asia", hit)
+    if mrgOK(asia.maHi, asia.mbHi)
+        check(asia.hi, asia.aHi, asia.bHi, true,  "Asia", hit, sideHi)
+    if mrgOK(asia.maLo, asia.mbLo)
+        check(asia.lo, asia.aLo, asia.bLo, false, "Asia", hit, sideLo)
 // NY PRE 15m-niveauer (de der var uroerte paa begge ved open), til 15:31
 if use15 and not nOn and tMin < m15H * 60 + m15M and array.size(lv15) > 0
     for i = 0 to array.size(lv15) - 1
@@ -444,7 +552,22 @@ if use15 and not nOn and tMin < m15H * 60 + m15M and array.size(lv15) > 0
         // NY PRE's eget high/low er allerede tjekket ovenfor
         bool isExt = m.isHi ? math.abs(m.a - nz(ny.aHi)) < tickHalf : math.abs(m.a - nz(ny.aLo)) < tickHalf
         if not m.dead and not isExt
-            check(m.st, m.a, m.b, m.isHi, "15m", hit)
+            check(m.st, m.a, m.b, m.isHi, "15m", hit, m.isHi ? sideHi : sideLo)
+
+// Minuttet hvor chartet sidst tog et session high / low i vinduet
+var int sHiM = na
+var int sLoM = na
+var float sHiMx = na
+var float sLoMn = na
+// ... tidligere i minuttet, FOER denne bar (entry-candlen selv taeller ikke)
+float sHiPrev = not na(sHiM) and sHiM == minB ? sHiMx : na
+float sLoPrev = not na(sLoM) and sLoM == minB ? sLoMn : na
+if hit.sHi
+    sHiMx := nz(sHiM, -1) != minB ? hit.sHiV : math.max(sHiMx, hit.sHiV)
+    sHiM  := minB
+if hit.sLo
+    sLoMn := nz(sLoM, -1) != minB ? hit.sLoV : math.min(sLoMn, hit.sLoV)
+    sLoM  := minB
 
 // ═════════════ EQ (til BE) - samme regler som EQ-indikatoren ═════════════
 eqBar() =>
@@ -465,68 +588,130 @@ if t1Chg
 bool new1m = sameTF ? barstate.isconfirmed : t1Chg
 
 float own   = na(h1) or na(l1) ? na : (h1 + l1) / 2
-bool  bearE = new1m and not na(c1) and c1 < o1 and c1 < own
-bool  bullE = new1m and not na(c1) and c1 > o1 and c1 > own
+// En candle der startede foer open (15:29) giver ikke en ny EQ efter open
+int   t1m   = na(t1) ? na : hour(t1, tz) * 60 + minute(t1, tz)
+bool  preC  = inWin and not na(t1m) and t1m < winS
+bool  bearE = new1m and not preC and not na(c1) and c1 < o1 and c1 < own
+bool  bullE = new1m and not preC and not na(c1) and c1 > o1 and c1 > own
 
+// Bearish EQ: anker = high, vokser ned
 var float dLastMid = na     // EQ-linjen paa den sidst brugte bearish EQ
 var float uLastMid = na     // EQ-linjen paa den sidst brugte bullish EQ
 var float dTop = na
 var float dBot = na
 var bool  dAct = false
+var int   dHitM = na        // minuttet hvor en bearish EQ sidst blev ramt
+var int   uHitM = na        // minuttet hvor en bullish EQ sidst blev ramt
+var float dHitMx = na       // hoejeste bearish EQ ramt i minuttet
+var float uHitMn = na       // laveste bullish EQ ramt i minuttet
+// ... tidligere i minuttet, FOER denne bar
+float dHitPrev = not na(dHitM) and dHitM == minB ? dHitMx : na
+float uHitPrev = not na(uHitM) and uHitM == minB ? uHitMn : na
+// Market open: alle live EQ'er nulstilles (som EQ-indikatoren). EQ'en der stod lige
+// foer open er allerede gemt som "EQ foer open".
+var bool uAct = false
+var int  eqResetDay = na
+if inWin and nz(eqResetDay, -1) != dNow
+    eqResetDay := dNow
+    dAct := false
+    uAct := false
 if dAct
-    dBot := math.min(dBot, low)
-    if barstate.isconfirmed and high >= (dTop + dBot) / 2
+    // Tjek mod linjen FOER barens egen low flytter den
+    float dMid0 = (dTop + dBot) / 2
+    if barstate.isconfirmed and high >= dMid0
         dAct := false
-        dLastMid := (dTop + dBot) / 2
+        dLastMid := dMid0
+        dHitMx := nz(dHitM, -1) != minB ? dMid0 : math.max(dHitMx, dMid0)
+        dHitM  := minB
+    else
+        dBot := math.min(dBot, low)
 if bearE and not dAct
     dTop := h1
     dBot := math.min(l1, low)
     dAct := true
 
+// Bullish EQ: anker = low, vokser op
 var float uBot = na
 var float uTop = na
-var bool  uAct = false
 if uAct
-    uTop := math.max(uTop, high)
-    if barstate.isconfirmed and low <= (uBot + uTop) / 2
+    // Tjek mod linjen FOER barens egen high flytter den
+    float uMid0 = (uBot + uTop) / 2
+    if barstate.isconfirmed and low <= uMid0
         uAct := false
-        uLastMid := (uBot + uTop) / 2
+        uLastMid := uMid0
+        uHitMn := nz(uHitM, -1) != minB ? uMid0 : math.min(uHitMn, uMid0)
+        uHitM  := minB
+    else
+        uTop := math.max(uTop, high)
 if bullE and not uAct
     uBot := l1
     uTop := math.max(h1, high)
     uAct := true
 
-// EQ foer market open (til BE): live EQ, ellers den sidst brugte. Laases fra 15:30.
-var float preDMid = na
-var float preUMid = na
-if tMin < winS
-    preDMid := dAct ? (dTop + dBot) / 2 : dLastMid
-    preUMid := uAct ? (uBot + uTop) / 2 : uLastMid
+// EQ foer market open (til BE): kun en EQ der stadig er live. Laases fra 15:30 og
+// vokser videre efter open, indtil EQ-linjen rammes (som backtesten).
+var float pDT = na     // bearish: top (anker) / bund (vokser ned)
+var float pDB = na
+var float pUB = na     // bullish: bund (anker) / top (vokser op)
+var float pUT = na
 // Hvornaar blev EQ'en fra foer open ramt efter open? (minuttet, na = ikke ramt)
 // Ramt = brugt op: den kan ikke laengere bruges som BE.
 var int preDHitM = na
 var int preUHitM = na
+var int preDHitT = na
+var int preUHitT = na
 if tMin < winS
+    pDT := dAct ? dTop : na
+    pDB := dAct ? dBot : na
+    pUB := uAct ? uBot : na
+    pUT := uAct ? uTop : na
     preDHitM := na
     preUHitM := na
 else
-    if na(preDHitM) and not na(preDMid) and low <= preDMid and high >= preDMid
-        preDHitM := minB
-    if na(preUHitM) and not na(preUMid) and low <= preUMid and high >= preUMid
-        preUHitM := minB
+    // Tjek mod linjen FOER barens egen low/high flytter den
+    if na(preDHitM) and not na(pDT)
+        if high >= (pDT + pDB) / 2
+            preDHitM := minB
+            preDHitT := time
+        else
+            pDB := math.min(pDB, low)
+    if na(preUHitM) and not na(pUB)
+        if low <= (pUB + pUT) / 2
+            preUHitM := minB
+            preUHitT := time
+        else
+            pUT := math.max(pUT, high)
+    // 15:29-candlen lukker foer open: dens EQ er ogsaa en 'EQ foer open' (30/3-26),
+    // hvis der ikke allerede staar en (live) EQ foer open i samme retning.
+    if new1m and preC
+        if c1 < o1 and c1 < own and (na(pDT) or not na(preDHitM))
+            pDT := h1
+            pDB := math.min(l1, low)
+            preDHitM := na
+        if c1 > o1 and c1 > own and (na(pUB) or not na(preUHitM))
+            pUB := l1
+            pUT := math.max(h1, high)
+            preUHitM := na
+float preDMid = na(pDT) ? na : (pDT + pDB) / 2
+float preUMid = na(pUB) ? na : (pUB + pUT) / 2
 
 // Blev EQ'en fra foer open ramt i SAMME minut som entry (foer/paa entry-candlen),
 // og ligger den paa profit-siden (eller praktisk talt paa entry)? Saa er
 // BE-spottet taget, og tradet er ugyldigt.
-preTaken(float eq, int hm, float px, bool isShort) =>
+preTaken(float eq, int hm, int ht, float px, bool isShort) =>
     float d = na(eq) ? na : (isShort ? px - eq : eq - px)
+    // EQ fra foer open: ogsaa ramt AF entry-candlen taeller
     not na(eq) and not na(hm) and hm == minB and d >= -beMin and d <= beMax
+
 
 // ═════════════════════ MINUT- OG DAGS-STATUS ═════════════════════
 var int  curM    = na
 var bool mHi     = false
 var bool mLo     = false
 var bool mBad    = false
+var bool mTraded = false   // der er allerede taget et trade i minuttet
+var int  dayTr   = 0       // trades i dag
+var bool dayWin  = false   // en trade har vundet i dag
 var bool dayHi   = false
 var bool dayLo   = false
 var int  lastDay = na
@@ -536,6 +721,8 @@ if newDay
     lastDay := dNow
     dayHi   := false
     dayLo   := false
+    dayTr   := 0
+    dayWin  := false
 
 // Tegninger fra det aktuelle minut - slettes hvis minuttet bliver ugyldigt
 var array<label> minLbls  = array.new<label>()
@@ -547,6 +734,7 @@ if minB != nz(curM, -1)
     mHi  := false
     mLo  := false
     mBad := false
+    mTraded := false
     array.clear(minLbls)
     array.clear(minLines)
     array.clear(minBoxes)
@@ -596,7 +784,7 @@ if newDay
     pendEnd  := na
 
 // Det ene indeks har taget et niveau -> mulighed for Vergence
-if hit.first and not hit.fired and not mBad and not dayBad
+if hit.first and not mBad and not dayBad
     [s1, c1x, l1x, b1x, t1x] = setBox("Mulighed for Vergence", color.yellow, hit.firstTx, "")
     bxStatus := s1
     bxCol    := c1x
@@ -604,16 +792,6 @@ if hit.first and not hit.fired and not mBad and not dayBad
     bxBE     := b1x
     bxTime   := t1x
     pendEnd  := minB + maxGap
-
-// Begge tog det, men for langt imellem
-if hit.tooLate and not hit.fired
-    [s2, c2x, l2x, b2x, t2x] = setBox("Ingen Vergence - > " + str.tostring(maxGap) + " min", color.gray, hit.lateTxt, "")
-    bxStatus := s2
-    bxCol    := c2x
-    bxLvl    := l2x
-    bxBE     := b2x
-    bxTime   := t2x
-    pendEnd  := minB
 
 // "Mulighed" udloeb uden at det andet indeks tog niveauet
 if not na(pendEnd) and minB > pendEnd
@@ -670,6 +848,8 @@ if oLive
     bool hitTP = oShort ? low  <= oTP : high >= oTP
     if hitSL or hitTP
         oLive := false
+        if hitTP and not hitSL
+            dayWin := true
         line.set_x2(oBeLn, time)
         line.set_x2(oTpLn, time)
         box.set_right(oSlB, time)
@@ -704,16 +884,8 @@ if oLive
             oBars += 1
 
 // ═════════════════════ TRADE ═════════════════════
-var bool   armed    = false
-var bool   armShort = false
-var float  armLvl   = na
-var float  armLvlB  = na
-var bool   armSame  = false
-var string armSrc   = ""
-var string armTxt   = ""
-var int    armMinB  = na
 var line   mxLn     = na
-// Stregen slettes 1 candle efter entry
+// Stregen slettes kort efter entry
 var line   mxDel    = na
 var int    mxDelT   = na
 if not na(mxDel) and (barstate.isrealtime ? timenow : time) >= mxDelT
@@ -722,36 +894,34 @@ if not na(mxDel) and (barstate.isrealtime ? timenow : time) >= mxDelT
 
 bool entLong  = false
 bool entShort = false
+bool vrgBear  = false
+bool vrgBull  = false
 
-if hit.fired and not armed and not mBad and not dayBad
-    armed    := true
-    armShort := hit.isShort
-    armLvl   := hit.lvl
-    armLvlB  := hit.lvlB
-    armSame  := hit.same
-    armSrc   := hit.src
-    armTxt   := hit.txt
-    armMinB  := minB
-    [s3, c3x, l3x, b3x, t3x] = setBox("Vergence - venter paa close", color.yellow, hit.txt, "")
-    bxStatus := s3
-    bxCol    := c3x
-    bxLvl    := l3x
-    bxBE     := b3x
-    bxTime   := t3x
-    pendEnd  := minB
-
-bool sameMin = minB == armMinB
-bool dirOK   = armShort ? bothBear : bothBull
-// Sweepede begge i SAMME minut, skal begge indeks lukke tilbage forbi hver sit niveau.
-bool backA   = armShort ? close < armLvl : close > armLvl
-bool backB   = not armSame or (not na(bClose) and (armShort ? bClose < armLvlB : bClose > armLvlB))
-bool backOK  = not needBack or (backA and backB)
+// Kun Vergence fra DETTE minut kan give entry
+if array.size(arms) > 0
+    for i = array.size(arms) - 1 to 0
+        if int(array.get(arms, i).t / 60000) != minB
+            array.remove(arms, i)
+// Ny Vergence paa denne bar (sider afgoeres altid, men arms kun i et gyldigt minut)
+Arm nHi = resolve(sideHi, true)
+Arm nLo = resolve(sideLo, false)
+for nA in array.from(nHi, nLo)
+    if not na(nA) and not mBad and not dayBad
+        array.push(arms, nA)
+        vrgBear := vrgBear or nA.sh
+        vrgBull := vrgBull or not nA.sh
+        bxStatus := "Vergence - venter paa close"
+        bxCol    := color.yellow
+        bxLvl    := nA.nm
+        bxBE     := ""
+        bxTime   := str.format_time(time, "HH:mm:ss", dispTz)
+        pendEnd  := minB
 
 // ── MAX SL-STREGEN: 30 points fra minut-candlens top/bund ──
-float mxLvl = armShort ? m1Hi - maxSL : m1Lo + maxSL
-bool  slOK  = not blockMax or (armShort ? close >= mxLvl : close <= mxLvl)
-if armed and sameMin and showMaxLn
-    int mS = armMinB * 60000
+bool anyArm = array.size(arms) > 0
+bool aSh    = anyArm ? array.get(arms, 0).sh : false
+float mxLvl = aSh ? m1Hi - maxSL : m1Lo + maxSL
+if anyArm and showMaxLn and not mBad
     if na(mxLn)
         mxLn := line.new(time, mxLvl, time + mxAhead * 60000, mxLvl, xloc = xloc.bar_time, color = mxCol, width = 3)
         array.push(minLines, mxLn)
@@ -760,200 +930,239 @@ if armed and sameMin and showMaxLn
         line.set_y2(mxLn, mxLvl)
         line.set_x2(mxLn, time + mxAhead * 60000)
 
-// ── FOERSTE 15s-close i rigtig retning afgoer tradet ──
-if armed and barstate.isconfirmed and sameMin and dirOK and not mBad
-    armed   := false
-    pendEnd := na
-    if not backOK
-        bxStatus := "Ingen Vergence - ingen close tilbage"
-        bxCol    := color.gray
-        bxBE     := ""
-    else if not slOK
-        mxLn     := na     // stregen bliver staaende, saa man kan se hvorfor
-        bxStatus := "Ingen Vergence - SL > " + str.tostring(maxSL, "#")
-        bxCol    := color.gray
-        bxBE     := ""
-    else
-        bool  sh = armShort
-        float px = close
-
-        // ── BE: den naermeste kandidat ──
-        BeC bc = BeC.new()
-        float lo  = sh ? (uAct ? uBot : na) : (dAct ? dBot : na)
-        float hi  = sh ? (uAct ? uTop : na) : (dAct ? dTop : na)
-        float mid = na(lo) or na(hi) ? na : (lo + hi) / 2
-        float qt  = na(lo) or na(hi) ? na : lo + (sh ? 0.75 : 0.25) * (hi - lo)
-        if beEq
-            tryBE(bc, px, sh, mid, "EQ")
-            tryBE(bc, px, sh, qt,  sh ? "0.75" : "0.25")
-        if bePre
-            if na(preDHitM)
-                tryBE(bc, px, sh, preDMid, "EQ foer open")
-            if na(preUHitM)
-                tryBE(bc, px, sh, preUMid, "EQ foer open")
-        if beSess
-            if not na(asia.lo)
-                tryBEt(bc, px, sh, sh ? asia.aLo : asia.aHi, sh ? "Asia low" : "Asia high", sh ? asia.lo.aTook : asia.hi.aTook)
-            if not na(lon.lo)
-                tryBEt(bc, px, sh, sh ? lon.aLo : lon.aHi, sh ? "London low" : "London high", sh ? lon.lo.aTook : lon.hi.aTook)
-            if not na(ny.lo)
-                tryBEt(bc, px, sh, sh ? ny.aLo : ny.aHi, sh ? "NY PRE low" : "NY PRE high", sh ? ny.lo.aTook : ny.hi.aTook)
-        if be15 and array.size(lv15) > 0
-            for i = 0 to array.size(lv15) - 1
-                Lv m = array.get(lv15, i)
-                if m.isHi != sh and not m.dead and not m.aTook
-                    tryBE(bc, px, sh, m.a, sh ? "15m low" : "15m high")
-        if be05 and isOpenM and array.size(lv05) > 0
-            for i = 0 to array.size(lv05) - 1
-                Lv m = array.get(lv05, i)
-                if m.isHi != sh and not m.dead and not m.aTook
-                    tryBE(bc, px, sh, m.a, sh ? "5m low" : "5m high")
-
-        // EQ fra foer open ramt i entry-minuttet -> BE-spottet er taget (endelig afgoerelse)
-        if bePre and (preTaken(preDMid, preDHitM, px, sh) or preTaken(preUMid, preUHitM, px, sh))
-            bc.bad := true
-            bc.src := "EQ foer open"
-        if bc.bad
-            bxStatus := "Ingen Vergence - BE (" + bc.src + ") allerede ramt"
+// ── FOERSTE 15s-close hvor begge lukker i retningen afgoer hver Vergence ──
+bool   vFire = false
+bool   vSh   = false
+string vTxt  = ""
+if anyArm and barstate.isconfirmed and not mBad
+    array<Arm> keep = array.new<Arm>()
+    for v in arms
+        if tidClose > 0 and time - v.t > 15000 * (tidClose - 1)
+            bxStatus := "Ingen Vergence - tid close (3. candle)"
             bxCol    := color.gray
             bxBE     := ""
+            continue
+        bool aD = v.sh ? close < open : close > open
+        bool bD = not na(bClose) and not na(bOpen) and (v.sh ? bClose < bOpen : bClose > bOpen)
+        if not (aD and bD)
+            array.push(keep, v)
+            continue
+        // tog begge indeks frisk liq i samme minut, skal begge lukke tilbage forbi hver sin
+        float va = v.a
+        float vb = v.b
+        Side  sdv = v.sh ? sideHi : sideLo
+        int   am  = int(v.t / 60000)
+        if nz(sdv.aFM, -1) == am and nz(sdv.bFM, -1) == am
+            va := na(va) ? sdv.aFL : va
+            vb := na(vb) ? sdv.bFL : vb
+        bool backA = not needBack or na(va) or (v.sh ? close < va : close > va)
+        bool backB = not needBack or na(vb) or (not na(bClose) and (v.sh ? bClose < vb : bClose > vb))
+        bool slOK  = not blockMax or (v.sh ? m1Hi - close <= maxSL : close - m1Lo <= maxSL)
+        if backA and backB and slOK and not vFire
+            vFire := true
+            vSh   := v.sh
+            vTxt  := v.nm + (not na(va) and not na(vb) ? "  (begge)" : not na(va) ? "  (" + aName + ")" : "  (" + bName + ")")
+        else if not vFire
+            pendEnd  := na
+            bxStatus := not (backA and backB) ? "Ingen Vergence - ingen close tilbage" : "Ingen Vergence - SL > " + str.tostring(maxSL, "#")
+            bxCol    := color.gray
+            bxLvl    := v.nm
+            bxBE     := ""
             bxTime   := str.format_time(time, "HH:mm:ss", dispTz)
-        if not bc.bad
-            entShort := sh
-            entLong  := not sh
-            // ── Lille markering paa chartet ──
-            color c = sh ? bearCol : bullCol
-            label lb = label.new(time, sh ? high : low, "VRG", xloc = xloc.bar_time,
-                 style = sh ? label.style_label_down : label.style_label_up,
-                 color = color.new(c, 10), textcolor = sh ? color.white : color.black, size = size.small)
-            label.set_tooltip(lb, (sh ? "SHORT - " : "LONG - ") + armTxt)
-            array.push(minLbls, lb)
-            line beL = na
-            if showBE and not na(bc.v)
-                beL := line.new(time, bc.v, time + beMins * 60000, bc.v, xloc = xloc.bar_time,
-                     color = beCol, width = 2, style = line.style_dashed)
-                array.push(minLines, beL)
+            if not slOK
+                mxLn := na     // stregen bliver staaende, saa man kan se hvorfor
+    arms := keep
 
-            // ── SL / TP ──
-            float slX = sh ? math.max(m1Hi, px + minSL) : math.min(m1Lo, px - minSL)
-            float tpX = na
-            string tpS = "75p"
-            // Kandidater: EQ (begge live EQ'er) og session liq som chartet ikke har taget
-            array<float>  tc = array.new<float>()
-            array<string> tn = array.new<string>()
-            if uAct
-                array.push(tc, (uBot + uTop) / 2)
-                array.push(tn, "EQ")
-            if dAct
-                array.push(tc, (dBot + dTop) / 2)
-                array.push(tn, "EQ")
-            for i = 0 to 2
-                Sess s  = i == 0 ? asia : (i == 1 ? lon : ny)
-                St   st = sh ? s.lo : s.hi
-                if not na(st) and not st.aTook
-                    array.push(tc, sh ? s.aLo : s.aHi)
-                    array.push(tn, (i == 0 ? "Asia" : (i == 1 ? "London" : "NY PRE")) + (sh ? " low" : " high"))
-            if array.size(tc) > 0
-                for i = 0 to array.size(tc) - 1
-                    float cx = array.get(tc, i)
-                    float d  = na(cx) ? na : (sh ? px - cx : cx - px)
-                    if not na(d) and d >= tpMin and d <= tpMax and (na(tpX) or d < math.abs(px - tpX))
-                        tpX := cx
-                        tpS := array.get(tn, i)
-            if na(tpX)
-                tpX := sh ? px - tpMax : px + tpMax
+bool dayDone = (maxDay > 0 and dayTr >= maxDay) or (stopWin and dayWin)
+if vFire and (mTraded or dayDone)
+    vFire := false
+if vFire
+    array.clear(arms)
+    pendEnd := na
+    bool  sh = vSh
+    float px = close
 
-            line tpL = na
-            if showBE and not showPos
-                tpL := line.new(time, tpX, time + beMins * 60000, tpX, xloc = xloc.bar_time,
-                     color = tpCol, width = 2, style = line.style_dashed)
-                array.push(minLines, tpL)
+    // ── BE: den naermeste kandidat ──
+    BeC bc = BeC.new()
+    float lo  = sh ? (uAct ? uBot : na) : (dAct ? dBot : na)
+    float hi  = sh ? (uAct ? uTop : na) : (dAct ? dTop : na)
+    float mid = na(lo) or na(hi) ? na : (lo + hi) / 2
+    float qt  = na(lo) or na(hi) ? na : lo + (sh ? 0.75 : 0.25) * (hi - lo)
+    if beEq
+        tryBE(bc, px, sh, mid, "EQ")
+        tryBE(bc, px, sh, qt,  sh ? "0.75" : "0.25")
+    if bePre
+        if na(preDHitM)
+            tryBE(bc, px, sh, preDMid, "EQ foer open")
+        if na(preUHitM)
+            tryBE(bc, px, sh, preUMid, "EQ foer open")
+    if beSess
+        if not na(asia.lo)
+            tryBEt(bc, px, sh, sh ? asia.aLo : asia.aHi, sh ? "Asia low" : "Asia high", sh ? asia.lo.aTook : asia.hi.aTook)
+        if not na(lon.lo)
+            tryBEt(bc, px, sh, sh ? lon.aLo : lon.aHi, sh ? "London low" : "London high", sh ? lon.lo.aTook : lon.hi.aTook)
+        if not na(ny.lo)
+            tryBEt(bc, px, sh, sh ? ny.aLo : ny.aHi, sh ? "NY PRE low" : "NY PRE high", sh ? ny.lo.aTook : ny.hi.aTook)
+    if be15 and array.size(lv15) > 0
+        for i = 0 to array.size(lv15) - 1
+            Lv m = array.get(lv15, i)
+            if m.isHi != sh and not m.dead and not m.aTook
+                tryBE(bc, px, sh, m.a, sh ? "15m low" : "15m high")
+    if be05 and isOpenM and array.size(lv05) > 0
+        for i = 0 to array.size(lv05) - 1
+            Lv m = array.get(lv05, i)
+            if m.isHi != sh and not m.dead and not m.aTook
+                tryBE(bc, px, sh, m.a, sh ? "5m low" : "5m high")
 
-            // Nyt trade afloeser et evt. aabent
-            if oLive
-                line.set_x2(oBeLn, time)
-                line.set_x2(oTpLn, time)
-                box.set_right(oSlB, time)
-                box.set_right(oTpB, time)
-                box.set_right(oSlF, time)
-                box.set_right(oTpF, time)
-                label.set_x(oSlLb, time)
-                label.set_x(oEnLb, time)
-                label.set_x(oTpLb, time)
-            oLive  := true
-            oShort := sh
-            oEntry := px
-            oSL    := slX
-            oTP    := tpX
-            oBE    := bc.v
-            oBeHit := false
-            oT     := time
-            oM     := minB
-            oBars  := 0
-            oBeLn  := beL
-            oTpLn  := tpL
-            oSL0   := slX
-            oAdv   := px
-            oFav   := px
-            oSlB   := na
-            oTpB   := na
-            oSlF   := na
-            oTpF   := na
-            if showBE and showPos
-                int xr0 = time + beMins * 60000
-                oSlB := box.new(time, math.max(slX, px), xr0, math.min(slX, px), xloc = xloc.bar_time, border_color = color.new(#F23645, 100), bgcolor = posSlCol)
-                oTpB := box.new(time, math.max(tpX, px), xr0, math.min(tpX, px), xloc = xloc.bar_time, border_color = color.new(#089981, 100), bgcolor = posTpCol)
-                oSlF := box.new(time, px, xr0, px, xloc = xloc.bar_time, border_color = color.new(#F23645, 100), bgcolor = posSlHit)
-                oTpF := box.new(time, px, xr0, px, xloc = xloc.bar_time, border_color = color.new(#089981, 100), bgcolor = posTpHit)
-                array.push(minBoxes, oSlB)
-                array.push(minBoxes, oTpB)
-                array.push(minBoxes, oSlF)
-                array.push(minBoxes, oTpF)
-            oSlLb := na
-            oEnLb := na
-            oTpLb := na
-            if showBE and showPos and showPx
-                int xr1 = time + beMins * 60000
-                oSlLb := label.new(xr1, slX, str.tostring(slX, format.mintick), xloc = xloc.bar_time, style = label.style_label_left,
-                     color = color.new(color.black, 100), textcolor = color.new(#F23645, 0), size = size.small)
-                oEnLb := label.new(xr1, px,  str.tostring(px,  format.mintick), xloc = xloc.bar_time, style = label.style_label_left,
-                     color = color.new(color.black, 100), textcolor = pxCol, size = size.small)
-                oTpLb := label.new(xr1, tpX, str.tostring(tpX, format.mintick), xloc = xloc.bar_time, style = label.style_label_left,
-                     color = color.new(color.black, 100), textcolor = color.new(#089981, 0), size = size.small)
-                array.push(minLbls, oSlLb)
-                array.push(minLbls, oEnLb)
-                array.push(minLbls, oTpLb)
-            oTime  := str.format_time(time, "HH:mm:ss", dispTz)
-            mxDel  := mxLn     // slettes paa naeste candle
-            mxDelT := time_close + mxKeepS * 1000
-            mxLn   := na
+    // EQ fra foer open ramt i entry-minuttet -> BE-spottet er taget (endelig afgoerelse)
+    // kun EQ'en paa BE-siden: short -> bullish (under), long -> bearish (over)
+    if bePre and (sh ? preTaken(preUMid, preUHitM, preUHitT, px, sh) : preTaken(preDMid, preDHitM, preDHitT, px, sh))
+        bc.bad := true
+        bc.src := "EQ foer open"
+    // Liq i trade-retningen taget i entry-minuttet (foer entry-candlen), paa BE-siden
+    bool eqTaken = sh ? (not na(uHitPrev) and px - uHitPrev >= -beMin) : (not na(dHitPrev) and dHitPrev - px >= -beMin)
+    bool slTaken = sh ? (not na(sLoPrev) and px - sLoPrev >= -beMin) : (not na(sHiPrev) and sHiPrev - px >= -beMin)
+    if eqTaken or slTaken
+        bc.bad := true
+        bc.src := eqTaken ? (sh ? "bullish EQ" : "bearish EQ") : (sh ? "session low" : "session high")
+    if bc.bad
+        bxStatus := "Ingen Vergence - BE (" + bc.src + ") allerede ramt"
+        bxCol    := color.gray
+        bxBE     := ""
+        bxTime   := str.format_time(time, "HH:mm:ss", dispTz)
+    if not bc.bad
+        entShort := sh
+        entLong  := not sh
+        // ── Lille markering paa chartet ──
+        color c = sh ? bearCol : bullCol
+        label lb = label.new(time, sh ? high : low, "VRG", xloc = xloc.bar_time,
+             style = sh ? label.style_label_down : label.style_label_up,
+             color = color.new(c, 10), textcolor = sh ? color.white : color.black, size = size.small)
+        label.set_tooltip(lb, (sh ? "SHORT - " : "LONG - ") + vTxt)
+        array.push(minLbls, lb)
+        line beL = na
+        if showBE and not na(bc.v)
+            beL := line.new(time, bc.v, time + beMins * 60000, bc.v, xloc = xloc.bar_time,
+                 color = beCol, width = 2, style = line.style_dashed)
+            array.push(minLines, beL)
 
-            // ── Boksen ──
-            bxStatus := sh ? "SHORT" : "LONG"
-            bxCol    := c
-            bxLvl    := armTxt
-            bxBE     := not showBE ? "" : (na(bc.v) ? "-" : bc.src) + "    TP: " + tpS
-            bxTime   := str.format_time(time, "HH:mm:ss", dispTz)
-            tStatus  := bxStatus
-            tCol     := bxCol
-            tLvl     := bxLvl
-            tBE      := bxBE
-            tTime    := bxTime
-            tM       := minB
+        // ── SL / TP ──
+        float slX = sh ? math.max(m1Hi, px + minSL) : math.min(m1Lo, px - minSL)
+        float tpX = na
+        string tpS = "75p"
+        // Kandidater: EQ (begge live EQ'er) og session liq som chartet ikke har taget
+        array<float>  tc = array.new<float>()
+        array<string> tn = array.new<string>()
+        if uAct
+            array.push(tc, (uBot + uTop) / 2)
+            array.push(tn, "EQ")
+        if dAct
+            array.push(tc, (dBot + dTop) / 2)
+            array.push(tn, "EQ")
+        for i = 0 to 2
+            Sess s  = i == 0 ? asia : (i == 1 ? lon : ny)
+            St   st = sh ? s.lo : s.hi
+            if not na(st) and not st.aTook
+                array.push(tc, sh ? s.aLo : s.aHi)
+                array.push(tn, (i == 0 ? "Asia" : (i == 1 ? "London" : "NY PRE")) + (sh ? " low" : " high"))
+        if array.size(tc) > 0
+            for i = 0 to array.size(tc) - 1
+                float cx = array.get(tc, i)
+                float d  = na(cx) ? na : (sh ? px - cx : cx - px)
+                if not na(d) and d >= tpMin and d <= tpMax and (na(tpX) or d < math.abs(px - tpX))
+                    tpX := cx
+                    tpS := array.get(tn, i)
+        if na(tpX)
+            tpX := sh ? px - tpMax : px + tpMax
 
-// Minuttet er gaaet uden et close i rigtig retning -> intet trade
-if armed and not sameMin
-    armed    := false
-    bxStatus := "Ingen Vergence - intet close i minuttet"
-    bxCol    := color.gray
-    bxBE     := ""
-if not armed and not na(mxLn)
+        line tpL = na
+        if showBE and not showPos
+            tpL := line.new(time, tpX, time + beMins * 60000, tpX, xloc = xloc.bar_time,
+                 color = tpCol, width = 2, style = line.style_dashed)
+            array.push(minLines, tpL)
+
+        // Nyt trade afloeser et evt. aabent
+        if oLive
+            line.set_x2(oBeLn, time)
+            line.set_x2(oTpLn, time)
+            box.set_right(oSlB, time)
+            box.set_right(oTpB, time)
+            box.set_right(oSlF, time)
+            box.set_right(oTpF, time)
+            label.set_x(oSlLb, time)
+            label.set_x(oEnLb, time)
+            label.set_x(oTpLb, time)
+        oLive  := true
+        mTraded := true
+        dayTr  += 1
+        oShort := sh
+        oEntry := px
+        oSL    := slX
+        oTP    := tpX
+        oBE    := bc.v
+        oBeHit := false
+        oT     := time
+        oM     := minB
+        oBars  := 0
+        oBeLn  := beL
+        oTpLn  := tpL
+        oSL0   := slX
+        oAdv   := px
+        oFav   := px
+        oSlB   := na
+        oTpB   := na
+        oSlF   := na
+        oTpF   := na
+        if showBE and showPos
+            int xr0 = time + beMins * 60000
+            oSlB := box.new(time, math.max(slX, px), xr0, math.min(slX, px), xloc = xloc.bar_time, border_color = color.new(#F23645, 100), bgcolor = posSlCol)
+            oTpB := box.new(time, math.max(tpX, px), xr0, math.min(tpX, px), xloc = xloc.bar_time, border_color = color.new(#089981, 100), bgcolor = posTpCol)
+            oSlF := box.new(time, px, xr0, px, xloc = xloc.bar_time, border_color = color.new(#F23645, 100), bgcolor = posSlHit)
+            oTpF := box.new(time, px, xr0, px, xloc = xloc.bar_time, border_color = color.new(#089981, 100), bgcolor = posTpHit)
+            array.push(minBoxes, oSlB)
+            array.push(minBoxes, oTpB)
+            array.push(minBoxes, oSlF)
+            array.push(minBoxes, oTpF)
+        oSlLb := na
+        oEnLb := na
+        oTpLb := na
+        if showBE and showPos and showPx
+            int xr1 = time + beMins * 60000
+            oSlLb := label.new(xr1, slX, str.tostring(slX, format.mintick), xloc = xloc.bar_time, style = label.style_label_left,
+                 color = color.new(color.black, 100), textcolor = color.new(#F23645, 0), size = size.small)
+            oEnLb := label.new(xr1, px,  str.tostring(px,  format.mintick), xloc = xloc.bar_time, style = label.style_label_left,
+                 color = color.new(color.black, 100), textcolor = pxCol, size = size.small)
+            oTpLb := label.new(xr1, tpX, str.tostring(tpX, format.mintick), xloc = xloc.bar_time, style = label.style_label_left,
+                 color = color.new(color.black, 100), textcolor = color.new(#089981, 0), size = size.small)
+            array.push(minLbls, oSlLb)
+            array.push(minLbls, oEnLb)
+            array.push(minLbls, oTpLb)
+        oTime  := str.format_time(time, "HH:mm:ss", dispTz)
+        mxDel  := mxLn     // slettes paa naeste candle
+        mxDelT := time_close + mxKeepS * 1000
+        mxLn   := na
+
+        // ── Boksen ──
+        bxStatus := sh ? "SHORT" : "LONG"
+        bxCol    := c
+        bxLvl    := vTxt
+        bxBE     := not showBE ? "" : (na(bc.v) ? "-" : bc.src) + "    TP: " + tpS
+        bxTime   := str.format_time(time, "HH:mm:ss", dispTz)
+        tStatus  := bxStatus
+        tCol     := bxCol
+        tLvl     := bxLvl
+        tBE      := bxBE
+        tTime    := bxTime
+        tM       := minB
+
+// Minuttet er gaaet uden et close -> intet trade
+if not anyArm and not na(mxLn)
     line.delete(mxLn)
     mxLn := na
 
 // Minuttet blev ugyldigt -> slet alt fra minuttet
-if justBad or (dayBad and armed)
-    armed   := false
+if justBad or (dayBad and anyArm)
+    array.clear(arms)
     pendEnd := na
     if tM == minB
         tStatus := ""
@@ -977,8 +1186,6 @@ if barstate.islast
             table.cell(bx, 0, 2, "BE / TP",  text_color = color.gray, text_size = boxSize)
             table.cell(bx, 1, 2, bxBE,  text_color = beCol,      text_size = boxSize)
 
-bool vrgBear = hit.fired and hit.isShort and not mBad
-bool vrgBull = hit.fired and not hit.isShort and not mBad
 alertcondition(hit.first and not mBad, "Mulighed for Vergence", "Mulighed for Vergence - det ene indeks har taget et niveau")
 alertcondition(vrgBear,  "Bearish Vergence", "Bearish Vergence - begge indeks tog session-high")
 alertcondition(vrgBull,  "Bullish Vergence", "Bullish Vergence - begge indeks tog session-low")
