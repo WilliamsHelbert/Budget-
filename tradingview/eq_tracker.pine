@@ -3,6 +3,8 @@
 //  EQ - Equilibrium Tracker  (v18)
 //  ---------------------------------------------------------------
 //  NYT I v18
+//    - EQ foer open stopper paa den 15s-candle der foerst rammer den
+//      (vokser og tjekkes som en normal EQ).
 //    - "EQ foer open" tegnes nu som en helt normal EQ (samme bokse,
 //      farver og linjer) med labelen "EQ foer open". De lilla linjer
 //      kan vaelges igen under "Market open".
@@ -378,9 +380,9 @@ if open1529
     bearTrig := false
     bullTrig := false
 
-// EQ foer open: tjek mod linjen FOER barens egen low/high flytter den
-// (som backtesten), voks ellers videre. Rammes den, fryser den resten
-// af dagen. En EQ fra 15:29-candlen tjekkes foerst fra naeste bar.
+// EQ foer open: vokser og stopper praecis som en normal EQ - paa den bar
+// der rammer EQ-linjen. Saa fryser den resten af dagen.
+// En EQ fra 15:29-candlen tjekkes foerst fra naeste bar.
 if pbOn
     if na(pbD)
         pbD  := preNormal ? newDraw(pbT, time, pbHi, pbLo, false) : newPreDraw(pbT, time, pbHi, pbLo)
@@ -388,10 +390,11 @@ if pbOn
              color = color.new(preCol, 100), textcolor = preCol, style = label.style_label_left, size = size.small)
     if pbNew
         pbNew := false
-    else if barstate.isconfirmed and high >= (pbHi + pbLo) / 2
-        pbOn := false
     else
+        // som en normal EQ: voks med barens low, og stop paa den bar der rammer linjen
         pbLo := math.min(pbLo, low)
+        if barstate.isconfirmed and high >= (pbHi + pbLo) / 2
+            pbOn := false
     updDraw(pbD, pbT, time, pbHi, pbLo)
     label.set_xy(pbLb, time, (pbHi + pbLo) / 2)
 if plOn
@@ -401,10 +404,10 @@ if plOn
              color = color.new(preCol, 100), textcolor = preCol, style = label.style_label_left, size = size.small)
     if plNew
         plNew := false
-    else if barstate.isconfirmed and low <= (plHi + plLo) / 2
-        plOn := false
     else
         plHi := math.max(plHi, high)
+        if barstate.isconfirmed and low <= (plHi + plLo) / 2
+            plOn := false
     updDraw(plD, plT, time, plHi, plLo)
     label.set_xy(plLb, time, (plHi + plLo) / 2)
 

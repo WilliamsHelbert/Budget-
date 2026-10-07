@@ -63,6 +63,7 @@ VRG_SAMEMIN = True # Vergence: entry skal vaere i samme minut som sweepet
 VRG_FIRST = 'both' # 'both' = foerste close hvor begge lukker i retningen afgoer; 'any' = foerste close hvor bare et af dem goer
 PRE_MINAGE = None  # EQ foer open skal vaere mindst N min gammel ved open (None = fra)
 PRE_LIKE_LIVE = False  # EQ foer open behandles som normal EQ (ramt af entry-candlen selv taeller ikke)
+PRE_GROWFIRST = False  # EQ foer open: voks foerst og tjek saa (som EQ-indikatorens live EQ)
 PRE_TOL = None   # EQ foer open ramt i entry-minuttet: hvor langt BAG entry den maa ligge og stadig goere tradet ugyldigt (None = BE_MIN)
 PRE_1529 = True  # 15:29-candlens EQ (lukker foer open) taeller som 'EQ foer open'
 PRE_INVALID = True  # EQ foer open ramt i entry-minuttet -> ugyldigt (False = test)
@@ -634,15 +635,19 @@ def _run(nq_path, es_path, start, end, base):
             # EQ foer open vokser videre efter open (som EQ-indikatoren), indtil den rammes.
             # Tjek mod linjen FOER barens egen low/high flytter den.
             if preDHitM is None and pDT is not None:
+                if PRE_GROWFIRST:
+                    pDB = min(pDB, lo)   # som EQ-indikatoren: voks foerst, tjek saa mod den nye linje
                 if hi >= (pDT + pDB) / 2:
                     preDHitM, preDHitT = minB, t
-                else:
+                elif not PRE_GROWFIRST:
                     pDB = min(pDB, lo)
                 preD = (pDT + pDB) / 2
             if preUHitM is None and pUB is not None:
+                if PRE_GROWFIRST:
+                    pUT = max(pUT, hi)
                 if lo <= (pUB + pUT) / 2:
                     preUHitM, preUHitT = minB, t
-                else:
+                elif not PRE_GROWFIRST:
                     pUT = max(pUT, hi)
                 preU = (pUB + pUT) / 2
             # 15:29-candlen lukker foer open: dens EQ er ogsaa en 'EQ foer open' (30/3-26)
