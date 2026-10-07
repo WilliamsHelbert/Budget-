@@ -1,6 +1,17 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v4.0)
+//  Sweep Trade (SMT)  (v4.1)
+//  ---------------------------------------------------------------
+//  NYT I v4.1 (samme regler som backtesten, oktober 2026)
+//    - TID CLOSE: entry kun paa den 15s-candle der foerst tager niveauet
+//      eller den naeste. 3. candle eller senere = intet trade.
+//    - EQ FOER OPEN vokser videre efter open, indtil EQ-linjen rammes
+//      (tjekkes mod linjen foer barens egen low/high flytter den).
+//      Er der ingen live EQ ved open, bruges 15:29-candlens EQ.
+//    - SAMLET NIVEAU: er en London/Asia high/low samlet med en senere
+//      session paa bare eet af indeksene, bruges den ikke som eget niveau
+//      (kun det samlede, fx NY PRE high). (9/4-26)
+//    - Max 2 trades pr. dag, og stop for dagen efter en vundet trade (TP).
 //  ---------------------------------------------------------------
 //  NYT I v4.0
 //    - Alle live EQ'er nulstilles ved market open, ligesom EQ-indikatoren.
@@ -190,6 +201,12 @@ m15M     = input.int(31, "15m-niveauer gaelder til - minut (NY)", minval = 0, ma
 
 g6 = "Regler"
 needBoth  = input.bool(true, "Begge indeks skal lukke samme vej", group = g6)
+tidClose  = input.int(2, "Tid close: entry senest paa candle nr. (0 = fra)", minval = 0, maxval = 4, group = g6,
+     tooltip = "Taelles fra den 15s-candle der foerst tager niveauet. 2 = den candle eller den naeste.")
+mergeEither = input.bool(true, "Samlet niveau paa eet indeks er ikke eget niveau", group = g6,
+     tooltip = "Er London/Asia samlet med en senere session (fx NY PRE high) paa bare det ene indeks, tjekkes kun det samlede niveau.")
+maxDay    = input.int(2, "Max trades pr. dag", minval = 0, group = g6)
+stopWin   = input.bool(true, "Stop for dagen efter en vundet trade", group = g6)
 dayBlock  = input.bool(false, "Bloker resten af dagen naar begge sider er taget", group = g6,
      tooltip = "Er der siden market open taget baade en high-side og en low-side (paa et af indeksene), kommer der ikke flere trades den dag. Signaler i SAMME minut som det skete slettes altid.")
 
@@ -318,6 +335,8 @@ bool nStart = nOn and na(nT[1])
 type St
     int  aM    = na
     int  bM    = na
+    int  aT    = na      // tid for den foerste candle der tog niveauet (tid close)
+    int  bT    = na
     bool aDone = false
     bool bDone = false
     bool aTook = false
@@ -468,8 +487,10 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h, float aTg = na, fl
             bool newB = not st.bDone and na(st.bM) and bSweep
             if newA
                 st.aM := minB
+                st.aT := time
             if newB
                 st.bM := minB
+                st.bT := time
             if newA or newB
                 h.swHi  := h.swHi or isHi
                 h.swLo  := h.swLo or not isHi
@@ -500,6 +521,11 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h, float aTg = na, fl
                      : (close > open and not na(bClose) and bClose > bOpen))
                 bool aBack = not st.aDone and not bTk and st.aM == minB and (isHi ? close < aL : close > aL)
                 bool bBack = not st.bDone and not aTk and st.bM == minB and not na(bClose) and (isHi ? bClose < bL : bClose > bL)
+                // Tid close: entry paa sweep-candlen eller de naeste tidClose-1 candles
+                if tidClose > 0 and aBack and time - st.aT > 15000 * (tidClose - 1)
+                    aBack := false
+                if tidClose > 0 and bBack and time - st.bT > 15000 * (tidClose - 1)
+                    bBack := false
                 if not dirOK and (aBack or bBack)
                     h.noDir := true
                 bool slOK = not blockMax or (isHi ? m1Hi - close <= maxSL : close - m1Lo <= maxSL)
@@ -655,17 +681,17 @@ Hit hit = Hit.new()
 if useNy and not nOn
     check(ny.hi, ny.aHi, ny.bHi, true,  "NY PRE", hit, tgA(ny, true),  tgB(ny, true))
     check(ny.lo, ny.aLo, ny.bLo, false, "NY PRE", hit, tgA(ny, false), tgB(ny, false))
-// Har BEGGE indeks taget niveauet i en senere session, er det samme niveau som den
-// senere sessions -> det tjekkes kun dér.
+// Har et indeks (mergeEither) / begge indeks taget niveauet i en senere session, er det
+// samme niveau som den senere sessions -> det tjekkes kun dér.
 if useLon and not lOn
-    if not (lon.maHi and lon.mbHi)
+    if not (mergeEither ? (lon.maHi or lon.mbHi) : (lon.maHi and lon.mbHi))
         check(lon.hi, lon.aHi, lon.bHi, true,  "London", hit, tgA(lon, true),  tgB(lon, true))
-    if not (lon.maLo and lon.mbLo)
+    if not (mergeEither ? (lon.maLo or lon.mbLo) : (lon.maLo and lon.mbLo))
         check(lon.lo, lon.aLo, lon.bLo, false, "London", hit, tgA(lon, false), tgB(lon, false))
 if useAsia and not aOn
-    if not (asia.maHi and asia.mbHi)
+    if not (mergeEither ? (asia.maHi or asia.mbHi) : (asia.maHi and asia.mbHi))
         check(asia.hi, asia.aHi, asia.bHi, true,  "Asia", hit, tgA(asia, true),  tgB(asia, true))
-    if not (asia.maLo and asia.mbLo)
+    if not (mergeEither ? (asia.maLo or asia.mbLo) : (asia.maLo and asia.mbLo))
         check(asia.lo, asia.aLo, asia.bLo, false, "Asia", hit, tgA(asia, false), tgB(asia, false))
 if use15 and not nOn and tMin < m15E and array.size(lv15) > 0
     for i = 0 to array.size(lv15) - 1
@@ -769,12 +795,12 @@ if bullE and not uAct
     uTop := math.max(h1, high)
     uAct := true
 
-// EQ foer market open (til BE): kun en EQ der stadig er live. Laases fra 15:30.
-var float preDMid = na
-var float preUMid = na
-if tMin < winS
-    preDMid := dAct ? (dTop + dBot) / 2 : na
-    preUMid := uAct ? (uBot + uTop) / 2 : na
+// EQ foer market open (til BE): kun en EQ der stadig er live. Laases fra 15:30 og
+// vokser videre efter open, indtil EQ-linjen rammes (som backtesten).
+var float pDT = na     // bearish: top (anker) / bund (vokser ned)
+var float pDB = na
+var float pUB = na     // bullish: bund (anker) / top (vokser op)
+var float pUT = na
 // Hvornaar blev EQ'en fra foer open ramt efter open? (minuttet, na = ikke ramt)
 // Ramt = brugt op: den kan ikke laengere bruges som BE.
 var int preDHitM = na
@@ -782,15 +808,39 @@ var int preUHitM = na
 var int preDHitT = na
 var int preUHitT = na
 if tMin < winS
+    pDT := dAct ? dTop : na
+    pDB := dAct ? dBot : na
+    pUB := uAct ? uBot : na
+    pUT := uAct ? uTop : na
     preDHitM := na
     preUHitM := na
 else
-    if na(preDHitM) and not na(preDMid) and low <= preDMid and high >= preDMid
-        preDHitM := minB
-        preDHitT := time
-    if na(preUHitM) and not na(preUMid) and low <= preUMid and high >= preUMid
-        preUHitM := minB
-        preUHitT := time
+    // Tjek mod linjen FOER barens egen low/high flytter den
+    if na(preDHitM) and not na(pDT)
+        if high >= (pDT + pDB) / 2
+            preDHitM := minB
+            preDHitT := time
+        else
+            pDB := math.min(pDB, low)
+    if na(preUHitM) and not na(pUB)
+        if low <= (pUB + pUT) / 2
+            preUHitM := minB
+            preUHitT := time
+        else
+            pUT := math.max(pUT, high)
+    // 15:29-candlen lukker foer open: dens EQ er ogsaa en 'EQ foer open' (30/3-26),
+    // hvis der ikke allerede staar en (live) EQ foer open i samme retning.
+    if new1m and preC
+        if c1 < o1 and c1 < own and (na(pDT) or not na(preDHitM))
+            pDT := h1
+            pDB := math.min(l1, low)
+            preDHitM := na
+        if c1 > o1 and c1 > own and (na(pUB) or not na(preUHitM))
+            pUB := l1
+            pUT := math.max(h1, high)
+            preUHitM := na
+float preDMid = na(pDT) ? na : (pDT + pDB) / 2
+float preUMid = na(pUB) ? na : (pUB + pUT) / 2
 
 // Blev EQ'en fra foer open ramt i SAMME minut som entry (foer/paa entry-candlen),
 // og ligger den paa profit-siden (eller praktisk talt paa entry)? Saa er
@@ -811,11 +861,16 @@ var bool dayHi   = false
 var bool dayLo   = false
 var int  lastDay = na
 
+var int  dayTr   = 0       // trades i dag
+var bool dayWin  = false   // en trade har vundet i dag
+
 bool newDay = inWin and nz(lastDay, -1) != dNow
 if newDay
     lastDay := dNow
     dayHi   := false
     dayLo   := false
+    dayTr   := 0
+    dayWin  := false
 
 // Tegninger fra det aktuelle minut - slettes hvis minuttet bliver ugyldigt
 var array<label> minLbls  = array.new<label>()
@@ -1012,6 +1067,8 @@ if oLive
     bool hitTP = oShort ? low  <= oTP : high >= oTP
     if hitSL or hitTP
         oLive := false
+        if hitTP and not hitSL
+            dayWin := true
         line.set_x2(oBeLn, time)
         line.set_x2(oTpLn, time)
         box.set_right(oSlB, time)
@@ -1046,7 +1103,8 @@ if oLive
             oBars += 1
 
 // ═════════════════════ TRADE ═════════════════════
-bool ok      = hit.fired and not mBad and not dayBad and not mTraded   // kun eet trade pr. minut
+bool dayDone = (maxDay > 0 and dayTr >= maxDay) or (stopWin and dayWin)
+bool ok      = hit.fired and not mBad and not dayBad and not mTraded and not dayDone   // kun eet trade pr. minut
 bool beBadNow = false   // tradet blev ugyldigt fordi BE allerede var ramt
 bool goShort = ok and hit.isShort
 bool goLong  = ok and not hit.isShort
@@ -1184,6 +1242,7 @@ if ok
             label.set_x(oTpLb, time)
         oLive  := true
         mTraded := true
+        dayTr  += 1
         oShort := sh
         oEntry := px
         oSL    := slX
