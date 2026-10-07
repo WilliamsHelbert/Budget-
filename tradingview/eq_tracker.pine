@@ -1,7 +1,12 @@
 //@version=6
 // =====================================================================
-//  EQ - Equilibrium Tracker  (v17)
+//  EQ - Equilibrium Tracker  (v18)
 //  ---------------------------------------------------------------
+//  NYT I v18
+//    - "EQ foer open" tegnes nu som en helt normal EQ (samme bokse,
+//      farver og linjer) med labelen "EQ foer open". De lilla linjer
+//      kan vaelges igen under "Market open".
+//
 //  NYT I v17
 //    - "EQ foer open": den live bearish og bullish EQ der staar lige
 //      foer market open, gemmes ved open i stedet for at blive slettet.
@@ -105,7 +110,9 @@ showPreOpen    = input.bool(true, "Vis EQ'er fra foer market open", group = g4,
      tooltip = "Slaa fra for at holde chartet rent indtil aabningen - saa oprettes der slet ingen EQ'er i timerne foer market open.")
 showPreEq      = input.bool(true, "Vis EQ foer open efter open (til BE)", group = g4,
      tooltip = "Den live EQ lige foer open (eller 15:29-candlens EQ) beholdes efter open som lilla linjer og vokser videre, indtil den rammes.")
-preCol         = input.color(color.purple, "Farve EQ foer open", group = g4)
+preNormal      = input.bool(true, "EQ foer open ligner en normal EQ", group = g4,
+     tooltip = "Fra = tegnes som lilla linjer i stedet.")
+preCol         = input.color(color.purple, "Farve EQ foer open (lilla linjer / label)", group = g4)
 showOpenMarker = input.bool(true, "Marker nulstillings-baren (blaa baggrund)", group = g4,
      tooltip = "Farver den bar hvor nulstillingen sker. Slaa fra naar du har bekraeftet at den rammer rigtigt.")
 openHour       = input.int(9, "Market open - time (NY)",  minval = 0, maxval = 23, group = g4)
@@ -376,7 +383,7 @@ if open1529
 // af dagen. En EQ fra 15:29-candlen tjekkes foerst fra naeste bar.
 if pbOn
     if na(pbD)
-        pbD  := newPreDraw(pbT, time, pbHi, pbLo)
+        pbD  := preNormal ? newDraw(pbT, time, pbHi, pbLo, false) : newPreDraw(pbT, time, pbHi, pbLo)
         pbLb := label.new(time, (pbHi + pbLo) / 2, "EQ foer open", xloc = xloc.bar_time,
              color = color.new(preCol, 100), textcolor = preCol, style = label.style_label_left, size = size.small)
     if pbNew
@@ -389,7 +396,7 @@ if pbOn
     label.set_xy(pbLb, time, (pbHi + pbLo) / 2)
 if plOn
     if na(plD)
-        plD  := newPreDraw(plT, time, plHi, plLo)
+        plD  := preNormal ? newDraw(plT, time, plHi, plLo, true) : newPreDraw(plT, time, plHi, plLo)
         plLb := label.new(time, (plHi + plLo) / 2, "EQ foer open", xloc = xloc.bar_time,
              color = color.new(preCol, 100), textcolor = preCol, style = label.style_label_left, size = size.small)
     if plNew
