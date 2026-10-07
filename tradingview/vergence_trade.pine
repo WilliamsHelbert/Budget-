@@ -682,13 +682,14 @@ else
         else
             pUT := math.max(pUT, high)
     // 15:29-candlen lukker foer open: dens EQ er ogsaa en 'EQ foer open' (30/3-26),
-    // hvis der ikke allerede staar en (live) EQ foer open i samme retning.
+    // kun hvis der ikke stod en live EQ foer open i samme retning (en EQ der rammes
+    // af 15:30-candlen erstattes IKKE - saa er den ramt, 24/2-26).
     if new1m and preC
-        if c1 < o1 and c1 < own and (na(pDT) or not na(preDHitM))
+        if c1 < o1 and c1 < own and na(pDT)
             pDT := h1
             pDB := math.min(l1, low)
             preDHitM := na
-        if c1 > o1 and c1 > own and (na(pUB) or not na(preUHitM))
+        if c1 > o1 and c1 > own and na(pUB)
             pUB := l1
             pUT := math.max(h1, high)
             preUHitM := na

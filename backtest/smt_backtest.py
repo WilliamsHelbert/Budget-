@@ -642,10 +642,10 @@ def _run(nq_path, es_path, start, end, base):
             if PRE_1529 and new1m and tMin == WIN_S and resetDay == dstr:
                 o1, h1, l1, c1 = prevMinOHLC
                 own = (h1 + l1) / 2
-                if c1 < o1 and c1 < own and (pDT is None or preDHitM is not None):
+                if c1 < o1 and c1 < own and pDT is None:
                     pDT, pDB, preDHitM = h1, min(l1, lo), None
                     preD = (pDT + pDB) / 2
-                if c1 > o1 and c1 > own and (pUB is None or preUHitM is not None):
+                if c1 > o1 and c1 > own and pUB is None:
                     pUB, pUT, preUHitM = l1, max(h1, hi), None
                     preU = (pUB + pUT) / 2
 
