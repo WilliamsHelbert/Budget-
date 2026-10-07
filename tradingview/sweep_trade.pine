@@ -5,8 +5,8 @@
 //  NYT I v4.1 (samme regler som backtesten, oktober 2026)
 //    - TID CLOSE: entry kun paa den 15s-candle der foerst tager niveauet
 //      eller den naeste. 3. candle eller senere = intet trade.
-//    - EQ FOER OPEN vokser videre efter open, indtil EQ-linjen rammes
-//      (tjekkes mod linjen foer barens egen low/high flytter den).
+//    - EQ FOER OPEN vokser videre efter open og stopper paa den candle der
+//      rammer EQ-linjen (som en normal EQ).
 //      Er der ingen live EQ ved open, bruges 15:29-candlens EQ.
 //    - SAMLET NIVEAU: er en London/Asia high/low samlet med en senere
 //      session paa bare eet af indeksene, bruges den ikke som eget niveau
@@ -815,19 +815,17 @@ if tMin < winS
     preDHitM := na
     preUHitM := na
 else
-    // Tjek mod linjen FOER barens egen low/high flytter den
+    // Som en normal EQ: voks med barens low/high, og stop paa den bar der rammer linjen
     if na(preDHitM) and not na(pDT)
+        pDB := math.min(pDB, low)
         if high >= (pDT + pDB) / 2
             preDHitM := minB
             preDHitT := time
-        else
-            pDB := math.min(pDB, low)
     if na(preUHitM) and not na(pUB)
+        pUT := math.max(pUT, high)
         if low <= (pUB + pUT) / 2
             preUHitM := minB
             preUHitT := time
-        else
-            pUT := math.max(pUT, high)
     // 15:29-candlen lukker foer open: dens EQ er ogsaa en 'EQ foer open' (30/3-26),
     // kun hvis der ikke stod en live EQ foer open i samme retning (en EQ der rammes
     // af 15:30-candlen erstattes IKKE - saa er den ramt, 24/2-26).
