@@ -61,6 +61,7 @@ VRG_ALLBACK = False # Vergence: begge indeks skal staa tilbage forbi niveauet ve
 VRG_SAMELVL = True  # Vergence: begge indeks skal have taget samme niveau
 VRG_SAMEMIN = True # Vergence: entry skal vaere i samme minut som sweepet
 VRG_FIRST = 'both' # 'both' = foerste close hvor begge lukker i retningen afgoer; 'any' = foerste close hvor bare et af dem goer
+PRE_MINAGE = None  # EQ foer open skal vaere mindst N min gammel ved open (None = fra)
 PRE_TOL = None   # EQ foer open ramt i entry-minuttet: hvor langt BAG entry den maa ligge og stadig goere tradet ugyldigt (None = BE_MIN)
 PRE_1529 = True  # 15:29-candlens EQ (lukker foer open) taeller som 'EQ foer open'
 PRE_INVALID = True  # EQ foer open ramt i entry-minuttet -> ugyldigt (False = test)
@@ -619,10 +620,14 @@ def _run(nq_path, es_path, start, end, base):
             uFormT = t - 60
         # EQ foer market open (til BE) - laases fra 15:30
         if tMin < WIN_S:
-            preD = (dTop + dBot) / 2 if dAct else None   # kun en live EQ
-            preU = (uBot + uTop) / 2 if uAct else None
-            pDT, pDB = (dTop, dBot) if dAct else (None, None)
-            pUB, pUT = (uBot, uTop) if uAct else (None, None)
+            # PRE_MINAGE: EQ'en skal vaere dannet mindst N min foer open for at taelle
+            tOpen = t - t % 60 + (WIN_S - tMin) * 60
+            dOK = dAct and (PRE_MINAGE is None or dFormT is None or tOpen - dFormT >= PRE_MINAGE * 60)
+            uOK = uAct and (PRE_MINAGE is None or uFormT is None or tOpen - uFormT >= PRE_MINAGE * 60)
+            preD = (dTop + dBot) / 2 if dOK else None   # kun en live EQ
+            preU = (uBot + uTop) / 2 if uOK else None
+            pDT, pDB = (dTop, dBot) if dOK else (None, None)
+            pUB, pUT = (uBot, uTop) if uOK else (None, None)
             preDHitM = preUHitM = None
         else:
             # EQ foer open vokser videre efter open (som EQ-indikatoren), indtil den rammes.
@@ -640,7 +645,7 @@ def _run(nq_path, es_path, start, end, base):
                     pUT = max(pUT, hi)
                 preU = (pUB + pUT) / 2
             # 15:29-candlen lukker foer open: dens EQ er ogsaa en 'EQ foer open' (30/3-26)
-            if PRE_1529 and new1m and tMin == WIN_S and resetDay == dstr:
+            if PRE_1529 and (PRE_MINAGE is None or PRE_MINAGE <= 1) and new1m and tMin == WIN_S and resetDay == dstr:
                 o1, h1, l1, c1 = prevMinOHLC
                 own = (h1 + l1) / 2
                 if c1 < o1 and c1 < own and pDT is None:
