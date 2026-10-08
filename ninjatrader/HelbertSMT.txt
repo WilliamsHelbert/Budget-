@@ -112,6 +112,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         private double cum;
         private string logPath;
         private string statusDay = "";
+        private bool wrongChart;
         private int nBars, nPaired, nDays; private DateTime lastNy;
 
         // ───────────── indstillinger ─────────────
@@ -173,7 +174,16 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
             else if (State == State.DataLoaded)
             {
-                Print("HelbertSMT startet paa " + Instrument.FullName + " / " + CompareSymbol + " (" + BarsPeriod.Value + " " + BarsPeriod.BarsPeriodType + ")");
+                string msg = "HelbertSMT startet paa " + Instrument.FullName + " / " + CompareSymbol + " (" + BarsPeriod.Value + " " + BarsPeriod.BarsPeriodType + ")";
+                Print(msg);
+                Log(msg, NinjaTrader.Cbi.LogLevel.Information);
+                wrongChart = !Instrument.FullName.StartsWith("NQ") && !Instrument.FullName.StartsWith("MNQ");
+                if (wrongChart)
+                {
+                    string w = "HelbertSMT: FORKERT CHART - strategien skal ligge paa et NQ/MNQ 15 Second chart, ikke " + Instrument.FullName + ". Den handler ikke.";
+                    Print(w);
+                    Log(w, NinjaTrader.Cbi.LogLevel.Warning);
+                }
                 try { nyTz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"); }
                 catch { nyTz = TimeZoneInfo.FindSystemTimeZoneById("America/New_York"); }
                 logPath = Path.Combine(NinjaTrader.Core.Globals.UserDataDir, "HelbertSMT_log.csv");
@@ -213,7 +223,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (pend && pendNq.t == esBar.t) { pend = false; Step(pendNq, true); }
                 return;
             }
-            if (BarsInProgress != 0) return;
+            if (BarsInProgress != 0 || wrongChart) return;
             NBar nq = new NBar { t = ToUnixStart(Times[0][0]), o = Opens[0][0], h = Highs[0][0], l = Lows[0][0], c = Closes[0][0] };
             // forrige NQ-bar ventede paa ES og fik ingen -> koer den uden ES
             if (pend) { pend = false; Step(pendNq, false); }
@@ -599,7 +609,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             string tm = dk.ToString("HH:mm:ss");
             if (beBad)
             {
-                Log(dstr, tm, sh, h, px, sl, tp, be, beS, "UGYLDIG (BE allerede ramt)", "", double.NaN, false);
+                WriteCsv(dstr, tm, sh, h, px, sl, tp, be, beS, "UGYLDIG (BE allerede ramt)", "", double.NaN, false);
                 Print(string.Format("{0} {1} {2} {3} ({4}) UGYLDIG - BE ({5}) allerede ramt", dstr, tm, sh ? "SHORT" : "LONG", h.src, h.who, beS));
                 return;
             }
@@ -607,7 +617,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             // dagsregler: stop efter win, max 2 pr. dag (gyldige trades taeller ogsaa paa papir)
             if (dayWin || dayCount >= 2)
             {
-                Log(dstr, tm, sh, h, px, sl, tp, be, beS, dayWin ? "SPRUNGET OVER (dagen vundet)" : "SPRUNGET OVER (max 2)", "", double.NaN, false);
+                WriteCsv(dstr, tm, sh, h, px, sl, tp, be, beS, dayWin ? "SPRUNGET OVER (dagen vundet)" : "SPRUNGET OVER (max 2)", "", double.NaN, false);
                 Print(string.Format("{0} {1} {2} {3} - sprunget over ({4})", dstr, tm, sh ? "SHORT" : "LONG", h.src, dayWin ? "dagen vundet" : "max 2"));
                 return;
             }
@@ -623,7 +633,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             if (o != null)
             {
-                Log(o.date, o.time, o.shrt, null, o.entry, o.sl0, o.tp, o.be, o.beSrc, "OK", "AFLOEST", 0, o.real, o.src, o.who);
+                WriteCsv(o.date, o.time, o.shrt, null, o.entry, o.sl0, o.tp, o.be, o.beSrc, "OK", "AFLOEST", 0, o.real, o.src, o.who);
                 curve.Add(cum);   // afloest = 0R paa kurven
                 if (o.real && LiveOrders) { if (o.shrt) ExitShort("SMT"); else ExitLong("SMT"); }
             }
@@ -668,7 +678,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 double R = Math.Round(pts / 10.0, 2);
                 if (R > 0) dayWin = true;
                 cum += R; curve.Add(cum);
-                Log(x.date, x.time, x.shrt, null, x.entry, x.sl0, x.tp, x.be, x.beSrc, "OK", res, R, x.real, x.src, x.who);
+                WriteCsv(x.date, x.time, x.shrt, null, x.entry, x.sl0, x.tp, x.be, x.beSrc, "OK", res, R, x.real, x.src, x.who);
                 o = null;
                 return;
             }
@@ -697,7 +707,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 SetStopLoss("SMT", CalculationMode.Price, x.entry, false);
         }
 
-        private void Log(string dstr, string tm, bool sh, Hit h, double px, double sl, double tp, double be, string beS,
+        private void WriteCsv(string dstr, string tm, bool sh, Hit h, double px, double sl, double tp, double be, string beS,
             string status, string res, double R, bool real, string src = null, string who = null)
         {
             try
