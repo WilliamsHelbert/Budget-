@@ -670,9 +670,11 @@ def _run(nq_path, es_path, start, end, base):
                 own = (h1 + l1) / 2
                 if c1 < o1 and c1 < own and pDT is None:
                     pDT, pDB, preDHitM = h1, min(l1, lo), None
+                    dFormT = t - 60
                     preD = (pDT + pDB) / 2
                 if c1 > o1 and c1 > own and pUB is None:
                     pUB, pUT, preUHitM = l1, max(h1, hi), None
+                    uFormT = t - 60
                     preU = (pUB + pUT) / 2
 
         # niveauer ved open til charts (SNAP = {} for at slaa til)
