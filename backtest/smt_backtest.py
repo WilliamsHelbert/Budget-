@@ -636,20 +636,24 @@ def _run(nq_path, es_path, start, end, base):
         else:
             # EQ foer open vokser videre efter open (som EQ-indikatoren), indtil den rammes.
             # Tjek mod linjen FOER barens egen low/high flytter den.
+            # 'path': candlens forloeb antages O-L-H-C (gron) / O-H-L-C (rod). Kommer det nye
+            # yderpunkt FOER prisen gaar mod linjen, tjekkes mod den flyttede linje, ellers mod den gamle.
+            gfD = PRE_GROWFIRST is True or (PRE_GROWFIRST == 'path' and cl > op)
+            gfU = PRE_GROWFIRST is True or (PRE_GROWFIRST == 'path' and cl < op)
             if preDHitM is None and pDT is not None:
-                if PRE_GROWFIRST:
-                    pDB = min(pDB, lo)   # som EQ-indikatoren: voks foerst, tjek saa mod den nye linje
+                if gfD:
+                    pDB = min(pDB, lo)   # voks foerst, tjek saa mod den nye linje
                 if hi >= (pDT + pDB) / 2:
                     preDHitM, preDHitT = minB, t
-                elif not PRE_GROWFIRST:
+                elif not gfD:
                     pDB = min(pDB, lo)
                 preD = (pDT + pDB) / 2
             if preUHitM is None and pUB is not None:
-                if PRE_GROWFIRST:
+                if gfU:
                     pUT = max(pUT, hi)
                 if lo <= (pUB + pUT) / 2:
                     preUHitM, preUHitT = minB, t
-                elif not PRE_GROWFIRST:
+                elif not gfU:
                     pUT = max(pUT, hi)
                 preU = (pUB + pUT) / 2
             # 15:29-candlen lukker foer open: dens EQ er ogsaa en 'EQ foer open' (30/3-26)
