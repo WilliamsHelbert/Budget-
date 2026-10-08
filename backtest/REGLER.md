@@ -9,7 +9,8 @@ Kun ændringer der hjælper over hele perioden er taget med.
 - **Tid close:** entry på den første 15s-candle der tager niveauet eller den næste.
   3. candle eller senere = ugyldig. (`TID_CLOSE = 2`, `TID_REF = 'first'`, `TID_REF_SMT = 'first'`)
 - Ingen BE i de første 2 15s-candles efter entry.
-- EQ før open ramt i entry-minuttet = ugyldig; EQ før open fortsætter med at vokse efter open.
+- EQ før open (BE-siden) ramt i entry-minuttet – før eller af entry-candlen – = **altid ugyldig**, uanset hvor
+  linjen ligger ift. entry (valgt 8/10-26; 14/5 SMT bliver ugyldig); EQ før open fortsætter med at vokse efter open.
   EQ'en fra 15:29-candlen (lukker før open) tæller også som EQ før open, men kun hvis der ikke stod
   en live EQ ved open (`PRE_1529`, 30/3-26 og 24/2-26). EQ før open vokser og stopper på den candle
   der rammer linjen. Candlens forløb afgør om det er den gamle eller den flyttede linje:
@@ -40,10 +41,9 @@ Kun ændringer der hjælper over hele perioden er taget med.
 ## Resultater med reglerne (R)
 | | 2023* | 2024 | 2025 | 2026** | I alt | Max DD | Blows (−10R) |
 |---|---|---|---|---|---|---|---|
-| SMT + tid close | +36,5 | −53,4 | +54,9 | +49,9 | +87,8 | −60 | 5 |
-| SMT + tid close + kurvefilter 30 | +36,5 | −10,8 | +47,4 | +49,9 | +123,0 | −17 | 1 |
-| Vergence + tid close | −1,2 | +1,6 | +3,4 | +32,8 | +36,6 | −25 | 6 |
-| SMT filter 30 + Vergence | +35,3 | −9,1 | +50,8 | +82,7 | +159,6 | −37 | 6 |
+| SMT + tid close + kurvefilter 30 | +26,3 | −10,7 | +29,9 | +54,7 | +100,2 | −19 | 1 |
+| Vergence + tid close | +5,9 | +7,0 | +5,1 | +34,8 | +52,9 | −24 | 6 |
+| SMT filter 30 + Vergence | +32,2 | −3,7 | +35,0 | +89,6 | +153,1 | −34 | 7 |
 
 Alle med max 2/dag og stop efter win. Testet og forkastet (oktober 2026): EQ før open min. 3/5 min gammel,
 EQ før open ramt af entry-candlen tæller ikke, EQ ramt bag entry gør altid ugyldig (−18R, og 14/5 er gyldig),

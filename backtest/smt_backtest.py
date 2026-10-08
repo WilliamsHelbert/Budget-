@@ -67,7 +67,7 @@ PRE_MINAGE = None  # EQ foer open skal vaere mindst N min gammel ved open (None 
 PRE_LIKE_LIVE = False  # EQ foer open behandles som normal EQ (ramt af entry-candlen selv taeller ikke)
 PRE_GROWFIRST = 'path'  # EQ foer open: candlens forloeb (gron O-L-H-C, rod O-H-L-C) afgoer om den flyttede eller gamle linje tjekkes
 CORR50 = None  # None / 'ny' (NY PRE-trades) / 'ny15' (+15m) / 'all': begge indeks paa rigtig side af 50 % af NY PRE-rangen
-PRE_TOL = None   # EQ foer open ramt i entry-minuttet: hvor langt BAG entry den maa ligge og stadig goere tradet ugyldigt (None = BE_MIN)
+PRE_TOL = 1e9   # EQ foer open (BE-siden) ramt i entry-minuttet = altid ugyldig, uanset hvor den ligger ift. entry
 PRE_1529 = True  # 15:29-candlens EQ (lukker foer open) taeller som 'EQ foer open'
 PRE_INVALID = True  # EQ foer open ramt i entry-minuttet -> ugyldigt (False = test)
 EQ_RESET = True    # nulstil live EQ'er ved open (som EQ-indikatoren)

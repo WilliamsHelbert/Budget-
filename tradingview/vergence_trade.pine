@@ -709,7 +709,8 @@ float preUMid = na(pUB) ? na : (pUB + pUT) / 2
 preTaken(float eq, int hm, int ht, float px, bool isShort) =>
     float d = na(eq) ? na : (isShort ? px - eq : eq - px)
     // EQ fra foer open: ogsaa ramt AF entry-candlen taeller
-    not na(eq) and not na(hm) and hm == minB and d >= -beMin and d <= beMax
+    // EQ foer open (BE-siden) ramt i entry-minuttet = altid ugyldig, uanset hvor den ligger ift. entry
+    not na(eq) and not na(hm) and hm == minB and d <= beMax
 
 
 // ═════════════════════ MINUT- OG DAGS-STATUS ═════════════════════
