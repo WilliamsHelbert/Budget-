@@ -58,12 +58,14 @@ For hvert session-high (low spejlvendt), så længe sessionen kører:
   i samme minut, kommer der ikke flere trades i det minut (trades der allerede er taget, står).
 
 ## 5. EQ (equilibrium) – til BE og ugyldig-regler
-Bygges af **1m-candles på NQ**, vurderes når 1m-candlen lukker:
+EQ'er **oprettes** af 1m-candles på NQ (vurderes når 1m-candlen lukker, dvs. på den første 15s-candle i
+næste minut), men de **følges på 15s-candles**: vækst og ramt-tjek sker for hver 15s-candle, ikke pr. minut.
+Ved oprettelsen starter den voksende ende i 1m-candlens eget low/high og den aktuelle 15s-candles low/high.
 - **Bearish EQ:** close < open OG close < (high+low)/2. Anker = candlens high. Bund = candlens low,
   og vokser med nye lows. EQ-linje = (anker + bund)/2.
 - **Bullish EQ:** spejlvendt (close > open og > midten, anker = low, toppen vokser med nye highs).
 - Max én live bearish og én live bullish ad gangen (ny oprettes kun når der ikke er en live).
-- **Ramt:** bearish EQ er ramt når high ≥ EQ-linjen (tjekkes mod linjen før barens eget low flytter den);
+- **Ramt:** pr. 15s-candle: bearish EQ er ramt når high ≥ EQ-linjen (tjekkes mod linjen før candlens eget low flytter den);
   bullish når low ≤ linjen. Ramt = brugt (ikke live mere).
 - **Ved 09:30 nulstilles alle live EQ'er.** 09:29-candlen giver ikke en ny live EQ efter open.
 - **EQ før open:** den live bearish og bullish EQ der står ved 09:29:59 gemmes som "EQ før open".
@@ -77,8 +79,10 @@ Kandidater på profit-siden af entry, **2–50 point** fra entry; den **nærmest
 - Live EQ på BE-siden: short → bullish EQ's linje og dens 0,75-niveau (bund + 0,75·(top−bund));
   long → bearish EQ's linje og dens 0,25-niveau.
 - EQ før open (begge retninger), hvis ikke ramt endnu.
-- Session high/low (Asia, London, NY PRE) på BE-siden. Er niveauet taget af NQ **før 09:30**, er det ikke
-  kandidat. Er det taget i vinduet (før entry) og bliver det valgt → tradet er ugyldigt.
+- Session-niveauer: **short → kun session LOWS** (Asia low, London low, NY PRE low); **long → kun session HIGHS**.
+  Et session-high er aldrig BE for en short (heller ikke hvis prisen er løbet igennem det), og omvendt.
+  Er niveauet taget af NQ **før 09:30**, er det ikke kandidat. Er det taget i vinduet (til og med
+  entry-candlen) og bliver det valgt → tradet er ugyldigt.
 - 15m-niveauer (ikke døde, ikke taget af NQ). 5m-niveauer kun ved entry i 09:30-minuttet.
 - Intet BE fundet → tradet kører uden BE.
 
