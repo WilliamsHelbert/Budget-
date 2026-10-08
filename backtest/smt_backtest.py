@@ -58,6 +58,8 @@ TID_REF_SMT = 'first'  # SMT: taelles fra foerste candle der tager niveauet (13/
 TID_REF = 'first'  # Vergence: samme som SMT - fra foerste candle der tager niveauet ('last' = fra sweepets yderpunkt)
 VRG_ONESIDE = False # Vergence: efter en Vergence uden trade er siden lukket (indtil et trade)
 VRG_ALLBACK = False # Vergence: begge indeks skal staa tilbage forbi niveauet ved entry
+VRG_SAMEGAP = False  # Vergence: gap maales pr. niveau mellem foerste takes
+VRG_15UNIQUE = True  # Vergence: hvert 15m-niveau er et selvstaendigt niveau (22/1-26)
 VRG_SAMELVL = True  # Vergence: begge indeks skal have taget samme niveau
 VRG_SAMEMIN = True # Vergence: entry skal vaere i samme minut som sweepet
 VRG_FIRST = 'both' # 'both' = foerste close hvor begge lukker i retningen afgoer; 'any' = foerste close hvor bare et af dem goer
@@ -397,12 +399,14 @@ def _run(nq_path, es_path, start, end, base):
                 vSide[s_].update(aF=[], bF=[], aE=None, bE=None, aFL=None, bFL=None, aFM=None, bFM=None, new=False, had=False, dead=False)
         h = Hit()
 
-        def check(st, aL, bL, isHi, nm, aTg=None, bTg=None):
+        def check(st, aL, bL, isHi, nm, aTg=None, bTg=None, tag=None):
             if st is None or aL is None or bL is None:
                 return
             aSweep = hi >= aL + TICK if isHi else lo <= aL - TICK
             bSweep = bok and (bh >= bL + TICK if isHi else bl <= bL - TICK)
             lvlNm = nm + (" high" if isHi else " low")
+            # Vergence: hvert 15m-niveau er sit eget niveau (begge indeks skal tage SAMME 15m-candles low)
+            vKey = lvlNm + (" " + tag if (tag and VRG_15UNIQUE) else "")
             if inWin and (aSweep or bSweep):
                 if SIDE['d'] != dstr:
                     SIDE.update(d=dstr, hi=False, lo=False)
@@ -446,7 +450,7 @@ def _run(nq_path, es_path, start, end, base):
                 ext = max if isHi else min
                 if newA:
                     if st.aLv is None:      # frisk
-                        sd['aF'].append([minB, aL, lvlNm, False])
+                        sd['aF'].append([minB, aL, vKey, False])
                         sd['aFL'] = aL if sd.get('aFM') != minB or sd['aFL'] is None else (max if isHi else min)(sd['aFL'], aL)
                         sd['aFM'] = minB
                     if VRG_MOVED is True or curA == aL or (VRG_MOVED == 'until' and not sd['had']):
@@ -455,7 +459,7 @@ def _run(nq_path, es_path, start, end, base):
                     st.aLv = hi if isHi else lo
                 if newB:
                     if st.bLv is None:
-                        sd['bF'].append([minB, bL, lvlNm, False])
+                        sd['bF'].append([minB, bL, vKey, False])
                         sd['bFL'] = bL if sd.get('bFM') != minB or sd['bFL'] is None else (max if isHi else min)(sd['bFL'], bL)
                         sd['bFM'] = minB
                     if VRG_MOVED is True or curB == bL or (VRG_MOVED == 'until' and not sd['had']):
@@ -547,7 +551,7 @@ def _run(nq_path, es_path, start, end, base):
             for m in lv15:
                 isExt = abs(m.a - (ny.aHi or 0)) < TICK / 2 if m.isHi else abs(m.a - (ny.aLo or 0)) < TICK / 2
                 if not m.dead and not isExt:
-                    check(m.st, m.a, m.b, m.isHi, "15m")
+                    check(m.st, m.a, m.b, m.isHi, "15m", tag=(pd.Timestamp(m.tm, unit="s", tz="UTC").tz_convert(TZ) + pd.Timedelta(hours=6)).strftime("%H:%M") if m.tm else None)
 
         if h.sHi and sHiM != minB:
             sHiM, sHiT = minB, t
@@ -745,6 +749,10 @@ def _run(nq_path, es_path, start, end, base):
                         nA = {x[2] for x in sd['aF']}
                         fa = [f for f in fa if f[2] in nB]
                         fb = [f for f in fb if f[2] in nA]
+                    if VRG_SAMEGAP:
+                        # 5 min maales mellem de to indeks' FOERSTE take af SAMME niveau (20/1-26)
+                        fa = [f for f in sd['aF'] if not f[3] and any(g[2] == f[2] and abs(g[0] - f[0]) <= VRG_GAP for g in sd['bF'])]
+                        fb = [f for f in sd['bF'] if not f[3] and any(g[2] == f[2] and abs(g[0] - f[0]) <= VRG_GAP for g in sd['aF'])]
                     if fa or fb:
                         ext = max if side else min
                         # kun det indeks der tager frisk liq i DETTE minut skal lukke tilbage
