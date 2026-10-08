@@ -28,6 +28,8 @@ using System.Linq;
 using NinjaTrader.Cbi;
 using NinjaTrader.Data;
 using NinjaTrader.NinjaScript;
+using NinjaTrader.NinjaScript.DrawingTools;
+using System.Windows.Media;
 #endregion
 
 namespace NinjaTrader.NinjaScript.Strategies
@@ -109,6 +111,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         private List<double> curve = new List<double>();
         private double cum;
         private string logPath;
+        private string statusDay = "";
 
         // ───────────── indstillinger ─────────────
         [NinjaScriptProperty]
@@ -379,6 +382,18 @@ namespace NinjaTrader.NinjaScript.Strategies
             double preD = double.IsNaN(pDT) ? double.NaN : (pDT + pDB) / 2;
             double preU = double.IsNaN(pUB) ? double.NaN : (pUB + pUT) / 2;
 
+            // ── daglig status ved open (NinjaScript Output) - saa du kan se at den koerer ──
+            if (inWin && isOpenM && statusDay != dstr)
+            {
+                statusDay = dstr;
+                Print(string.Format(CultureInfo.InvariantCulture,
+                    "HelbertSMT {0} 15:30  NY PRE H/L {1}/{2} (ES {3}/{4})  London {5}/{6}{7}  Asia {8}/{9}{10}  15m-niveauer {11}  EQ foer open bear {12} bull {13}  ES-data {14}",
+                    dstr, ny.aHi, ny.aLo, ny.bHi, ny.bLo, lon.aHi, lon.aLo, (lon.maHi || lon.mbHi || lon.maLo || lon.mbLo) ? " (samlet)" : "",
+                    asia.aHi, asia.aLo, (asia.maHi || asia.mbHi || asia.maLo || asia.mbLo) ? " (samlet)" : "",
+                    lv15.Count(m => !m.dead) / 1, double.IsNaN(preD) ? "-" : preD.ToString("0.00", CultureInfo.InvariantCulture),
+                    double.IsNaN(preU) ? "-" : preU.ToString("0.00", CultureInfo.InvariantCulture), bok ? "ok" : "MANGLER"));
+            }
+
             // ── minut-status ──
             if (minB != curM) { curM = minB; mHi = false; mLo = false; mBad = false; }
             if (inWin) { mHi = mHi || h.swHi; mLo = mLo || h.swLo; }
@@ -576,6 +591,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (beBad)
             {
                 Log(dstr, tm, sh, h, px, sl, tp, be, beS, "UGYLDIG (BE allerede ramt)", "", double.NaN, false);
+                Print(string.Format("{0} {1} {2} {3} ({4}) UGYLDIG - BE ({5}) allerede ramt", dstr, tm, sh ? "SHORT" : "LONG", h.src, h.who, beS));
                 return;
             }
             lastTradeM = minB;   // kun eet trade pr. minut (ogsaa naar dagsreglerne springer det over)
@@ -583,6 +599,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (dayWin || dayCount >= 2)
             {
                 Log(dstr, tm, sh, h, px, sl, tp, be, beS, dayWin ? "SPRUNGET OVER (dagen vundet)" : "SPRUNGET OVER (max 2)", "", double.NaN, false);
+                Print(string.Format("{0} {1} {2} {3} - sprunget over ({4})", dstr, tm, sh ? "SHORT" : "LONG", h.src, dayWin ? "dagen vundet" : "max 2"));
                 return;
             }
             dayCount++;
@@ -615,6 +632,16 @@ namespace NinjaTrader.NinjaScript.Strategies
                 SetProfitTarget("SMT", CalculationMode.Price, tp);
                 if (sh) EnterShort(qty, "SMT"); else EnterLong(qty, "SMT");
             }
+            // markering paa chartet
+            try
+            {
+                DateTime barTime = TimeZoneInfo.ConvertTimeFromUtc(epoch.AddSeconds(t + 15), NinjaTrader.Core.Globals.GeneralOptions.TimeZoneInfo);
+                if (sh) Draw.ArrowDown(this, "SMT" + t, false, barTime, px + 4, real ? Brushes.Red : Brushes.Gray);
+                else Draw.ArrowUp(this, "SMT" + t, false, barTime, px - 4, real ? Brushes.Lime : Brushes.Gray);
+                Draw.Text(this, "SMTt" + t, false, (sh ? "SMT SHORT " : "SMT LONG ") + h.src, barTime, sh ? px + 10 : px - 10, 0,
+                    Brushes.White, new NinjaTrader.Gui.Tools.SimpleFont("Arial", 10), System.Windows.TextAlignment.Center, Brushes.Transparent, Brushes.Transparent, 0);
+            }
+            catch { }
             Print(string.Format("{0} {1} {2} {3} ({4}) entry {5} SL {6} TP {7} BE {8} [{9}] {10}",
                 dstr, tm, sh ? "SHORT" : "LONG", h.src, h.who, px, sl, tp, double.IsNaN(be) ? "-" : be.ToString(), beS, real ? "RIGTIG" : "PAPIR"));
         }
