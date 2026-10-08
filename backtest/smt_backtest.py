@@ -64,6 +64,7 @@ VRG_FIRST = 'both' # 'both' = foerste close hvor begge lukker i retningen afgoer
 PRE_MINAGE = None  # EQ foer open skal vaere mindst N min gammel ved open (None = fra)
 PRE_LIKE_LIVE = False  # EQ foer open behandles som normal EQ (ramt af entry-candlen selv taeller ikke)
 PRE_GROWFIRST = True  # EQ foer open: voks foerst og tjek saa (som EQ-indikatorens live EQ)
+CORR50 = None  # None / 'ny' (NY PRE-trades) / 'ny15' (+15m) / 'all': begge indeks paa rigtig side af 50 % af NY PRE-rangen
 PRE_TOL = None   # EQ foer open ramt i entry-minuttet: hvor langt BAG entry den maa ligge og stadig goere tradet ugyldigt (None = BE_MIN)
 PRE_1529 = True  # 15:29-candlens EQ (lukker foer open) taeller som 'EQ foer open'
 PRE_INVALID = True  # EQ foer open ramt i entry-minuttet -> ugyldigt (False = test)
@@ -845,6 +846,16 @@ def _run(nq_path, es_path, start, end, base):
                 if bad:
                     h.fired = False
                     stats["ikke_corr"] = stats.get("ikke_corr", 0) + 1
+        if h.fired and CORR50:
+            # correlation: long kun naar BEGGE indeks staar under 50 % af NY PRE-rangen, short over
+            srcx = h.src or ""
+            use = CORR50 == 'all' or ("NY PRE" in srcx) or (CORR50 == 'ny15' and "15m" in srcx)
+            if use and ny.aHi is not None and ny.bHi is not None and bok:
+                ma, mb = (ny.aHi + ny.aLo) / 2, (ny.bHi + ny.bLo) / 2
+                bad = (cl <= ma or bc <= mb) if h.isShort else (cl >= ma or bc >= mb)
+                if bad:
+                    h.fired = False
+                    stats["ikke_corr50"] = stats.get("ikke_corr50", 0) + 1
         if h.fired and not mBad:
             sh, px = h.isShort, cl
             # BE
