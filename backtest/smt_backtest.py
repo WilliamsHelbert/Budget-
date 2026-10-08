@@ -58,7 +58,7 @@ TID_REF_SMT = 'first'  # SMT: taelles fra foerste candle der tager niveauet (13/
 TID_REF = 'first'  # Vergence: samme som SMT - fra foerste candle der tager niveauet ('last' = fra sweepets yderpunkt)
 VRG_ONESIDE = False # Vergence: efter en Vergence uden trade er siden lukket (indtil et trade)
 VRG_ALLBACK = False # Vergence: begge indeks skal staa tilbage forbi niveauet ved entry
-VRG_SAMEGAP = False  # Vergence: gap maales pr. niveau mellem foerste takes
+VRG_SAMEGAP = 'mv'  # Vergence: 5 min maales pr. niveau mellem foerste takes; nyt yderpunkt i samme minut som det andet indeks' take taeller ogsaa (20/1, 12/2-26)
 VRG_15UNIQUE = True  # Vergence: hvert 15m-niveau er et selvstaendigt niveau (22/1-26)
 VRG_SAMELVL = True  # Vergence: begge indeks skal have taget samme niveau
 VRG_SAMEMIN = True # Vergence: entry skal vaere i samme minut som sweepet
@@ -396,7 +396,7 @@ def _run(nq_path, es_path, start, end, base):
         if MODE == 'vrg' and inWin and vDay != dstr:
             vDay = dstr
             for s_ in (True, False):
-                vSide[s_].update(aF=[], bF=[], aE=None, bE=None, aFL=None, bFL=None, aFM=None, bFM=None, new=False, had=False, dead=False)
+                vSide[s_].update(aF=[], bF=[], aE=None, bE=None, aFL=None, bFL=None, aFM=None, bFM=None, new=False, had=False, dead=False, aMv=[], bMv=[])
         h = Hit()
 
         def check(st, aL, bL, isHi, nm, aTg=None, bTg=None, tag=None):
@@ -453,6 +453,8 @@ def _run(nq_path, es_path, start, end, base):
                         sd['aF'].append([minB, aL, vKey, False])
                         sd['aFL'] = aL if sd.get('aFM') != minB or sd['aFL'] is None else (max if isHi else min)(sd['aFL'], aL)
                         sd['aFM'] = minB
+                    if st.aLv is not None:
+                        sd.setdefault('aMv', []).append((minB, vKey))   # nyt yderpunkt (ikke frisk)
                     if VRG_MOVED is True or curA == aL or (VRG_MOVED == 'until' and not sd['had']):
                         sd['aE'] = minB
                         sd['new'] = True
@@ -462,6 +464,8 @@ def _run(nq_path, es_path, start, end, base):
                         sd['bF'].append([minB, bL, vKey, False])
                         sd['bFL'] = bL if sd.get('bFM') != minB or sd['bFL'] is None else (max if isHi else min)(sd['bFL'], bL)
                         sd['bFM'] = minB
+                    if st.bLv is not None:
+                        sd.setdefault('bMv', []).append((minB, vKey))
                     if VRG_MOVED is True or curB == bL or (VRG_MOVED == 'until' and not sd['had']):
                         sd['bE'] = minB
                         sd['new'] = True
@@ -751,8 +755,11 @@ def _run(nq_path, es_path, start, end, base):
                         fb = [f for f in fb if f[2] in nA]
                     if VRG_SAMEGAP:
                         # 5 min maales mellem de to indeks' FOERSTE take af SAMME niveau (20/1-26)
-                        fa = [f for f in sd['aF'] if not f[3] and any(g[2] == f[2] and abs(g[0] - f[0]) <= VRG_GAP for g in sd['bF'])]
-                        fb = [f for f in sd['bF'] if not f[3] and any(g[2] == f[2] and abs(g[0] - f[0]) <= VRG_GAP for g in sd['aF'])]
+                        # ... eller det andet indeks laver et nyt yderpunkt paa samme niveau i SAMME minut (12/2-26)
+                        fa = [f for f in sd['aF'] if not f[3] and (any(g[2] == f[2] and abs(g[0] - f[0]) <= VRG_GAP for g in sd['bF'])
+                              or (VRG_SAMEGAP == 'mv' and any(g[1] == f[2] and g[0] == f[0] for g in sd.get('bMv', []))))]
+                        fb = [f for f in sd['bF'] if not f[3] and (any(g[2] == f[2] and abs(g[0] - f[0]) <= VRG_GAP for g in sd['aF'])
+                              or (VRG_SAMEGAP == 'mv' and any(g[1] == f[2] and g[0] == f[0] for g in sd.get('aMv', []))))]
                     if fa or fb:
                         ext = max if side else min
                         # kun det indeks der tager frisk liq i DETTE minut skal lukke tilbage

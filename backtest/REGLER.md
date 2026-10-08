@@ -29,8 +29,9 @@ Kun ændringer der hjælper over hele perioden er taget med.
   Værktøj: "SMT afbryder"-artifact.
 
 ## Vergence
-- Begge indeks skal tage samme niveau; det andet senest 5 min efter.
-- Nye yderpunkter tæller som liq indtil siden har haft sin første Vergence.
+- Begge indeks skal tage SAMME niveau. De 5 min måles mellem de to indeks' første take af det niveau (20/1-26).
+  Hvert 15m-niveau er sit eget niveau – begge skal tage samme 15m-candles high/low (22/1-26).
+- Et nyt yderpunkt på niveauet tæller kun, hvis det sker i samme minut som det andet indeks' første take (12/2-26).
 - Indekset der tager liq i det fuldendende minut lukker tilbage forbi niveauet (begge, hvis begge i samme minut).
 - Entry i samme minut som sweepet. BE kun EQ (EQ, 25/75 %, EQ før open) og session-levels – ikke 5m/15m.
 - Intet kurvefilter (gjorde Vergence dårligere i alle varianter).
