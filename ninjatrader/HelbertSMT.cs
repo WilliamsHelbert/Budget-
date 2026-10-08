@@ -112,6 +112,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         private double cum;
         private string logPath;
         private string statusDay = "";
+        private int nBars, nPaired, nDays; private DateTime lastNy;
 
         // ───────────── indstillinger ─────────────
         [NinjaScriptProperty]
@@ -165,8 +166,14 @@ namespace NinjaTrader.NinjaScript.Strategies
             {
                 AddDataSeries(CompareSymbol, BarsPeriodType.Second, 15);
             }
+            else if (State == State.Realtime)
+            {
+                Print(string.Format("HelbertSMT: historik faerdig - {0} NQ-bars, {1} med ES, {2} dage med 15:30-vindue, sidste bar {3} (NY)",
+                    nBars, nPaired, nDays, lastNy.ToString("yyyy-MM-dd HH:mm:ss")));
+            }
             else if (State == State.DataLoaded)
             {
+                Print("HelbertSMT startet paa " + Instrument.FullName + " / " + CompareSymbol + " (" + BarsPeriod.Value + " " + BarsPeriod.BarsPeriodType + ")");
                 try { nyTz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"); }
                 catch { nyTz = TimeZoneInfo.FindSystemTimeZoneById("America/New_York"); }
                 logPath = Path.Combine(NinjaTrader.Core.Globals.UserDataDir, "HelbertSMT_log.csv");
@@ -219,6 +226,8 @@ namespace NinjaTrader.NinjaScript.Strategies
         {
             long t = a.t;
             DateTime lt = NyTime(t);
+            nBars++; if (bok) nPaired++; lastNy = lt;
+            if (nBars == 1) Print("HelbertSMT: foerste bar " + lt.ToString("yyyy-MM-dd HH:mm:ss") + " (NY)");
             int tMin = lt.Hour * 60 + lt.Minute;
             bool inWin = tMin >= WIN_S && tMin < WIN_E;
             bool isOpenM = tMin == WIN_S;
@@ -385,7 +394,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             // ── daglig status ved open (NinjaScript Output) - saa du kan se at den koerer ──
             if (inWin && isOpenM && statusDay != dstr)
             {
-                statusDay = dstr;
+                statusDay = dstr; nDays++;
                 Print(string.Format(CultureInfo.InvariantCulture,
                     "HelbertSMT {0} 15:30  NY PRE H/L {1}/{2} (ES {3}/{4})  London {5}/{6}{7}  Asia {8}/{9}{10}  15m-niveauer {11}  EQ foer open bear {12} bull {13}  ES-data {14}",
                     dstr, ny.aHi, ny.aLo, ny.bHi, ny.bLo, lon.aHi, lon.aLo, (lon.maHi || lon.mbHi || lon.maLo || lon.mbLo) ? " (samlet)" : "",
