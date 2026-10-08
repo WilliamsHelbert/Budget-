@@ -3,8 +3,9 @@
 //  EQ - Equilibrium Tracker  (v18)
 //  ---------------------------------------------------------------
 //  NYT I v18
-//    - EQ foer open stopper paa den 15s-candle der foerst rammer den
-//      (vokser og tjekkes som en normal EQ).
+//    - EQ foer open stopper paa den 15s-candle der rammer den. Candlens
+//      forloeb (groen O-L-H-C / roed O-H-L-C) afgoer om det er den gamle
+//      eller den flyttede linje der rammes (6/1-26).
 //    - "EQ foer open" tegnes nu som en helt normal EQ (samme bokse,
 //      farver og linjer) med labelen "EQ foer open". De lilla linjer
 //      kan vaelges igen under "Market open".
@@ -391,10 +392,15 @@ if pbOn
     if pbNew
         pbNew := false
     else
-        // som en normal EQ: voks med barens low, og stop paa den bar der rammer linjen
-        pbLo := math.min(pbLo, low)
+        // candlens forloeb: groen O-L-H-C -> nyt low foerst (tjek den flyttede linje),
+        // roed O-H-L-C -> high foerst (tjek den gamle linje)
+        bool gfD = close > open
+        if gfD
+            pbLo := math.min(pbLo, low)
         if barstate.isconfirmed and high >= (pbHi + pbLo) / 2
             pbOn := false
+        else if not gfD
+            pbLo := math.min(pbLo, low)
     updDraw(pbD, pbT, time, pbHi, pbLo)
     label.set_xy(pbLb, time, (pbHi + pbLo) / 2)
 if plOn
@@ -405,9 +411,13 @@ if plOn
     if plNew
         plNew := false
     else
-        plHi := math.max(plHi, high)
+        bool gfU = close < open
+        if gfU
+            plHi := math.max(plHi, high)
         if barstate.isconfirmed and low <= (plHi + plLo) / 2
             plOn := false
+        else if not gfU
+            plHi := math.max(plHi, high)
     updDraw(plD, plT, time, plHi, plLo)
     label.set_xy(plLb, time, (plHi + plLo) / 2)
 

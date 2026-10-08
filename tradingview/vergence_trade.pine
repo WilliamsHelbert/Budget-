@@ -668,17 +668,26 @@ if tMin < winS
     preDHitM := na
     preUHitM := na
 else
-    // Som en normal EQ: voks med barens low/high, og stop paa den bar der rammer linjen
+    // Candlens forloeb antages O-L-H-C (groen) / O-H-L-C (roed). Kommer det nye yderpunkt
+    // FOER prisen gaar mod linjen, tjekkes mod den flyttede linje - ellers mod den gamle (6/1-26).
+    bool gfD = close > open
+    bool gfU = close < open
     if na(preDHitM) and not na(pDT)
-        pDB := math.min(pDB, low)
+        if gfD
+            pDB := math.min(pDB, low)
         if high >= (pDT + pDB) / 2
             preDHitM := minB
             preDHitT := time
+        else if not gfD
+            pDB := math.min(pDB, low)
     if na(preUHitM) and not na(pUB)
-        pUT := math.max(pUT, high)
+        if gfU
+            pUT := math.max(pUT, high)
         if low <= (pUB + pUT) / 2
             preUHitM := minB
             preUHitT := time
+        else if not gfU
+            pUT := math.max(pUT, high)
     // 15:29-candlen lukker foer open: dens EQ er ogsaa en 'EQ foer open' (30/3-26),
     // kun hvis der ikke stod en live EQ foer open i samme retning (en EQ der rammes
     // af 15:30-candlen erstattes IKKE - saa er den ramt, 24/2-26).

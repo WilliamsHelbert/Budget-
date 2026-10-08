@@ -14,7 +14,7 @@ def bt(v,y='2026'):
 src=src.replace("cmpall_pm.json","cmpfinal.json").replace("json.dump(OUT","OUTX=OUT\n#json.dump(OUT")
 exec(src)
 # Vergence 2025 (2/1-7/3)
-u=pd.read_pickle('vjournal2025.pkl'); b=bt('v_pm','2025'); b=b[b.dato<='2025-03-07'].reset_index(drop=True)
+u=pd.read_pickle('vjournal2025.pkl'); b=bt('v_path','2025'); b=b[b.dato<='2025-03-07'].reset_index(drop=True)
 used=set(); miss=[]; diff=[]
 for r in u.itertuples():
     c=b[(b.dato==r.dato)&(~b.index.isin(used))]; c=c[c['min'].map(lambda m: m[:2]==r.min[:2] and abs(int(m[3:])-int(r.min[3:]))<=1)]

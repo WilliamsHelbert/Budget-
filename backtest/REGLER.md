@@ -12,7 +12,10 @@ Kun ændringer der hjælper over hele perioden er taget med.
 - EQ før open ramt i entry-minuttet = ugyldig; EQ før open fortsætter med at vokse efter open.
   EQ'en fra 15:29-candlen (lukker før open) tæller også som EQ før open, men kun hvis der ikke stod
   en live EQ ved open (`PRE_1529`, 30/3-26 og 24/2-26). EQ før open vokser og stopper på den candle
-  der rammer linjen, ligesom en normal EQ (`PRE_GROWFIRST`).
+  der rammer linjen. Candlens forløb afgør om det er den gamle eller den flyttede linje:
+  grøn candle = open-low-high-close, rød = open-high-low-close (`PRE_GROWFIRST='path'`, 6/1-26).
+- 15m-niveauer: liq kun i 15:30-minuttet (entry i samme minut). Som BE (kun SMT) hele vinduet,
+  så længe de ikke er taget.
 - Et session-niveau der kun er samlet med en senere session på det ene indeks, er ikke sit eget
   niveau (fx London+Asia samlet i NY PRE high på NQ, men ikke på ES → kun NY PRE high). (`MERGE_EITHER`, 9/4-26)
 - Ét trade pr. minut; high og low taget i samme minut før entry = ugyldig.
@@ -36,13 +39,14 @@ Kun ændringer der hjælper over hele perioden er taget med.
 ## Resultater med reglerne (R)
 | | 2023* | 2024 | 2025 | 2026** | I alt | Max DD | Blows (−10R) |
 |---|---|---|---|---|---|---|---|
-| SMT + tid close | +36,5 | −52,4 | +49,5 | +49,9 | +83,5 | −59 | 5 |
-| SMT + tid close + kurvefilter 30 | +36,5 | −10,8 | +37,6 | +49,9 | +113,2 | −20 | 1 |
-| Vergence + tid close | +1,0 | +1,6 | +4,7 | +32,8 | +40,1 | −25 | 5 |
-| SMT filter 30 + Vergence | +37,5 | −9,1 | +42,3 | +82,7 | +153,3 | −34 | 5 |
+| SMT + tid close | +36,5 | −53,4 | +54,9 | +49,9 | +87,8 | −60 | 5 |
+| SMT + tid close + kurvefilter 30 | +36,5 | −10,8 | +47,4 | +49,9 | +123,0 | −17 | 1 |
+| Vergence + tid close | −1,2 | +1,6 | +3,4 | +32,8 | +36,6 | −25 | 6 |
+| SMT filter 30 + Vergence | +35,3 | −9,1 | +50,8 | +82,7 | +159,6 | −37 | 6 |
 
 Alle med max 2/dag og stop efter win. Testet og forkastet (oktober 2026): EQ før open min. 3/5 min gammel,
-EQ før open ramt af entry-candlen tæller ikke, EQ ramt bag entry gør altid ugyldig (−18R).
+EQ før open ramt af entry-candlen tæller ikke, EQ ramt bag entry gør altid ugyldig (−18R, og 14/5 er gyldig),
+correlation 50 % af NY PRE-rangen (kun NY PRE: −5R; NY PRE+15m/alle: −70R).
 \* fra 20/6. \*\* til 11/9.
 
 ## Testet og forkastet

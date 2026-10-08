@@ -63,7 +63,7 @@ VRG_SAMEMIN = True # Vergence: entry skal vaere i samme minut som sweepet
 VRG_FIRST = 'both' # 'both' = foerste close hvor begge lukker i retningen afgoer; 'any' = foerste close hvor bare et af dem goer
 PRE_MINAGE = None  # EQ foer open skal vaere mindst N min gammel ved open (None = fra)
 PRE_LIKE_LIVE = False  # EQ foer open behandles som normal EQ (ramt af entry-candlen selv taeller ikke)
-PRE_GROWFIRST = True  # EQ foer open: voks foerst og tjek saa (som EQ-indikatorens live EQ)
+PRE_GROWFIRST = 'path'  # EQ foer open: candlens forloeb (gron O-L-H-C, rod O-H-L-C) afgoer om den flyttede eller gamle linje tjekkes
 CORR50 = None  # None / 'ny' (NY PRE-trades) / 'ny15' (+15m) / 'all': begge indeks paa rigtig side af 50 % af NY PRE-rangen
 PRE_TOL = None   # EQ foer open ramt i entry-minuttet: hvor langt BAG entry den maa ligge og stadig goere tradet ugyldigt (None = BE_MIN)
 PRE_1529 = True  # 15:29-candlens EQ (lukker foer open) taeller som 'EQ foer open'
