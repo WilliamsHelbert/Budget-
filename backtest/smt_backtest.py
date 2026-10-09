@@ -58,7 +58,7 @@ TID_REF_SMT = 'first'  # SMT: taelles fra foerste candle der tager niveauet (13/
 TID_REF = 'first'  # Vergence: samme som SMT - fra foerste candle der tager niveauet ('last' = fra sweepets yderpunkt)
 VRG_ONESIDE = False # Vergence: efter en Vergence uden trade er siden lukket (indtil et trade)
 VRG_ALLBACK = False # Vergence: begge indeks skal staa tilbage forbi niveauet ved entry
-VRG_SAMEGAP = 'mv'  # Vergence: 5 min maales pr. niveau mellem foerste takes; nyt yderpunkt i samme minut som det andet indeks' take taeller ogsaa (20/1, 12/2-26)
+VRG_SAMEGAP = True  # Vergence: 5 min maales pr. niveau mellem de to indeks' FOERSTE take (20/1, 5/2-26) - nye yderpunkter taeller ikke
 VRG_15UNIQUE = True  # Vergence: hvert 15m-niveau er et selvstaendigt niveau (22/1-26)
 VRG_SAMELVL = True  # Vergence: begge indeks skal have taget samme niveau
 VRG_SAMEMIN = True # Vergence: entry skal vaere i samme minut som sweepet

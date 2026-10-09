@@ -30,13 +30,11 @@ Kun ændringer der hjælper over hele perioden er taget med.
   Værktøj: "SMT afbryder"-artifact.
 
 ## Vergence
-- Begge indeks skal tage SAMME niveau. De 5 min måles mellem de to indeks' første take af det niveau (20/1-26).
-  Hvert 15m-niveau er sit eget niveau – begge skal tage samme 15m-candles high/low (22/1-26).
-- Et nyt yderpunkt på niveauet tæller kun, hvis det sker i samme minut som det andet indeks' første take (12/2-26).
+- Begge indeks skal tage SAMME niveau. De 5 min måles mellem de to indeks' første take af det niveau –
+  nye yderpunkter tæller ikke (20/1 og 5/2-26). Hvert 15m-niveau er sit eget niveau (22/1-26).
 - Indekset der tager liq i det fuldendende minut lukker tilbage forbi niveauet (begge, hvis begge i samme minut).
 - Entry i samme minut som sweepet. BE kun EQ (EQ, 25/75 %, EQ før open) og session-levels – ikke 5m/15m.
-- Intet kurvefilter (gjorde Vergence dårligere i alle varianter).
-- Kør med: `MODE='vrg', USE_5M=False, USE_15M_BE=False`.
+- Intet kurvefilter. Vergence 2023–26: +42,9R, DD −22, 4 blows (10R). Begge modeller: +143,1R, DD −30, 4 blows.
 
 ## Resultater med reglerne (R)
 | | 2023* | 2024 | 2025 | 2026** | I alt | Max DD | Blows (−10R) |
