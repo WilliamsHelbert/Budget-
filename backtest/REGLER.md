@@ -33,7 +33,8 @@ Kun ændringer der hjælper over hele perioden er taget med.
 - Begge indeks skal tage SAMME niveau. De 5 min måles mellem de to indeks' første take af det niveau –
   nye yderpunkter tæller ikke (20/1 og 5/2-26). Hvert 15m-niveau er sit eget niveau (22/1-26).
 - Indekset der tager liq i det fuldendende minut lukker tilbage forbi niveauet (begge, hvis begge i samme minut).
-- Entry i samme minut som sweepet. BE kun EQ (EQ, 25/75 %, EQ før open) og session-levels – ikke 5m/15m.
+- Entry i samme minut som sweepet. BE: EQ (EQ, 25/75 %, EQ før open), session-levels og – som i SMT – 15m-niveauer
+  og 5m-niveauer ved entry i 15:30-minuttet (9/10-26: +6,9R, 1 blow færre for Vergence).
 - Intet kurvefilter. Vergence 2023–26: +42,9R, DD −22, 4 blows (10R). Begge modeller: +143,1R, DD −30, 4 blows.
 
 ## Resultater med reglerne (R)
