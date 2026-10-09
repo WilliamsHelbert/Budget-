@@ -1,7 +1,11 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v4.1)
+//  Sweep Trade (SMT)  (v4.2)
 //  ---------------------------------------------------------------
+//  NYT I v4.2 (9/10-26)
+//    - EQ FOER OPEN ramt i entry-minuttet goer IKKE laengere tradet ugyldigt
+//      (testet paa 2023-2026: reglen var overfit paa 2026). EQ'en bruges stadig
+//      som BE, saa laenge den ikke er ramt. Kan slaas til igen under BE-indstillinger.
 //  NYT I v4.1 (samme regler som backtesten, oktober 2026)
 //    - TID CLOSE: entry kun paa den 15s-candle der foerst tager niveauet
 //      eller den naeste. 3. candle eller senere = intet trade.
@@ -245,6 +249,8 @@ be15    = input.bool(true, "15m-niveauer",             group = g4)
 be05    = input.bool(true, "5m-niveauer (kun 15:30)",  group = g4)
 bePre   = input.bool(true, "EQ fra foer market open", group = g4,
      tooltip = "EQ-linjen (0.5) paa den bullish og bearish EQ der stod LIVE lige foer 15:30 (en EQ der allerede er brugt taeller ikke). Laases ved open og kan bruges som BE resten af vinduet.")
+preInv  = input.bool(false, "EQ foer open ramt = ugyldigt trade", group = g4,
+     tooltip = "Fra som standard (9/10-26). Til = er EQ foer open paa BE-siden ramt i entry-minuttet, er tradet ugyldigt (gammel regel).")
 
 g5 = "Visning"
 shortCol = input.color(color.red,    "Short", group = g5)
@@ -1175,7 +1181,7 @@ if ok
 
     // EQ fra foer open ramt i entry-minuttet -> BE-spottet er taget (endelig afgoerelse)
     // kun EQ'en paa BE-siden: short -> bullish (under), long -> bearish (over)
-    if bePre and (sh ? preTaken(preUMid, preUHitM, preUHitT, px, sh) : preTaken(preDMid, preDHitM, preDHitT, px, sh))
+    if bePre and preInv and (sh ? preTaken(preUMid, preUHitM, preUHitT, px, sh) : preTaken(preDMid, preDHitM, preDHitT, px, sh))
         bc.bad := true
         bc.src := "EQ foer open"
     // Liq i trade-retningen taget i entry-minuttet (foer/paa entry-candlen)

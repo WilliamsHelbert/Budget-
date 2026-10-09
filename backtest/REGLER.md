@@ -9,12 +9,13 @@ Kun ændringer der hjælper over hele perioden er taget med.
 - **Tid close:** entry på den første 15s-candle der tager niveauet eller den næste.
   3. candle eller senere = ugyldig. (`TID_CLOSE = 2`, `TID_REF = 'first'`, `TID_REF_SMT = 'first'`)
 - Ingen BE i de første 2 15s-candles efter entry.
-- EQ før open (BE-siden) ramt i entry-minuttet – før eller af entry-candlen – = **altid ugyldig**, uanset hvor
-  linjen ligger ift. entry (valgt 8/10-26; 14/5 SMT bliver ugyldig); EQ før open fortsætter med at vokse efter open.
-  EQ'en fra 15:29-candlen (lukker før open) tæller også som EQ før open, men kun hvis der ikke stod
-  en live EQ ved open (`PRE_1529`, 30/3-26 og 24/2-26). EQ før open vokser og stopper på den candle
-  der rammer linjen. Candlens forløb afgør om det er den gamle eller den flyttede linje:
-  grøn candle = open-low-high-close, rød = open-high-low-close (`PRE_GROWFIRST='path'`, 6/1-26).
+- **EQ før open gør IKKE et trade ugyldigt** (ændret 9/10-26, `PRE_INVALID = False`). Den bruges kun som
+  BE-kandidat, så længe den ikke er ramt. Den gamle regel (EQ før open ramt i entry-minuttet = ugyldig) var
+  bygget på 2026-dage og var overfit: på 2023–2025 kostede den SMT +40R og Vergence +44R, og din 2025-journal
+  matchede kun 48/89 med den mod 65/89 uden. I 2026 koster ændringen ~11R (SMT) / ~9R (Vergence), og 5 SMT-trades
+  du har dømt ugyldige (fx 24/2, 30/3) kommer med (−6,7R i alt). Kan slås til igen i indikatorer og NinjaTrader.
+  EQ før open vokser videre efter open; 15:29-candlens EQ bruges hvis der ingen live stod ved open (`PRE_1529`);
+  candlens forløb afgør ramt (grøn O-L-H-C, rød O-H-L-C, `PRE_GROWFIRST='path'`).
 - 15m-niveauer: liq kun i 15:30-minuttet (entry i samme minut). Som BE (kun SMT) hele vinduet,
   så længe de ikke er taget.
 - Et session-niveau der kun er samlet med en senere session på det ene indeks, er ikke sit eget
@@ -35,17 +36,26 @@ Kun ændringer der hjælper over hele perioden er taget med.
 - Indekset der tager liq i det fuldendende minut lukker tilbage forbi niveauet (begge, hvis begge i samme minut).
 - Entry i samme minut som sweepet. BE: EQ (EQ, 25/75 %, EQ før open), session-levels og – som i SMT – 15m-niveauer
   og 5m-niveauer ved entry i 15:30-minuttet (9/10-26: +6,9R, 1 blow færre for Vergence).
-- Intet kurvefilter. Vergence 2023–26: +42,9R, DD −22, 4 blows (10R). Begge modeller: +143,1R, DD −30, 4 blows.
+- Intet kurvefilter (kurvefilter 20/30/40 testet 9/10-26: færre R, ikke stabilt bedre).
 
-## Resultater med reglerne (R)
+## Resultater med reglerne (R) – opdateret 9/10-26
 | | 2023* | 2024 | 2025 | 2026** | I alt | Max DD | Blows (−10R) |
 |---|---|---|---|---|---|---|---|
-| SMT + tid close + kurvefilter 30 | +26,3 | −10,7 | +29,9 | +54,7 | +100,2 | −19 | 1 |
-| Vergence + tid close | +5,9 | +7,0 | +5,1 | +34,8 | +52,9 | −24 | 6 |
-| SMT filter 30 + Vergence | +32,2 | −3,7 | +35,0 | +89,6 | +153,1 | −34 | 7 |
+| SMT + kurvefilter 30 | +32,4 | −11,5 | +65,1 | +43,2 | +129,2 | −19 | 2 |
+| Vergence | +7,6 | +12,0 | +40,3 | +25,5 | +85,4 | −24 | 2 |
+| SMT filter 30 + Vergence | +40,0 | +0,5 | +105,4 | +68,7 | +214,5 | −26 | 8 |
 
-Alle med max 2/dag og stop efter win. Testet og forkastet (oktober 2026): EQ før open min. 3/5 min gammel,
-EQ før open ramt af entry-candlen tæller ikke, EQ ramt bag entry gør altid ugyldig (−18R, og 14/5 er gyldig),
+Alle med max 2/dag og stop efter win. Gennemsnit begge: 5,4R/måned, 15 af 40 måneder negative.
+Journal-match: SMT 2025 65/89, SMT 2026 30/30 (+5 ekstra), Vergence 2026 26/32.
+
+EQ før open-varianter (begge modeller, hele perioden): altid ugyldig +150,0R · original ±2 p +171,2R ·
+**aldrig ugyldig (valgt) +214,5R** · slet ikke brugt +193,6R.
+
+Ekstra mulighed (ikke indført): stop dagen ved −2R samlet for begge modeller: +220,2R, 6 blows i stedet for 8,
+lidt bedre i alle 4 år.
+
+Testet og forkastet (oktober 2026): EQ før open min. 3/5 min gammel,
+EQ før open ramt af entry-candlen tæller ikke,
 correlation 50 % af NY PRE-rangen (kun NY PRE: −5R; NY PRE+15m/alle: −70R).
 \* fra 20/6. \*\* til 11/9.
 

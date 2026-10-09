@@ -70,7 +70,8 @@ PRE_GROWFIRST = 'path'  # EQ foer open: candlens forloeb (gron O-L-H-C, rod O-H-
 CORR50 = None  # None / 'ny' (NY PRE-trades) / 'ny15' (+15m) / 'all': begge indeks paa rigtig side af 50 % af NY PRE-rangen
 PRE_TOL = 1e9   # EQ foer open (BE-siden) ramt i entry-minuttet = altid ugyldig, uanset hvor den ligger ift. entry
 PRE_1529 = True  # 15:29-candlens EQ (lukker foer open) taeller som 'EQ foer open'
-PRE_INVALID = True  # EQ foer open ramt i entry-minuttet -> ugyldigt (False = test)
+PRE_INVALID = False  # EQ foer open ramt i entry-minuttet -> ugyldigt. Fra (9/10-26): overfit paa 2026, kostede ~35R i 2025
+                     # (2025-journal 48/89 -> 65/89). EQ foer open bruges stadig som BE-kandidat.
 EQ_RESET = True    # nulstil live EQ'er ved open (som EQ-indikatoren)
 USE_MBAD = True    # high- og low-side taget i samme minut -> ingen nye trades i minuttet
 ONE_PER_MIN = True # kun eet trade pr. minut (det foerste)

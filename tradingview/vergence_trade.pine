@@ -1,6 +1,11 @@
 //@version=6
 // =====================================================================
-//  Vergence  (v3.0)  - samme model som backtesten (oktober 2026)
+//  Vergence  (v3.1)  - samme model som backtesten (oktober 2026)
+//  ---------------------------------------------------------------
+//  NYT I v3.1 (9/10-26)
+//    - EQ FOER OPEN ramt i entry-minuttet goer IKKE laengere tradet ugyldigt
+//      (testet paa 2023-2026: reglen var overfit paa 2026). EQ'en bruges stadig
+//      som BE, saa laenge den ikke er ramt. Kan slaas til igen under BE-indstillinger.
 //  ---------------------------------------------------------------
 //  MODELLEN
 //    - Begge indeks skal tage SAMME niveau (Asia / London / NY PRE
@@ -100,6 +105,8 @@ be15    = input.bool(false, "15m-niveauer",             group = g4)
 be05    = input.bool(false, "5m-niveauer (kun 15:30)",  group = g4)
 bePre   = input.bool(true, "EQ fra foer market open", group = g4,
      tooltip = "EQ-linjen (0.5) paa den bullish og bearish EQ der stod lige foer 15:30 - live, ellers den sidst brugte. Laases ved open og kan bruges som BE resten af vinduet.")
+preInv  = input.bool(false, "EQ foer open ramt = ugyldigt trade", group = g4,
+     tooltip = "Fra som standard (9/10-26). Til = er EQ foer open paa BE-siden ramt i entry-minuttet, er tradet ugyldigt (gammel regel).")
 
 g5 = "Visning"
 bearCol  = input.color(color.red,    "Short", group = g5)
@@ -1025,7 +1032,7 @@ if vFire
 
     // EQ fra foer open ramt i entry-minuttet -> BE-spottet er taget (endelig afgoerelse)
     // kun EQ'en paa BE-siden: short -> bullish (under), long -> bearish (over)
-    if bePre and (sh ? preTaken(preUMid, preUHitM, preUHitT, px, sh) : preTaken(preDMid, preDHitM, preDHitT, px, sh))
+    if bePre and preInv and (sh ? preTaken(preUMid, preUHitM, preUHitT, px, sh) : preTaken(preDMid, preDHitM, preDHitT, px, sh))
         bc.bad := true
         bc.src := "EQ foer open"
     // Liq i trade-retningen taget i entry-minuttet (foer entry-candlen), paa BE-siden

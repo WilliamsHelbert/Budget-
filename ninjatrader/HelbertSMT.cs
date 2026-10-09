@@ -142,6 +142,10 @@ namespace NinjaTrader.NinjaScript.Strategies
         [Display(Name = "Send rigtige ordrer", Order = 3, GroupName = "3. Regler")]
         public bool LiveOrders { get; set; }
 
+        [NinjaScriptProperty]
+        [Display(Name = "EQ foer open ramt = ugyldigt trade", Order = 4, GroupName = "3. Regler")]
+        public bool PreOpenInvalid { get; set; }
+
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
@@ -162,6 +166,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 UseCurveFilter = true;
                 SeedCurve = "";
                 LiveOrders = true;
+                PreOpenInvalid = false;
             }
             else if (State == State.Configure)
             {
@@ -573,9 +578,9 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if ((sh ? c.Item1 < px : c.Item1 > px) && d >= BE_MIN && d <= BE_MAX && (double.IsNaN(be) || d < Math.Abs(px - be)))
                 { be = c.Item1; beS = c.Item2; beBad = c.Item3; }
             }
-            // EQ foer open (BE-siden) ramt i entry-minuttet = altid ugyldig
+            // EQ foer open (BE-siden) ramt i entry-minuttet = ugyldig (kun hvis slaaet til; fra som standard 9/10-26)
             double peq = sh ? preU : preD; long phm = sh ? preUHitM : preDHitM;
-            if (!double.IsNaN(peq) && phm == minB && (sh ? px - peq : peq - px) <= BE_MAX) { beBad = true; beS = "EQ foer open"; }
+            if (PreOpenInvalid && !double.IsNaN(peq) && phm == minB && (sh ? px - peq : peq - px) <= BE_MAX) { beBad = true; beS = "EQ foer open"; }
             // live EQ / session-liq paa BE-siden taget i entry-minuttet foer entry-candlen
             long m0 = minB * 60;
             Func<List<KeyValuePair<long, double>>, bool> anyHit = L =>

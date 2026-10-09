@@ -87,8 +87,7 @@ Kandidater på profit-siden af entry, **2–50 point** fra entry; den **nærmest
 - Intet BE fundet → tradet kører uden BE.
 
 **Ugyldigt trade:**
-- EQ før open på BE-siden (short: den bullish, long: den bearish) er ramt i entry-minuttet – før eller af
-  entry-candlen. **Altid ugyldigt**, uanset hvor EQ-linjen ligger i forhold til entry (dog højst 50 point foran).
+- (EQ før open gør ikke et trade ugyldigt – den er kun BE-kandidat så længe den ikke er ramt. Ændret 9/10-26.)
 - En live EQ på BE-siden er ramt i entry-minuttet før entry-candlen, og dens linje ligger højst 2 point bag entry.
 - Et session-niveau på BE-siden er taget (første gang i vinduet) i entry-minuttet før entry-candlen, højst 2 point bag entry.
 
