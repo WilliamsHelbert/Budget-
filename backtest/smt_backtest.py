@@ -58,6 +58,7 @@ TID_REF_SMT = 'first'  # SMT: taelles fra foerste candle der tager niveauet (13/
 TID_REF = 'first'  # Vergence: samme som SMT - fra foerste candle der tager niveauet ('last' = fra sweepets yderpunkt)
 VRG_ONESIDE = False # Vergence: efter en Vergence uden trade er siden lukket (indtil et trade)
 VRG_ALLBACK = False # Vergence: begge indeks skal staa tilbage forbi niveauet ved entry
+VRG_SHARED = False  # Vergence: close tilbage maales kun mod niveauer begge indeks har taget (2/7-26)
 VRG_SAMEGAP = True  # Vergence: 5 min maales pr. niveau mellem de to indeks' FOERSTE take (20/1, 5/2-26) - nye yderpunkter taeller ikke
 VRG_15UNIQUE = True  # Vergence: hvert 15m-niveau er et selvstaendigt niveau (22/1-26)
 VRG_SAMELVL = True  # Vergence: begge indeks skal have taget samme niveau
@@ -773,6 +774,12 @@ def _run(nq_path, es_path, start, end, base):
                             # close tilbage maales mod det yderste niveau indekset tog i samme minut
                             fa = [f for f in sd['aF'] if f[0] in {g[0] for g in fa}]
                             fb = [f for f in sd['bF'] if f[0] in {g[0] for g in fb}]
+                            if VRG_SHARED:
+                                # kun niveauer BEGGE indeks har taget taeller (2/7-26): et niveau det ene
+                                # indeks tog alene (fx NQ's NY PRE low) er ikke en del af Vergence
+                                shared = {x[2] for x in sd['aF']} & {x[2] for x in sd['bF']}
+                                fa = [f for f in fa if f[2] in shared]
+                                fb = [f for f in fb if f[2] in shared]
                         aLv = ext(f[1] for f in fa) if fa else None
                         bLv = ext(f[1] for f in fb) if fb else None
                         names = sorted({f[2] for f in fa + fb})
@@ -816,7 +823,7 @@ def _run(nq_path, es_path, start, end, base):
                     # tog begge indeks liq i samme minut, skal begge lukke tilbage forbi hver sin liq
                     sdv = vSide[vs]
                     am = vt // 60
-                    if VRG_BOTHBACK and sdv.get('aFM') == am and sdv.get('bFM') == am:
+                    if VRG_BOTHBACK and not VRG_SHARED and sdv.get('aFM') == am and sdv.get('bFM') == am:
                         va = va if va is not None else sdv['aFL']
                         vb = vb if vb is not None else sdv['bFL']
                     # de(t) indeks der tog FRISK liq skal lukke tilbage forbi den
