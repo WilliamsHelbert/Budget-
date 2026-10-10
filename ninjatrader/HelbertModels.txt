@@ -25,6 +25,7 @@
 //      anden model, tages det nye kun paa papir (ingen modsatte ordrer).
 //    - Alle signaler (ogsaa papir-trades) skrives i en CSV-log:
 //      Dokumenter\NinjaTrader 8\HelbertModels_log.csv
+//    - Dagsstatus kl. 15:30 skrives i Dokumenter\NinjaTrader 8\HelbertModels_status.txt
 // =====================================================================
 #region Using declarations
 using System;
@@ -333,13 +334,15 @@ namespace NinjaTrader.NinjaScript.Strategies
                     if (!vrg)
                     {
                         S.nDays++;
-                        S.Print(string.Format(CultureInfo.InvariantCulture,
-                            "HelbertModels {0} 15:30  NY PRE H/L {1}/{2} (ES {3}/{4})  London {5}/{6}{7}  Asia {8}/{9}{10}  15m-niveauer {11}  EQ foer open bear {12} bull {13}  ES-data {14}{15}",
+                        string stl = string.Format(CultureInfo.InvariantCulture,
+                            "HelbertModels {0} 15:30  NY PRE H/L {1}/{2} (ES {3}/{4})  London {5}/{6}{7}  Asia {8}/{9}{10}  15m-niveauer {11}  EQ foer open bear {12} bull {13}  ES-data {14}  NY PRE-bars {16}{15}",
                             dstr, ny.aHi, ny.aLo, ny.bHi, ny.bLo, lon.aHi, lon.aLo, (lon.maHi || lon.mbHi || lon.maLo || lon.mbLo) ? " (samlet)" : "",
                             asia.aHi, asia.aLo, (asia.maHi || asia.mbHi || asia.maLo || asia.mbLo) ? " (samlet)" : "",
                             lv15.Count(m => !m.dead), double.IsNaN(preD) ? "-" : preD.ToString("0.00", CultureInfo.InvariantCulture),
                             double.IsNaN(preU) ? "-" : preU.ToString("0.00", CultureInfo.InvariantCulture), bok ? "ok" : "MANGLER",
-                            noTradeDay ? "  -> INGEN TRADES I DAG (boersen lukket / data mangler)" : ""));
+                            noTradeDay ? "  -> INGEN TRADES I DAG (boersen lukket / data mangler)" : "", S.nyCnt);
+                        S.Print(stl);
+                        try { File.AppendAllText(S.statusPath, stl + "\n"); } catch { }
                     }
                 }
 
@@ -763,7 +766,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         private NBar pendNq; private bool pend;
         private Dictionary<long, double> nqClose = new Dictionary<long, double>();   // NQ-close pr. bar (til MNQ-forskydning)
         private Engine smt, vrgE;
-        private string logPath;
+        private string logPath, statusPath;
         private string[] statusDay = { "", "" };
         private bool wrongChart;
         private int tradeBip = 0;   // BarsInProgress som ordrerne laegges paa
@@ -896,6 +899,9 @@ namespace NinjaTrader.NinjaScript.Strategies
                 logPath = Path.Combine(NinjaTrader.Core.Globals.UserDataDir, "HelbertModels_log.csv");
                 try { File.WriteAllText(logPath, "model;dato;tid_dk;retning;niveau;swept;entry;sl;tp;be;be_kilde;status;resultat;R;rigtig\n"); }
                 catch { }
+                // dagsstatus kl. 15:30 (samme linje som i Output-vinduet) - nemmere at sende end Output
+                statusPath = Path.Combine(NinjaTrader.Core.Globals.UserDataDir, "HelbertModels_status.txt");
+                try { File.WriteAllText(statusPath, ""); } catch { }
                 smt = UseSMT ? new Engine(this, false) { contracts = SmtContracts, useCurve = SmtCurveFilter } : null;
                 vrgE = UseVergence ? new Engine(this, true) { contracts = VrgContracts, useCurve = VrgCurveFilter } : null;
                 if (smt != null) Seed(smt, SmtSeedCurve);
