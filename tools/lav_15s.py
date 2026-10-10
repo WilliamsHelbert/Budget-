@@ -2,7 +2,8 @@
 Databento OHLCV-1s -> 15-sekunders NQ- og ES-filer til backtesten.
 
 Brug: laeg denne fil i samme mappe som Databento-zip-filerne (GLBX-....zip) og koer
-    python lav_15s.py
+    python lav_15s.py 20261010        (kun zip-filer med 20261010 i navnet)
+    python lav_15s.py                 (alle GLBX-zip-filer i mappen)
 Scriptet finder selv alle GLBX-*.zip (eller .dbn.zst) i mappen og laver for hver af dem
     NQ_<fra>_<til>.parquet  og  ES_<fra>_<til>.parquet
 
@@ -51,19 +52,24 @@ def convert(dbn_files):
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
     os.chdir(here)
-    zips = sorted(glob.glob("GLBX-*.zip"))
-    loose = sorted(glob.glob("*.dbn.zst")) + sorted(glob.glob("*.dbn"))
+    # kun zip-filer hentet i dag/efter en bestemt dato: python lav_15s.py 20261010
+    pat = sys.argv[1] if len(sys.argv) > 1 else ""
+    zips = sorted(z for z in glob.glob("GLBX-*.zip") if pat in z)
+    loose = [] if pat else sorted(glob.glob("*ohlcv*.dbn.zst")) + sorted(glob.glob("*ohlcv*.dbn"))
     if not zips and not loose:
         sys.exit("Fandt ingen GLBX-*.zip eller .dbn.zst i " + here)
     for z in zips:
         print("zip:", z)
         with tempfile.TemporaryDirectory() as tmp:
             zipfile.ZipFile(z).extractall(tmp)
-            files = sorted(glob.glob(os.path.join(tmp, "**", "*.dbn*"), recursive=True))
-            if files:
+            files = sorted(glob.glob(os.path.join(tmp, "**", "*ohlcv*.dbn*"), recursive=True))
+            if not files:
+                print("  springer over (ingen OHLCV-filer, fx MBO/TBBO)")
+                continue
+            try:
                 convert(files)
-            else:
-                print("  (ingen .dbn-filer i zip-filen)")
+            except Exception as ex:
+                print("  FEJL, springer over:", ex)
     if loose:
         convert(loose)
     print("Faerdig. Send NQ_*.parquet og ES_*.parquet.")
