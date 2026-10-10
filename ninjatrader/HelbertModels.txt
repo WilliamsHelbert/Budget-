@@ -7,9 +7,12 @@
 //  eget kurvefilter) paa samme chart.
 //
 //  OPSAETNING
-//    - Laeg strategien paa et MNQ- eller NQ-chart med 15 SEKUNDERS bars
-//      (Data Series: MNQ 12-26, Type Second, Value 15, Trading hours:
-//      "CME US Index Futures ETH"). MES/ES hentes automatisk (CompareSymbol).
+//    - Laeg strategien paa et NQ-chart med 15 SEKUNDERS bars
+//      (Data Series: NQ 12-26, Type Second, Value 15, Trading hours:
+//      "CME US Index Futures ETH"). ES hentes automatisk (CompareSymbol).
+//    - Signalerne laves paa NQ og ES (som backtesten og dine charts).
+//      Ordrerne laegges paa "Handel paa" (standard MNQ 12-26). MNQ/MES har
+//      lidt andre 15s-bars end NQ/ES og giver derfor andre signaler.
 //    - Load mindst 10 dage (gerne 1 aar) saa sessioner og kurvefilter er klar.
 //    - Calculate = On bar close (saettes automatisk).
 //
@@ -674,7 +677,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 {
                     S.WriteCsv(tag, o.date, o.time, o.shrt, o.src, o.who, o.entry, o.sl0, o.tp, o.be, o.beSrc, "OK", "AFLOEST", 0, o.real);
                     curve.Add(cum);   // afloest = 0R paa kurven
-                    if (o.real && S.LiveOrders && o.qty > 0) { if (o.shrt) S.ExitShort(0, o.qty, "Exit" + tag, tag); else S.ExitLong(0, o.qty, "Exit" + tag, tag); }
+                    if (o.real && S.LiveOrders && o.qty > 0) { if (o.shrt) S.ExitShort(S.tradeBip, o.qty, "Exit" + tag, tag); else S.ExitLong(S.tradeBip, o.qty, "Exit" + tag, tag); }
                 }
                 o = new VTrade { shrt = sh, entry = px, sl = sl, sl0 = sl, tp = tp, be = be, beSrc = beS, tpSrc = tpS, date = dstr, time = tm, src = h.src, who = h.who, real = real };
 
@@ -683,15 +686,15 @@ namespace NinjaTrader.NinjaScript.Strategies
                     int qty = contracts;
                     if (S.RiskDollars > 0)
                     {
-                        double pv = S.Instrument.MasterInstrument.PointValue;
+                        double pv = S.Instruments[S.tradeBip].MasterInstrument.PointValue;
                         qty = Math.Max(1, (int)Math.Floor(S.RiskDollars / (Math.Abs(px - sl) * pv)));
                     }
                     S.SetStopLoss(tag, CalculationMode.Price, sl, false);
                     S.SetProfitTarget(tag, CalculationMode.Price, tp);
                     o.qty = qty;
-                    // ordren skal ALTID paa chartets instrument (BarsInProgress 0 = MNQ/NQ), ogsaa naar baren
-                    // behandles mens MES/ES-dataene opdateres - ellers lander den paa ES (fejl i v1)
-                    if (sh) S.EnterShort(0, qty, tag); else S.EnterLong(0, qty, tag);
+                    // ordren skal ALTID paa handels-instrumentet (MNQ = BarsInProgress 2, eller chartets = 0),
+                    // ogsaa naar baren behandles mens ES-dataene opdateres - ellers lander den paa ES (fejl i v1)
+                    if (sh) S.EnterShort(S.tradeBip, qty, tag); else S.EnterLong(S.tradeBip, qty, tag);
                 }
                 // markering paa chartet
                 try
@@ -745,7 +748,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             {
                 x.beHit = true;
                 x.sl = x.entry;
-                if (x.real && S.LiveOrders && S.Positions[0].MarketPosition != MarketPosition.Flat)
+                if (x.real && S.LiveOrders && S.Positions[S.tradeBip].MarketPosition != MarketPosition.Flat)
                     S.SetStopLoss(tag, CalculationMode.Price, x.entry, false);
             }
         }
@@ -759,14 +762,19 @@ namespace NinjaTrader.NinjaScript.Strategies
         private string logPath;
         private string[] statusDay = { "", "" };
         private bool wrongChart;
+        private int tradeBip = 0;   // BarsInProgress som ordrerne laegges paa
         private int nBars, nPaired, nDays; private DateTime lastNy;
         private string nyCntDay = ""; private int nyCnt;
         private HashSet<string> extraClosed = new HashSet<string>();
 
         // ───────────── indstillinger ─────────────
         [NinjaScriptProperty]
-        [Display(Name = "Sammenlign med (MES/ES)", Order = 1, GroupName = "1. Data")]
+        [Display(Name = "Sammenlign med (ES)", Order = 1, GroupName = "1. Data")]
         public string CompareSymbol { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "Handel paa (fx MNQ 12-26, tom = chartets instrument)", Order = 2, GroupName = "1. Data")]
+        public string TradeSymbol { get; set; }
 
         [NinjaScriptProperty]
         [Display(Name = "Koer SMT", Order = 1, GroupName = "2. Modeller")]
@@ -833,7 +841,8 @@ namespace NinjaTrader.NinjaScript.Strategies
                 BarsRequiredToTrade = 0;
                 StartBehavior = StartBehavior.WaitUntilFlat;
                 TraceOrders = false;
-                CompareSymbol = "MES 12-26";
+                CompareSymbol = "ES 12-26";
+                TradeSymbol = "MNQ 12-26";
                 UseSMT = true;
                 UseVergence = true;
                 SmtContracts = 5;
@@ -850,6 +859,8 @@ namespace NinjaTrader.NinjaScript.Strategies
             else if (State == State.Configure)
             {
                 AddDataSeries(CompareSymbol, BarsPeriodType.Second, 15);
+                if (!string.IsNullOrWhiteSpace(TradeSymbol)) { AddDataSeries(TradeSymbol.Trim(), BarsPeriodType.Second, 15); tradeBip = 2; }
+                else tradeBip = 0;
             }
             else if (State == State.Realtime)
             {
@@ -859,6 +870,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             else if (State == State.DataLoaded)
             {
                 string msg = "HelbertModels startet paa " + Instrument.FullName + " / " + CompareSymbol + " (" + BarsPeriod.Value + " " + BarsPeriod.BarsPeriodType + ")"
+                    + "  ordrer paa " + (tradeBip == 2 ? TradeSymbol : Instrument.FullName)
                     + "  SMT " + (UseSMT ? SmtContracts + " stk" : "fra") + ", Vergence " + (UseVergence ? VrgContracts + " stk" : "fra");
                 Print(msg);
                 Log(msg, NinjaTrader.Cbi.LogLevel.Information);
@@ -866,6 +878,12 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (wrongChart)
                 {
                     string w = "HelbertModels: FORKERT CHART - strategien skal ligge paa et NQ/MNQ 15 Second chart, ikke " + Instrument.FullName + ". Den handler ikke.";
+                    Print(w);
+                    Log(w, NinjaTrader.Cbi.LogLevel.Warning);
+                }
+                else if (Instrument.FullName.StartsWith("MNQ"))
+                {
+                    string w = "HelbertModels: chartet er MNQ - signalerne kan afvige fra backtesten. Brug et NQ-chart, ES som sammenligning og 'Handel paa' = MNQ.";
                     Print(w);
                     Log(w, NinjaTrader.Cbi.LogLevel.Warning);
                 }
@@ -917,7 +935,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (pend && pendNq.t == esBar.t) { pend = false; Step(pendNq, true); }
                 return;
             }
-            if (BarsInProgress != 0 || wrongChart) return;
+            if (BarsInProgress != 0 || wrongChart) return;   // BarsInProgress 2 (handels-instrumentet) bruges kun til ordrer
             NBar nq = new NBar { t = ToUnixStart(Times[0][0]), o = Opens[0][0], h = Highs[0][0], l = Lows[0][0], c = Closes[0][0] };
             // forrige NQ-bar ventede paa ES og fik ingen -> koer den uden ES
             if (pend) { pend = false; Step(pendNq, false); }
