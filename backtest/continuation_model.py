@@ -1,8 +1,9 @@
 """
 Continuation-model backtest (ES/NQ, 1m/5m bygget fra 15s-data).
 
-Trin (long; short er spejlet):
- 1. Session liq sweep: Asia/London/NY PRE low (dagens) tages efter sessionen er slut,
+Trin (long; short er spejlet). Entry altid paa ES efter NY open:
+ 1. Session liq sweep: Asia/London/NY PRE low (dagens) eller en NY PRE 30m-low
+    (uroert under NY PRE paa begge symboler) tages efter sessionen er slut,
     paa ES ELLER NQ.
  2. 5m BOS / 5m IFVG: efter sweep-5m-candlen er lukket skal en 5m candle lukke
     paa/over en gyldig 5m swing high (ikke lukket over siden den blev lavet),
@@ -55,6 +56,29 @@ def levels(m1,S):
             out.append(dict(name=n,side=side,lvl=lv,end=b,taken=hit[0] if len(hit) else None))
     return out
 
+def m30_levels(m1,o_m1,S):
+    """High/low for hver 30m-candle i NY PRE. Gyldig hvis den ikke tages under
+    NY PRE paa nogen af de to symboler; et sweep taeller foerst efter open."""
+    pre,op=S['NY PRE']; out=[]
+    nyw=(m1.index>=pre)&(m1.index<op); onyw=(o_m1.index>=pre)&(o_m1.index<op)
+    hi_pre=m1[nyw].high.max(); lo_pre=m1[nyw].low.min()
+    t=pre
+    while t<op:
+        e=t+pd.Timedelta('30min')
+        a=m1[(m1.index>=t)&(m1.index<e)]; b=o_m1[(o_m1.index>=t)&(o_m1.index<e)]
+        if len(a) and len(b):
+            ra=m1[(m1.index>=e)&(m1.index<op)]; rb=o_m1[(o_m1.index>=e)&(o_m1.index<op)]
+            for side in ('high','low'):
+                la=a.high.max() if side=='high' else a.low.min()
+                lb=b.high.max() if side=='high' else b.low.min()
+                dead=((ra.high>=la).any() or (rb.high>=lb).any()) if side=='high' else ((ra.low<=la).any() or (rb.low<=lb).any())
+                if dead or la==(hi_pre if side=='high' else lo_pre): continue
+                after=m1[m1.index>=op]
+                hit=after.index[(after.high>=la) if side=='high' else (after.low<=la)]
+                out.append(dict(name=f"NY PRE 30m {t:%H:%M}",side=side,lvl=la,end=op,taken=hit[0] if len(hit) else None))
+        t=e
+    return out
+
 def swings(h,l):
     sh=[i for i in range(1,len(h)-1) if h[i]>h[i-1] and h[i]>h[i+1]]
     sl=[i for i in range(1,len(l)-1) if l[i]<l[i-1] and l[i]<l[i+1]]
@@ -65,7 +89,7 @@ def fvgs(h,l):
     bull=[(i,l[i],h[i-2]) for i in range(2,len(h)) if h[i-2]<l[i]]   # (c3, top, bund)
     return bear,bull
 
-def run_dir(day,sym,oth,m1,m5,o_m1,s15,S,ny_open,direction):
+def run_dir(day,sym,oth,m1,m5,o_m1,S,ny_open,direction,ex):
     """Long-logik i (evt. spejlet) prisrum. Returnerer liste af trades."""
     win_start=S['NY PRE'][0]
     win_end=pd.Timestamp(f'{day} {WIN_END_NY}',tz=NY).tz_convert(TZ)
@@ -77,8 +101,8 @@ def run_dir(day,sym,oth,m1,m5,o_m1,s15,S,ny_open,direction):
     bear1,bull1=fvgs(h,l); bear5,bull5=fvgs(h5,l5)
     j_of=np.searchsorted(t5.values, t1.floor('5min').values)  # 5m-index for hver 1m
     # sweeps: lows (i spejlet rum) paa begge symboler
-    lv_self=levels(m1,S); sweeps=[]
-    for src,lv in ((sym,lv_self),(oth,levels(o_m1,S))):
+    sweeps=[]
+    for src,lv in ((sym,levels(m1,S)+m30_levels(m1,o_m1,S)),(oth,levels(o_m1,S)+m30_levels(o_m1,m1,S))):
         for x in lv:
             if x['side']=='low' and x['taken'] is not None and win_start<=x['taken']<win_end:
                 sweeps.append((x['taken'],f"{src}:{x['name']}"))
@@ -154,20 +178,29 @@ def run_dir(day,sym,oth,m1,m5,o_m1,s15,S,ny_open,direction):
                     if (c[f+1:k]>top).any(): continue
                     if c[k]>top: why=f"1m IFVG {t1[f-2]:%H:%M} ({top})"; break
             if not why: continue
-            entry=c[k]; et=tend
-            # SL: laveste 5m low siden T2 vs. forrige 5m swing low
-            k2=info['k2']; seg=l[k2+1:k+1]; ia=k2+1+int(np.argmin(seg)); cur=l[ia]; jc=j_of[ia]
-            prev=next((l5[s] for s in reversed(sl5) if s<jc and s+1<=j_of[k]-0),None)
+            if tk<ny_open: continue          # entry kun efter market open
+            # Entry altid paa ES (ex): close paa samme minut
+            em1,em5,es15,elv=ex['m1'],ex['m5'],ex['s15'],ex['lv']
+            if tk not in em1.index: continue
+            entry=em1.loc[tk,'close']; et=tend
+            # SL paa ES: laveste low siden trin 2 vs. forrige 5m swing low
+            seg=em1[(em1.index>=info['T2'])&(em1.index<=tk)]
+            tcur=seg.low.idxmin(); cur=seg.low.min()
+            jc=em5.index.searchsorted(tcur.floor('5min'))
+            el5=em5.low.values; _,esl5=swings(em5.high.values,el5)
+            jk=em5.index.searchsorted(tk.floor('5min'))
+            prev=next((el5[s] for s in reversed(esl5) if s<jc and s+1<jk),None)
             sl=min(cur,prev) if prev is not None else cur
-            # TP: naermeste uroerte session-niveau over entry
-            cands=[x for x in lv_self if x['end']<=et and x['lvl']>entry and (x['taken'] is None or x['taken']>=et)]
+            if sl>=entry: continue
+            # TP: naermeste uroerte session-niveau paa ES over entry
+            cands=[x for x in elv if x['end']<=et and x['lvl']>entry and (x['taken'] is None or x['taken']>=et)]
             tp=min(cands,key=lambda x:x['lvl']) if cands else None
-            tr=dict(day=day,sym=sym,dir=direction,sweep_t=info['sweep_t'],sweep=info['sweep'],
+            tr=dict(day=day,sym='ES',signal=sym,dir=direction,sweep_t=info['sweep_t'],sweep=info['sweep'],
                     s2=info['s2'],T2=info['T2'],s3=info['s3'],T3=info['T3'],s4=why,entry_t=et,
                     entry=entry,sl=sl,tp=tp['lvl'] if tp else None,tp_name=f"{tp['name']} {tp['side']}" if tp else None)
             if tp is None:
                 tr.update(result='INGEN TP',R=None,exit_t=None); trades.append(tr); st=0; continue
-            w=s15[(s15.index>=et)&(s15.index<exit_t)]
+            w=es15[(es15.index>=et)&(es15.index<exit_t)]
             res=None
             for ts,r in w.iterrows():
                 if r.low<=sl: res=('SL',sl,ts); break
@@ -187,11 +220,13 @@ def run(days=None):
         if days and day not in days: continue
         S,ny_open=sessions(day)
         a=pd.Timestamp(f'{day} 00:00',tz=TZ); b=a+pd.Timedelta('1D')
+        es1=M1['ES'][a:b-pd.Timedelta('1ns')]; es15=D['ES'][a:b-pd.Timedelta('1ns')]
         for sym,oth in (('ES','NQ'),('NQ','ES')):
             m1=M1[sym][a:b-pd.Timedelta('1ns')]; om=M1[oth][a:b-pd.Timedelta('1ns')]
-            s15=D[sym][a:b-pd.Timedelta('1ns')]
             for dirn,f in (('LONG',lambda x:x),('SHORT',mirror)):
-                M=f(m1); m5=bars(M,'5min'); tr=run_dir(day,sym,oth,M,m5,f(om),f(s15),S,ny_open,dirn)
+                M=f(m1); m5=bars(M,'5min'); E=f(es1)
+                ex=dict(m1=E,m5=bars(E,'5min'),s15=f(es15),lv=levels(E,S))
+                tr=run_dir(day,sym,oth,M,m5,f(om),S,ny_open,dirn,ex)
                 if dirn=='SHORT':
                     for t in tr:
                         for kk in ('entry','sl','tp','exit'):
@@ -200,7 +235,7 @@ def run(days=None):
                             t[kk]=t[kk].replace('(-','(')
                         if t['tp_name']: t['tp_name']=t['tp_name'].replace('high','LOW').replace('low','high').replace('LOW','low')
                 allt+=tr
-    df=pd.DataFrame(allt).sort_values(['day','entry_t','sym']).reset_index(drop=True)
+    df=pd.DataFrame(allt).sort_values(['day','entry_t','signal']).reset_index(drop=True)
     return portfolio(df)
 
 def portfolio(df):
@@ -222,7 +257,7 @@ if __name__=='__main__':
     DATA_DIR=sys.argv[1]
     df=run(sys.argv[2:] or None)
     pd.set_option('display.width',300); pd.set_option('display.max_columns',30)
-    cols=['day','sym','dir','status','sweep_t','sweep','s2','s3','s4','entry_t','entry','sl','tp','tp_name','result','exit_t','R']
+    cols=['day','sym','signal','dir','status','sweep_t','sweep','s2','s3','s4','entry_t','entry','sl','tp','tp_name','result','exit_t','R']
     for c_ in ['sweep_t','entry_t','exit_t']: df[c_]=pd.to_datetime(df[c_]).dt.tz_convert(TZ).dt.strftime('%H:%M')
     print(df[cols].to_string())
     df.to_csv('results/marts_2024_trades.csv',index=False)
