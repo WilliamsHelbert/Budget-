@@ -21,6 +21,9 @@ Kun ændringer der hjælper over hele perioden er taget med.
 - Et session-niveau der kun er samlet med en senere session på det ene indeks, er ikke sit eget
   niveau (fx London+Asia samlet i NY PRE high på NQ, men ikke på ES → kun NY PRE high). (`MERGE_EITHER`, 9/4-26)
 - Ét trade pr. minut; high og low taget i samme minut før entry = ugyldig.
+- **Ingen trades på dage hvor New York-børsen er lukket** (futures handler, men der er ingen 09:30-open), og heller ikke
+  hvis NY PRE mangler data (færre end 300 af 360 15s-bars, fx CME-nedbrud 28/11-25). Tilføjet 10/10-26 efter datatjek:
+  fjerner 6 trades (−6,6R) i 2025–26. (`NO_TRADE_DAYS`, `NYPRE_MIN_BARS`)
 - Max 2 trades pr. dag pr. model, og **stop modellen for dagen efter en vundet trade** (også hvis det er dagens første).
   BE er ikke en win. Effekt 2023–26: SMT filter 30 +124,0 → +126,8R, Vergence +53,4 → +46,9R, samlet 177,4 → 173,7R, samme DD og blows.
 
@@ -38,12 +41,16 @@ Kun ændringer der hjælper over hele perioden er taget med.
   og 5m-niveauer ved entry i 15:30-minuttet (9/10-26: +6,9R, 1 blow færre for Vergence).
 - Intet kurvefilter (kurvefilter 20/30/40 testet 9/10-26: færre R, ikke stabilt bedre).
 
-## Resultater med reglerne (R) – opdateret 9/10-26
+## Resultater med reglerne (R) – opdateret 10/10-26
+Samme tal fra backtesten og fra NinjaTrader-strategien `HelbertModels` (testet trade for trade).
 | | 2023* | 2024 | 2025 | 2026** | I alt | Max DD | Blows (−10R) |
 |---|---|---|---|---|---|---|---|
-| SMT + kurvefilter 30 | +32,4 | −11,5 | +65,1 | +43,2 | +129,2 | −19 | 2 |
-| Vergence | +7,6 | +12,0 | +40,3 | +25,5 | +85,4 | −24 | 2 |
-| SMT filter 30 + Vergence | +40,0 | +0,5 | +105,4 | +68,7 | +214,5 | −26 | 8 |
+| SMT uden filter | +32,4 | −55,2 | +80,5 | +44,4 | +102,1 | −58 | 5 |
+| SMT + kurvefilter 30 | +32,4 | −11,5 | +67,3 | +44,4 | +132,5 | −19 | 2 |
+| Vergence uden filter | +7,6 | +12,0 | +40,3 | +26,5 | +86,4 | −24 | 2 |
+| Vergence + kurvefilter 30 | +8,6 | +8,1 | +29,7 | +19,0 | +65,4 | −17 | 1 |
+| Begge, intet filter | +40,0 | −43,2 | +120,8 | +70,9 | +188,5 | −56 | 10 |
+| Begge, kurvefilter på begge | +41,0 | −3,4 | +97,0 | +63,4 | +198,0 | −22 | 5 |
 
 Alle med max 2/dag og stop efter win. Gennemsnit begge: 5,4R/måned, 15 af 40 måneder negative.
 Journal-match: SMT 2025 65/89, SMT 2026 30/30 (+5 ekstra), Vergence 2026 26/32.

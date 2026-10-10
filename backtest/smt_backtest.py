@@ -89,6 +89,15 @@ VRG_BOTHBACK = True  # Vergence: tog begge frisk liq i samme minut, skal begge l
 VRG_ONESHOT = True # Vergence: foerste close hvor begge lukker i retningen afgoer (afvist = faerdigt)
 CLOSE_BACK = True  # SMT: skal 15s-closet ogsaa lukke tilbage forbi niveauet? (dokumentet kraever det kun for Vergence)
 DOJI_PREV = False  # test: entry-candlen skal ogsaa lukke forbi FORRIGE 15s-close (paa begge indeks)
+# Ingen trades paa dage hvor New York-boersen er lukket (ingen 09:30-open; futures handler med kort session),
+# og heller ikke hvis NY PRE mangler data (fx CME-nedbrud 28/11-25). Tilfoejet 10/10-26 efter datatjek.
+NO_TRADE_DAYS = {
+    "2023-01-02", "2023-01-16", "2023-02-20", "2023-04-07", "2023-05-29", "2023-06-19", "2023-07-04", "2023-09-04", "2023-11-23", "2023-12-25",
+    "2024-01-01", "2024-01-15", "2024-02-19", "2024-03-29", "2024-05-27", "2024-06-19", "2024-07-04", "2024-09-02", "2024-11-28", "2024-12-25",
+    "2025-01-01", "2025-01-09", "2025-01-20", "2025-02-17", "2025-04-18", "2025-05-26", "2025-06-19", "2025-07-04", "2025-09-01", "2025-11-27", "2025-12-25",
+    "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25", "2026-06-19", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
+    "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26", "2027-05-31", "2027-06-18", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24"}
+NYPRE_MIN_BARS = 300   # NY PRE har 360 15s-bars; faerre = data mangler -> ingen trades den dag
 
 
 def load(path):
@@ -245,6 +254,7 @@ def _run(nq_path, es_path, start, end, base):
     vDay = None
     resetDay = None
     hitsD, hitsU, hitsSH, hitsSL = [], [], [], []   # (tid, niveau) ramt i vinduet
+    nyCnt = {}   # antal NY PRE-bars pr. dag
     dHitT = uHitT = sHiT = sLoT = preDHitT = preUHitT = None
     # minut-status
     curM = None
@@ -290,6 +300,8 @@ def _run(nq_path, es_path, start, end, base):
         aOn = tMin >= ASIA[0] or tMin < ASIA[1]
         lOn = LON[0] <= tMin < LON[1]
         nOn = NY[0] <= tMin < NY[1]
+        if nOn:
+            nyCnt[dstr] = nyCnt.get(dstr, 0) + 1
         aStart, lStart, nStart = aOn and not prevOn["a"], lOn and not prevOn["l"], nOn and not prevOn["n"]
         prevOn.update(a=aOn, l=lOn, n=nOn)
 
@@ -885,6 +897,8 @@ def _run(nq_path, es_path, start, end, base):
                 if bad:
                     h.fired = False
                     stats["ikke_corr50"] = stats.get("ikke_corr50", 0) + 1
+        if h.fired and NYPRE_MIN_BARS and (dstr in NO_TRADE_DAYS or nyCnt.get(dstr, 0) < NYPRE_MIN_BARS):
+            h.fired = False
         if h.fired and not mBad:
             sh, px = h.isShort, cl
             # BE
