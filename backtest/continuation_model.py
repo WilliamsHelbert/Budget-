@@ -1,7 +1,7 @@
 """
 Continuation-model backtest (ES/NQ, 1m/5m bygget fra 15s-data).
 
-Trin (long; short er spejlet). Entry altid paa ES efter NY open:
+Trin (long; short er spejlet). Hele setup'et efter NY open, entry altid paa ES:
  1. Session liq sweep: Asia/London/NY PRE low (dagens) eller en NY PRE 30m-low
     (uroert under NY PRE paa begge symboler) tages efter sessionen er slut,
     paa ES ELLER NQ.
@@ -13,7 +13,8 @@ Trin (long; short er spejlet). Entry altid paa ES efter NY open:
  4. Entry: 1m close STRENGT over seneste 1m swing high, eller strengt over
     toppen af en bearish 1m FVG dannet efter trin 2.
  SL: laveste af (laveste 5m low siden trin 2, forrige 5m swing low).
- TP: naermeste uroerte session-niveau (Asia/London/NY PRE) i trade-retningen.
+ TP: naermeste uroerte session-niveau (Asia/London/NY PRE) i trade-retningen;
+     findes intet, naermeste uroerte 4h swing high/low.
  NY PRE = 90 min foer NY open (09:30 New York), London = 08:00 DK til NY PRE.
 
 Brug: python3 continuation_model.py DATA_DIR [2024-03-04 ...]
@@ -104,7 +105,7 @@ def run_dir(day,sym,oth,m1,m5,o_m1,S,ny_open,direction,ex):
     sweeps=[]
     for src,lv in ((sym,levels(m1,S)+m30_levels(m1,o_m1,S)),(oth,levels(o_m1,S)+m30_levels(o_m1,m1,S))):
         for x in lv:
-            if x['side']=='low' and x['taken'] is not None and win_start<=x['taken']<win_end:
+            if x['side']=='low' and x['taken'] is not None and ny_open<=x['taken']<win_end:  # hele setup'et efter open
                 sweeps.append((x['taken'],f"{src}:{x['name']}"))
     sweeps.sort()
     trades=[]; st=0; busy_until=win_start
@@ -195,6 +196,7 @@ def run_dir(day,sym,oth,m1,m5,o_m1,S,ny_open,direction,ex):
             # TP: naermeste uroerte session-niveau paa ES over entry
             cands=[x for x in elv if x['end']<=et and x['lvl']>entry and (x['taken'] is None or x['taken']>=et)]
             tp=min(cands,key=lambda x:x['lvl']) if cands else None
+            if tp is None: tp=h4_tp(ex,entry,et)
             tr=dict(day=day,sym='ES',signal=sym,dir=direction,sweep_t=info['sweep_t'],sweep=info['sweep'],
                     s2=info['s2'],T2=info['T2'],s3=info['s3'],T3=info['T3'],s4=why,entry_t=et,
                     entry=entry,sl=sl,tp=tp['lvl'] if tp else None,tp_name=f"{tp['name']} {tp['side']}" if tp else None)
@@ -211,8 +213,32 @@ def run_dir(day,sym,oth,m1,m5,o_m1,S,ny_open,direction,ex):
             trades.append(tr); st=0
     return trades
 
+def h4_bars(m1):
+    """4h-candles som TradingView for CME: start 18,22,02,06,10,14 NY-tid."""
+    x=m1.copy(); x.index=x.index.tz_convert(NY)
+    b=x.resample('4h',offset='2h').agg({'open':'first','high':'max','low':'min','close':'last'}).dropna()
+    b.index=b.index.tz_convert(TZ)
+    return b
+
+def h4_tp(ex,entry,et):
+    """Fallback-TP: naermeste uroerte 4h swing high over entry (bekraeftet foer entry)."""
+    b=ex['h4']; m=ex['m1all']; H4=pd.Timedelta('4h')
+    b=b[b.index>=et-pd.Timedelta('10D')]
+    h=b.high.values; t=b.index; best=None
+    for i in range(1,len(b)-1):
+        if not (h[i]>h[i-1] and h[i]>h[i+1]): continue
+        if t[i+1]+H4>et or h[i]<=entry: continue
+        later=m[(m.index>=t[i]+H4)&(m.index<et)]
+        if len(later) and later.high.max()>=h[i]: continue
+        if best is None or h[i]<best['lvl']:
+            best=dict(name=f"4h {t[i]:%d/%m %H:%M}",side='high',lvl=h[i])
+    return best
+
 def run(days=None):
-    D={s:load(s).loc['2024-03-01':'2024-03-31'] for s in ['ES','NQ']}
+    FULL={s:load(s).loc['2024-02-15':'2024-03-31'] for s in ['ES','NQ']}
+    D={s:FULL[s].loc['2024-03-01':'2024-03-31'] for s in FULL}
+    ESALL=bars(FULL['ES'],'1min')
+    XALL={'LONG':(ESALL,h4_bars(ESALL)),'SHORT':(mirror(ESALL),h4_bars(mirror(ESALL)))}
     M1={s:bars(D[s],'1min') for s in D}
     allt=[]
     for day in sorted(set(D['ES'].index.date)):
@@ -225,7 +251,7 @@ def run(days=None):
             m1=M1[sym][a:b-pd.Timedelta('1ns')]; om=M1[oth][a:b-pd.Timedelta('1ns')]
             for dirn,f in (('LONG',lambda x:x),('SHORT',mirror)):
                 M=f(m1); m5=bars(M,'5min'); E=f(es1)
-                ex=dict(m1=E,m5=bars(E,'5min'),s15=f(es15),lv=levels(E,S))
+                ex=dict(m1=E,m5=bars(E,'5min'),s15=f(es15),lv=levels(E,S),m1all=XALL[dirn][0],h4=XALL[dirn][1])
                 tr=run_dir(day,sym,oth,M,m5,f(om),S,ny_open,dirn,ex)
                 if dirn=='SHORT':
                     for t in tr:
