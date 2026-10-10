@@ -98,7 +98,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         {
             public bool shrt, beHit, early, noBE, real;
             public double entry, sl, sl0, tp, be = double.NaN;
-            public int bars, qty; public string date, time, src, who, beSrc, tpSrc;
+            public int bars, qty; public double off; public string date, time, src, who, beSrc, tpSrc;
         }
         private class VF { public long m; public double lvl; public string key; public bool used; }
         private class VSide
@@ -689,8 +689,11 @@ namespace NinjaTrader.NinjaScript.Strategies
                         double pv = S.Instruments[S.tradeBip].MasterInstrument.PointValue;
                         qty = Math.Max(1, (int)Math.Floor(S.RiskDollars / (Math.Abs(px - sl) * pv)));
                     }
-                    S.SetStopLoss(tag, CalculationMode.Price, sl, false);
-                    S.SetProfitTarget(tag, CalculationMode.Price, tp);
+                    // NQ-niveauer flyttes over paa handels-instrumentets prisskala (MNQ kan ligge nogle point
+                    // fra NQ i NinjaTraders sammensatte historik). Live er forskellen normalt 0.
+                    o.off = S.TradeOffset(px);
+                    S.SetStopLoss(tag, CalculationMode.Price, sl + o.off, false);
+                    S.SetProfitTarget(tag, CalculationMode.Price, tp + o.off);
                     o.qty = qty;
                     // ordren skal ALTID paa handels-instrumentet (MNQ = BarsInProgress 2, eller chartets = 0),
                     // ogsaa naar baren behandles mens ES-dataene opdateres - ellers lander den paa ES (fejl i v1)
@@ -749,7 +752,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 x.beHit = true;
                 x.sl = x.entry;
                 if (x.real && S.LiveOrders && S.Positions[S.tradeBip].MarketPosition != MarketPosition.Flat)
-                    S.SetStopLoss(tag, CalculationMode.Price, x.entry, false);
+                    S.SetStopLoss(tag, CalculationMode.Price, x.entry + x.off, false);
             }
         }
 
@@ -758,6 +761,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         private readonly DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private NBar esBar; private bool esHave;
         private NBar pendNq; private bool pend;
+        private Dictionary<long, double> nqClose = new Dictionary<long, double>();   // NQ-close pr. bar (til MNQ-forskydning)
         private Engine smt, vrgE;
         private string logPath;
         private string[] statusDay = { "", "" };
@@ -915,6 +919,21 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         private Engine OtherEngine(Engine e) { return e == smt ? vrgE : smt; }
 
+        // forskel mellem handels-instrumentet (MNQ) og NQ paa samme bar (afrundet til tick)
+        private double TradeOffset(double px)
+        {
+            if (tradeBip == 0) return 0;
+            try
+            {
+                if (CurrentBars[tradeBip] < 0) return 0;
+                double m = Closes[tradeBip][0], refPx;
+                long tm = ToUnixStart(Times[tradeBip][0]);
+                double d = nqClose.TryGetValue(tm, out refPx) ? m - refPx : m - px;
+                return Math.Round(d / TICK) * TICK;
+            }
+            catch { return 0; }
+        }
+
         // ── tid ──
         private long ToUnixStart(DateTime barEnd)
         {
@@ -937,6 +956,8 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
             if (BarsInProgress != 0 || wrongChart) return;   // BarsInProgress 2 (handels-instrumentet) bruges kun til ordrer
             NBar nq = new NBar { t = ToUnixStart(Times[0][0]), o = Opens[0][0], h = Highs[0][0], l = Lows[0][0], c = Closes[0][0] };
+            nqClose[nq.t] = nq.c;
+            if (nqClose.Count > 400) foreach (var k in nqClose.Keys.Where(k => k < nq.t - 3600).ToList()) nqClose.Remove(k);
             // forrige NQ-bar ventede paa ES og fik ingen -> koer den uden ES
             if (pend) { pend = false; Step(pendNq, false); }
             if (esHave && esBar.t == nq.t) Step(nq, true);
