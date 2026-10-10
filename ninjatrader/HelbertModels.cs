@@ -691,7 +691,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     o.qty = qty;
                     // ordren skal ALTID paa chartets instrument (BarsInProgress 0 = MNQ/NQ), ogsaa naar baren
                     // behandles mens MES/ES-dataene opdateres - ellers lander den paa ES (fejl i v1)
-                    if (sh) S.EnterShort(0, true, qty, tag); else S.EnterLong(0, true, qty, tag);
+                    if (sh) S.EnterShort(0, qty, tag); else S.EnterLong(0, qty, tag);
                 }
                 // markering paa chartet
                 try
