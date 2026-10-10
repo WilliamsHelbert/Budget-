@@ -82,6 +82,7 @@ USE_5M = True      # 5m-niveauer som BE-kandidat i aabningsminuttet
 PRICE_REF = None   # fx 25000: SL/TP/BE og R skaleres med NQ-prisen (None = faste point)
 SCALE_TP_ONLY = False  # kun TP skaleres (SL/BE/R faste)
 KDAY = None        # {dato: faktor} - skaler SL/TP/BE/R pr. dag (fx efter volatilitet)
+TP_LIQ = True      # TP ved liquidity 35-75 p (True) eller altid 75 p (False). Testet 10/10-26: med kurvefilter giver liquidity-TP mindst drawdown
 NEED_BE = False    # test: tradet kraever et BE der ligger foer TP
 BE2 = True         # ingen BE i de foerste 2 15s-candles efter entry
 VRG_BACK = True    # Vergence: indekset der tog frisk liq skal lukke tilbage forbi den
@@ -978,7 +979,7 @@ def _run(nq_path, es_path, start, end, base):
                 if st is not None and not st.aTook:
                     tcs.append(((s.aLo if sh else s.aHi), nm + (" low" if sh else " high")))
             tp, tpS = None, "75p"
-            for cv, cn in tcs:
+            for cv, cn in (tcs if TP_LIQ else []):
                 if cv is None:
                     continue
                 d = (px - cv) if sh else (cv - px)

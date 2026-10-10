@@ -19,6 +19,7 @@
 //  SIKKERHED
 //    - Kun handler i vinduet 09:30-10:00 New York-tid (15:30-16:00 dansk).
 //    - Max 2 trades pr. dag pr. model, stop modellen efter vundet trade.
+//    - TP ved liquidity 35-75 point, ellers 75 (kan slaas fra = altid 75).
 //    - Ingen trades paa dage hvor New York-boersen er lukket, eller hvis
 //      NY PRE (08:00-09:30) mangler data (fx CME-nedbrud 28/11-25).
 //    - Aabner den ene model et trade modsat et AABENT rigtigt trade fra den
@@ -639,7 +640,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     if (st != null && !st.aTook) tcs.Add(Tuple.Create(sh ? p.Item2.aLo : p.Item2.aHi, p.Item1 + (sh ? " low" : " high")));
                 }
                 double tp = double.NaN; string tpS = "75p";
-                foreach (var c in tcs)
+                foreach (var c in (S.LiquidityTP ? tcs : new List<Tuple<double, string>>()))
                 {
                     if (double.IsNaN(c.Item1)) continue;
                     double d = sh ? px - c.Item1 : c.Item1 - px;
@@ -827,6 +828,10 @@ namespace NinjaTrader.NinjaScript.Strategies
         public bool LiveOrders { get; set; }
 
         [NinjaScriptProperty]
+        [Display(Name = "TP ved liquidity 35-75 (fra = altid 75 point)", Order = 8, GroupName = "4. Regler")]
+        public bool LiquidityTP { get; set; }
+
+        [NinjaScriptProperty]
         [Display(Name = "EQ foer open ramt = ugyldigt trade", Order = 6, GroupName = "4. Regler")]
         public bool PreOpenInvalid { get; set; }
 
@@ -861,6 +866,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 VrgSeedCurve = "";
                 LiveOrders = true;
                 PreOpenInvalid = false;
+                LiquidityTP = true;
                 ExtraNoTradeDays = "";
             }
             else if (State == State.Configure)
