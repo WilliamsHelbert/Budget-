@@ -4,7 +4,7 @@ Databento OHLCV-1s -> 15-sekunders NQ- og ES-filer til backtesten.
 Brug: laeg denne fil i samme mappe som Databento-zip-filerne (GLBX-....zip) og koer
     python lav_15s.py 20261010        (kun zip-filer med 20261010 i navnet)
     python lav_15s.py                 (alle GLBX-zip-filer i mappen)
-Scriptet finder selv alle GLBX-*.zip (eller .dbn.zst) i mappen og laver for hver af dem
+Scriptet finder selv alle GLBX-*.zip, udpakkede GLBX-*-mapper (eller .dbn.zst) i mappen og laver for hver af dem
     NQ_<fra>_<til>.parquet  og  ES_<fra>_<til>.parquet
 
 Virker baade med NQ.FUT/ES.FUT (alle kontrakter) og NQ.v.0/ES.v.0 (kontinuerlig).
@@ -55,8 +55,9 @@ def main():
     # kun zip-filer hentet i dag/efter en bestemt dato: python lav_15s.py 20261010
     pat = sys.argv[1] if len(sys.argv) > 1 else ""
     zips = sorted(z for z in glob.glob("GLBX-*.zip") if pat in z)
+    dirs = sorted(z for z in glob.glob("GLBX-*") if os.path.isdir(z) and pat in z)
     loose = [] if pat else sorted(glob.glob("*ohlcv*.dbn.zst")) + sorted(glob.glob("*ohlcv*.dbn"))
-    if not zips and not loose:
+    if not zips and not loose and not dirs:
         sys.exit("Fandt ingen GLBX-*.zip eller .dbn.zst i " + here)
     for z in zips:
         print("zip:", z)
@@ -66,6 +67,14 @@ def main():
             if not files:
                 print("  springer over (ingen OHLCV-filer, fx MBO/TBBO)")
                 continue
+            try:
+                convert(files)
+            except Exception as ex:
+                print("  FEJL, springer over:", ex)
+    for dname in dirs:   # allerede udpakkede mapper
+        files = sorted(glob.glob(os.path.join(dname, "**", "*ohlcv*.dbn*"), recursive=True))
+        if files:
+            print("mappe:", dname)
             try:
                 convert(files)
             except Exception as ex:
