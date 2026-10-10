@@ -57,3 +57,14 @@ Hele 20/6-2023 → 11/9-2026 kørt gennem strategien (NQ/ES 15s) giver præcis d
 | Vergence kurvefilter 30 | 167 | +65,4 | +8,6 | +8,1 | +29,7 | +19,0 |
 
 (R = 10 point. Med 5 MNQ er 1R = $100.)
+
+## Startkurve til kurvefilteret (live)
+Kurvefilteret kigger på de sidste 30 papir-trades. Loader du chartet fra 12/9-2026, så indsæt
+backtestens seneste 40 R-værdier (til og med 11/9-2026) som startkurve:
+
+- **SMT:** `7.5,-1.18,-1.3,0,0,0,0,0,7.5,7.5,0,-1,7.5,3.72,-1.75,-2.4,-1,-1,-2.33,7.3,-1.95,-1.05,-1.52,0,5.05,0,4.44,-2.02,7.5,7.5,-1.02,7.5,3.98,-1.42,0,0,-1.75,0,-2.12,-2.8`
+- **Vergence:** `0,0,-1.68,0,7.5,0,-1.88,3.72,-1.58,-1.18,4.42,-2.33,-1.32,-1.95,7.5,0,0,-2.65,0,-1.25,-2.98,0,0,7.5,-2.5,7.5,6.88,7.5,-1.8,0,-1.1,-1.9,-1,0,-2.55,7.5,0,0,-2.08,-1.78`
+
+## Strategy Analyzer 2026 (NQ DEC26 + ES 12-26, ordrer på 5 MNQ, 1/1–9/10-2026)
++6.470 $, 76 trades, profit factor 2,01, max drawdown −1.467 $. Samme trades som backtesten,
+undtagen SMT 8/1 (TP) og 22/1 (SL), som NinjaTrader ikke tager (dataforskel i januar).
