@@ -67,4 +67,4 @@ backtestens seneste 40 R-værdier (til og med 11/9-2026) som startkurve:
 
 ## Strategy Analyzer 2026 (NQ DEC26 + ES 12-26, ordrer på 5 MNQ, 1/1–9/10-2026)
 +6.470 $, 76 trades, profit factor 2,01, max drawdown −1.467 $. Samme trades som backtesten,
-undtagen SMT 8/1 (TP) og 22/1 (SL), som NinjaTrader ikke tager (dataforskel i januar).
+undtagen SMT 8/1 (TP) og 22/1 (SL), som NinjaTrader ikke tager (sandsynligvis forskel i dataene – ikke undersøgt endnu).
