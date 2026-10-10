@@ -175,7 +175,7 @@ def run_dir(day,sym,oth,m1,m5,o_m1,s15,S,ny_open,direction):
             if res is None: res=('EOD',w.close.iloc[-1],w.index[-1])
             risk=entry-sl
             tr.update(result=res[0],exit=res[1],exit_t=res[2]+pd.Timedelta('15s'),risk=risk,R=(res[1]-entry)/risk)
-            trades.append(tr); st=0; busy_until=tr['exit_t']
+            trades.append(tr); st=0
     return trades
 
 def run(days=None):
@@ -200,20 +200,29 @@ def run(days=None):
                             t[kk]=t[kk].replace('(-','(')
                         if t['tp_name']: t['tp_name']=t['tp_name'].replace('high','LOW').replace('low','high').replace('LOW','low')
                 allt+=tr
-    df=pd.DataFrame(allt).sort_values(['sym','entry_t']).reset_index(drop=True)
-    # intet nyt trade mens et andet er aabent paa samme symbol
-    keep=[]; open_until={}
-    for i,r in df.iterrows():
-        if r.R is not None and not pd.isna(r.R):
-            if r.entry_t < open_until.get(r.sym,r.entry_t): continue
-            open_until[r.sym]=r.exit_t
-        keep.append(i)
-    return df.loc[keep].sort_values(['day','sym','entry_t']).reset_index(drop=True)
+    df=pd.DataFrame(allt).sort_values(['day','entry_t','sym']).reset_index(drop=True)
+    return portfolio(df)
+
+def portfolio(df):
+    """Kun eet trade ad gangen paa tvaers af ES/NQ og long/short: det der kommer
+    foerst er gyldigt. Et sweep der har givet TP/dagsslut er brugt op; gik
+    tradet i SL, maa et senere setup fra samme sweep godt tages."""
+    status=[]; open_until=None; used=set()
+    for r in df.itertuples():
+        key=(r.day,r.dir,r.sweep_t,r.sweep)
+        if r.result=='INGEN TP': status.append('Ingen TP'); continue
+        if open_until is not None and r.entry_t<open_until: status.append('Trade allerede aabent'); continue
+        if key in used: status.append('Sweep allerede brugt'); continue
+        status.append('Handlet'); open_until=r.exit_t
+        if r.result!='SL': used.add(key)
+    df['status']=status
+    return df
+
 if __name__=='__main__':
     DATA_DIR=sys.argv[1]
     df=run(sys.argv[2:] or None)
     pd.set_option('display.width',300); pd.set_option('display.max_columns',30)
-    cols=['day','sym','dir','sweep_t','sweep','s2','s3','s4','entry_t','entry','sl','tp','tp_name','result','exit_t','R']
+    cols=['day','sym','dir','status','sweep_t','sweep','s2','s3','s4','entry_t','entry','sl','tp','tp_name','result','exit_t','R']
     for c_ in ['sweep_t','entry_t','exit_t']: df[c_]=pd.to_datetime(df[c_]).dt.tz_convert(TZ).dt.strftime('%H:%M')
     print(df[cols].to_string())
     df.to_csv('results/marts_2024_trades.csv',index=False)
