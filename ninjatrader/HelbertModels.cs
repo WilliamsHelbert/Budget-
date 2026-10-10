@@ -95,7 +95,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         {
             public bool shrt, beHit, early, noBE, real;
             public double entry, sl, sl0, tp, be = double.NaN;
-            public int bars; public string date, time, src, who, beSrc, tpSrc;
+            public int bars, qty; public string date, time, src, who, beSrc, tpSrc;
         }
         private class VF { public long m; public double lvl; public string key; public bool used; }
         private class VSide
@@ -674,7 +674,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 {
                     S.WriteCsv(tag, o.date, o.time, o.shrt, o.src, o.who, o.entry, o.sl0, o.tp, o.be, o.beSrc, "OK", "AFLOEST", 0, o.real);
                     curve.Add(cum);   // afloest = 0R paa kurven
-                    if (o.real && S.LiveOrders) { if (o.shrt) S.ExitShort("Exit" + tag, tag); else S.ExitLong("Exit" + tag, tag); }
+                    if (o.real && S.LiveOrders && o.qty > 0) { if (o.shrt) S.ExitShort(0, o.qty, "Exit" + tag, tag); else S.ExitLong(0, o.qty, "Exit" + tag, tag); }
                 }
                 o = new VTrade { shrt = sh, entry = px, sl = sl, sl0 = sl, tp = tp, be = be, beSrc = beS, tpSrc = tpS, date = dstr, time = tm, src = h.src, who = h.who, real = real };
 
@@ -688,7 +688,10 @@ namespace NinjaTrader.NinjaScript.Strategies
                     }
                     S.SetStopLoss(tag, CalculationMode.Price, sl, false);
                     S.SetProfitTarget(tag, CalculationMode.Price, tp);
-                    if (sh) S.EnterShort(qty, tag); else S.EnterLong(qty, tag);
+                    o.qty = qty;
+                    // ordren skal ALTID paa chartets instrument (BarsInProgress 0 = MNQ/NQ), ogsaa naar baren
+                    // behandles mens MES/ES-dataene opdateres - ellers lander den paa ES (fejl i v1)
+                    if (sh) S.EnterShort(0, true, qty, tag); else S.EnterLong(0, true, qty, tag);
                 }
                 // markering paa chartet
                 try
@@ -742,7 +745,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             {
                 x.beHit = true;
                 x.sl = x.entry;
-                if (x.real && S.LiveOrders && S.Position.MarketPosition != MarketPosition.Flat)
+                if (x.real && S.LiveOrders && S.Positions[0].MarketPosition != MarketPosition.Flat)
                     S.SetStopLoss(tag, CalculationMode.Price, x.entry, false);
             }
         }
