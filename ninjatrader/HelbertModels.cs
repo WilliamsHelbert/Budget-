@@ -158,6 +158,12 @@ namespace NinjaTrader.NinjaScript.Strategies
             public VTrade o;
             public List<double> curve = new List<double>();
             public double cum;
+            // trades til og med startkurvens slutdato er allerede med i startkurven -> taeller ikke igen
+            private void AddR(string date, double R)
+            {
+                if (!string.IsNullOrEmpty(S.seedUntil) && string.CompareOrdinal(date, S.seedUntil) <= 0) return;
+                cum += R; curve.Add(cum);
+            }
 
             // ── een 15s-bar (samme raekkefoelge som backtesten) ──
             public void Step(NBar a, bool bok, NBar es, bool noTradeDay)
@@ -681,7 +687,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (o != null)
                 {
                     S.WriteCsv(tag, o.date, o.time, o.shrt, o.src, o.who, o.entry, o.sl0, o.tp, o.be, o.beSrc, "OK", "AFLOEST", 0, o.real);
-                    curve.Add(cum);   // afloest = 0R paa kurven
+                    AddR(o.date, 0);   // afloest = 0R paa kurven
                     if (o.real && S.LiveOrders && o.qty > 0) { if (o.shrt) S.ExitShort(S.tradeBip, o.qty, "Exit" + tag, tag); else S.ExitLong(S.tradeBip, o.qty, "Exit" + tag, tag); }
                 }
                 o = new VTrade { shrt = sh, entry = px, sl = sl, sl0 = sl, tp = tp, be = be, beSrc = beS, tpSrc = tpS, date = dstr, time = tm, src = h.src, who = h.who, real = real };
@@ -730,7 +736,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     else { pts = Math.Abs(x.tp - x.entry); res = "TP"; }
                     double R = Math.Round(pts / 10.0, 2);
                     if (R > 0) dayWin = true;
-                    cum += R; curve.Add(cum);
+                    AddR(x.date, R);
                     S.WriteCsv(tag, x.date, x.time, x.shrt, x.src, x.who, x.entry, x.sl0, x.tp, x.be, x.beSrc, "OK", res, R, x.real);
                     o = null;
                     return;
@@ -840,6 +846,11 @@ namespace NinjaTrader.NinjaScript.Strategies
         [Display(Name = "Ekstra dage uden trades (yyyy-mm-dd, kommasepareret)", Order = 7, GroupName = "4. Regler")]
         public string ExtraNoTradeDays { get; set; }
 
+        [NinjaScriptProperty]
+        [Display(Name = "Startkurverne gaar til og med (yyyy-mm-dd)", Order = 9, GroupName = "4. Regler")]
+        public string SeedUntil { get; set; }
+        internal string seedUntil;
+
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
@@ -863,8 +874,10 @@ namespace NinjaTrader.NinjaScript.Strategies
                 RiskDollars = 0;
                 SmtCurveFilter = true;
                 VrgCurveFilter = true;
-                SmtSeedCurve = "";
-                VrgSeedCurve = "";
+                // backtestens sidste 40 papir-R pr. model til og med 9/10-2026 (NQ/ES 15s, kurvefilter 30)
+                SmtSeedCurve = "0,0,0,0,7.5,7.5,0,-1,7.5,3.72,-1.75,-2.4,-1,-1,-2.33,7.3,-1.95,-1.05,-1.52,0,5.05,0,4.44,-2.02,7.5,7.5,-1.02,7.5,3.98,-1.42,0,0,-1.75,0,-2.12,-2.8,0,6.31,-1.3,-1.72";
+                VrgSeedCurve = "0,-1.68,0,7.5,0,-1.88,3.72,-1.58,-1.18,4.42,-2.33,-1.32,-1.95,7.5,0,0,-2.65,0,-1.25,-2.98,0,0,7.5,-2.5,7.5,6.88,7.5,-1.8,0,-1.1,-1.9,-1,0,-2.55,7.5,0,0,-2.08,-1.78,-1.72";
+                SeedUntil = "2026-10-09";
                 LiveOrders = true;
                 PreOpenInvalid = false;
                 LiquidityTP = true;
@@ -911,6 +924,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 try { File.WriteAllText(statusPath, ""); } catch { }
                 smt = UseSMT ? new Engine(this, false) { contracts = SmtContracts, useCurve = SmtCurveFilter } : null;
                 vrgE = UseVergence ? new Engine(this, true) { contracts = VrgContracts, useCurve = VrgCurveFilter } : null;
+                seedUntil = string.IsNullOrWhiteSpace(SeedUntil) ? null : SeedUntil.Trim();
                 if (smt != null) Seed(smt, SmtSeedCurve);
                 if (vrgE != null) Seed(vrgE, VrgSeedCurve);
                 extraClosed.Clear();

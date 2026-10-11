@@ -1,7 +1,11 @@
 //@version=6
 // =====================================================================
-//  Vergence  (v3.1)  - samme model som backtesten (oktober 2026)
+//  Vergence  (v3.2)  - samme model som backtesten (oktober 2026)
 //  ---------------------------------------------------------------
+//  NYT I v3.2 (11/10-26)
+//    - Ingen trades paa dage hvor New York-boersen er lukket (helligdage
+//      2025-2027, samme liste som backtesten og NinjaTrader). Futures handler
+//      de dage, men backtesten tager ingen trades. Kan slaas fra under Regler.
 //  NYT I v3.1 (9/10-26)
 //    - EQ FOER OPEN ramt i entry-minuttet goer IKKE laengere tradet ugyldigt
 //      (testet paa 2023-2026: reglen var overfit paa 2026). EQ'en bruges stadig
@@ -72,6 +76,8 @@ tidClose  = input.int(2, "Tid close: entry senest paa candle nr. (0 = fra)", min
      tooltip = "Taelles fra den 15s-candle der fuldender Vergence. 2 = den candle eller den naeste.")
 mergeEither = input.bool(true, "Samlet niveau paa eet indeks er ikke eget niveau", group = g6)
 maxDay    = input.int(2, "Max trades pr. dag", minval = 0, group = g6)
+noClosed  = input.bool(true, "Ingen trades naar NY-boersen er lukket", group = g6,
+     tooltip = "Helligdage 2025-2027 (fx Thanksgiving 26/11-26, juledag 25/12-26). Samme liste som backtesten.")
 stopWin   = input.bool(true, "Stop for dagen efter en vundet trade", group = g6)
 dayBlock  = input.bool(false, "Bloker resten af dagen naar begge sider er taget", group = g6,
      tooltip = "Fra (standard): kun SAMME minut goer det ugyldigt. Til: er der siden open taget baade en high-side og en low-side, kommer der ikke flere trades den dag.")
@@ -157,7 +163,9 @@ int   minB     = int(time / 60000)
 int  tMin    = hour(time, tz) * 60 + minute(time, tz)
 int  winS    = openHour * 60 + openMin
 int  winE    = endHour  * 60 + endMin
-bool inWin   = tMin >= winS and tMin < winE
+var string CLOSED = "2025-01-01,2025-01-09,2025-01-20,2025-02-17,2025-04-18,2025-05-26,2025-06-19,2025-07-04,2025-09-01,2025-11-27,2025-12-25,2026-01-01,2026-01-19,2026-02-16,2026-04-03,2026-05-25,2026-06-19,2026-07-03,2026-09-07,2026-11-26,2026-12-25,2027-01-01,2027-01-18,2027-02-15,2027-03-26,2027-05-31,2027-06-18,2027-07-05,2027-09-06,2027-11-25,2027-12-24"
+bool closedDay = noClosed and str.contains(CLOSED, str.format_time(time, "yyyy-MM-dd", tz))
+bool inWin   = tMin >= winS and tMin < winE and not closedDay
 bool isOpenM = tMin == winS
 int  dNow    = dayofmonth(time, tz)
 

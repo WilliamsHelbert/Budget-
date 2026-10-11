@@ -18,20 +18,27 @@ Fejlen *"Please select an instrument to run a Backtest on"* betyder, at der ikke
 4. Sammenlign med: **ES 12-26**. Handel paa: **MNQ 12-26** (ordrerne og P&L kommer på MNQ).
 5. Start- og slutdato inden for den periode, hvor du har sekunddata
    (tjek under Tools → Historical Data, at der findes 15-sekunders/tick-data for både MNQ og MES).
-6. Run → Trades-fanen. Loggen ligger i `Dokumenter\NinjaTrader 8\HelbertModels_log.csv`.
+6. **Til backtest: tøm de to startkurver og "Startkurverne gaar til og med"** (ellers står kurvefilteret stille
+   på 9/10-2026-kurven og tager ikke de trades med, der ligger før den dato).
+7. Run → Trades-fanen. Loggen ligger i `Dokumenter\NinjaTrader 8\HelbertModels_log.csv`.
 
-## På chart / live
-1. Chart: **NQ 12-26, 15 Second**, Trading hours *CME US Index Futures ETH*, load mindst 10 dage.
-2. Højreklik → **Strategies…** → tilføj **HelbertModels**:
-   - Sammenlign med: `ES 12-26`
-   - Handel paa: `MNQ 12-26` (tom = handler chartets instrument, altså NQ)
-   - Koer SMT / Koer Vergence: til/fra
-   - SMT: antal kontrakter = **5**, Vergence: antal kontrakter = **5** (standard)
-   - Kurvefilter (30) pr. model, startkurve pr. model (seneste papir-R, kommasepareret)
-   - Send rigtige ordrer: til = ordrer, fra = kun signaler i loggen
-   - Ekstra dage uden trades: fx `2026-12-24`
-   - Account: **Sim101** til at starte med.
-3. Output-vinduet (New → NinjaScript Output) viser en statuslinje kl. 15:30 hver dag og alle signaler.
+## På chart / live (uge 42, fra mandag 12/10-2026)
+1. Chart: **NQ 12-26, 15 Second**, Trading hours *CME US Index Futures ETH*.
+   Højreklik → Data Series → **Days to load: 20** (skal mindst gå tilbage til 12/10-2026, se startkurven nedenfor).
+2. Højreklik → **Strategies…** → tilføj **HelbertModels**. Standardindstillingerne er de rigtige:
+   - Sammenlign med: `ES 12-26`, Handel paa: `MNQ 12-26`
+   - Koer SMT og Koer Vergence: til
+   - SMT og Vergence: **5** kontrakter hver
+   - Kurvefilter (30): til på begge
+   - Startkurver: allerede udfyldt (til og med 9/10-2026), "Startkurverne gaar til og med" = `2026-10-09`
+   - EQ foer open ramt = ugyldigt: fra. TP ved liquidity 35-75: til
+   - Send rigtige ordrer: til
+   - Account: **Sim101** i den første uge
+   - Under *Properties*: **Start behavior = Wait until flat**, og sæt **Enabled** ✓
+3. Strategien skal være tændt fra før 15:30 dansk tid. Kl. 15:30 skriver den en statuslinje i
+   Output-vinduet (New → NinjaScript Output) og i `Dokumenter\NinjaTrader 8\HelbertModels_status.txt`.
+   Alle signaler (også papir-trades) står i `HelbertModels_log.csv` i samme mappe. Send de to filer efter hver dag.
+4. Rollover: NQ/ES/MNQ 12-26 udløber 18/12-2026. Skift til **03-27** på alle tre omkring **10/12-2026**.
 
 ## Hvorfor NQ-chart og MNQ-ordrer?
 Signalerne skal laves på NQ og ES, som backtesten og dine charts. MNQ og MES har lidt andre 15s-bars
@@ -59,11 +66,19 @@ Hele 20/6-2023 → 11/9-2026 kørt gennem strategien (NQ/ES 15s) giver præcis d
 (R = 10 point. Med 5 MNQ er 1R = $100.)
 
 ## Startkurve til kurvefilteret (live)
-Kurvefilteret kigger på de sidste 30 papir-trades. Loader du chartet fra 12/9-2026, så indsæt
-backtestens seneste 40 R-værdier (til og med 11/9-2026) som startkurve:
+Kurvefilteret kigger på de sidste 30 papir-trades pr. model. Startkurverne er lagt ind i koden:
+backtestens sidste 40 R pr. model til og med fredag 9/10-2026. Trades på chartet til og med den dato
+tæller ikke med igen, så det er ligegyldigt, hvor mange dage du loader – bare chartet går mindst tilbage til 12/10-2026.
+Begge modeller står over snittet efter 9/10, så det næste SMT- og Vergence-trade er **rigtigt**.
 
-- **SMT:** `7.5,-1.18,-1.3,0,0,0,0,0,7.5,7.5,0,-1,7.5,3.72,-1.75,-2.4,-1,-1,-2.33,7.3,-1.95,-1.05,-1.52,0,5.05,0,4.44,-2.02,7.5,7.5,-1.02,7.5,3.98,-1.42,0,0,-1.75,0,-2.12,-2.8`
-- **Vergence:** `0,0,-1.68,0,7.5,0,-1.88,3.72,-1.58,-1.18,4.42,-2.33,-1.32,-1.95,7.5,0,0,-2.65,0,-1.25,-2.98,0,0,7.5,-2.5,7.5,6.88,7.5,-1.8,0,-1.1,-1.9,-1,0,-2.55,7.5,0,0,-2.08,-1.78`
+Testet i C#-strategien: startkurve til og med 28/6-2024 og data fra 20/5-2024 giver præcis samme
+rigtig/papir-markering som backtesten i resten af 2024 (60 trades, heraf 41 papir).
+
+- **SMT:** `0,0,0,0,7.5,7.5,0,-1,7.5,3.72,-1.75,-2.4,-1,-1,-2.33,7.3,-1.95,-1.05,-1.52,0,5.05,0,4.44,-2.02,7.5,7.5,-1.02,7.5,3.98,-1.42,0,0,-1.75,0,-2.12,-2.8,0,6.31,-1.3,-1.72`
+- **Vergence:** `0,-1.68,0,7.5,0,-1.88,3.72,-1.58,-1.18,4.42,-2.33,-1.32,-1.95,7.5,0,0,-2.65,0,-1.25,-2.98,0,0,7.5,-2.5,7.5,6.88,7.5,-1.8,0,-1.1,-1.9,-1,0,-2.55,7.5,0,0,-2.08,-1.78,-1.72`
+
+Startes strategien senere (fx efter en uge), kan du lade startkurverne og datoen stå,
+så længe chartet loader alle dage siden 12/10-2026.
 
 ## Strategy Analyzer 2026 (NQ DEC26 + ES 12-26, ordrer på 5 MNQ, 1/1–9/10-2026)
 +6.470 $, 76 trades, profit factor 2,01, max drawdown −1.467 $. Samme trades som backtesten,
