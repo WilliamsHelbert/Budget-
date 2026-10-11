@@ -1,0 +1,62 @@
+ODIN til NinjaTrader 8 - fire strategier
+========================================
+
+Indhold
+  Strategies\Odin.cs           de fire strategier
+  Strategies\OdinMotor.cs      reglerne for Swing og Market Open
+  Strategies\OdinSmtMotor.cs   reglerne for SMT og Vergence (port af smt_backtest.py)
+  ODIN\kurve_Gungner.csv       SMT-kurven til kurvefilteret, til og med 9/10-2026
+  ODIN\kurve_Sleipner.csv      Vergence-kurven (bruges kun hvis kurvefilter slaas til)
+
+Strategierne i NinjaTrader
+  OdinHugin      Swing        formarkedets high/low, stop 40, stop til entry ved +75, ud kl. 17:00 dansk
+  OdinMunin      Market Open  1 minut fra 15:30, stop 30
+  OdinGungner    SMT          som smt_backtest.py, kurvefilter 10
+  OdinSleipner   Vergence     som smt_backtest.py (mode vrg), intet kurvefilter
+
+Testet mod Python paa alle 15s-barer jan 2023 - okt 2026: Swing 268/268, Market Open 331/331,
+SMT 264/264 og Vergence 250/250 handler ens (tid, retning, niveau, entry, SL, TP, BE, resultat, R).
+Ikke koert i NinjaTrader endnu - koer paa sim foerst.
+
+
+1. LAEG FILERNE IND
+  a) Luk NinjaScript Editor hvis den er aaben.
+  b) Kopier de tre .cs-filer fra Strategies\ til
+       Dokumenter\NinjaTrader 8\bin\Custom\Strategies\
+  c) Kopier mappen ODIN\ (med de to kurve-filer) til
+       Dokumenter\NinjaTrader 8\ODIN\
+     (mappen ligger ved siden af "bin". Opret den hvis den ikke findes.)
+  d) Aabn NinjaTrader -> New -> NinjaScript Editor og tryk F5. Der sker intet synligt naar det lykkes.
+
+2. DIAGRAMMET
+  - MNQ (den kontrakt der handles), 15 sekunder.
+  - Trading hours: "CME US Index Futures ETH".
+  - Days to load: mindst 10. Foerste gang: nok dage til at naa tilbage til 9/10-2026, saa SMT-kurven er hel.
+  - NQ og ES paa 15 sekunder laegges til af strategierne selv ("NQ ##-##" / "ES ##-##" - ruller selv).
+  - MNQ paa diagrammet skal skiftes manuelt ved kontraktrul (hvert kvartal). Alle modeller lukker samme dag.
+
+3. STRATEGIERNE
+  Laeg dem man vil koere paa SAMME diagram. Hver har sin egen position.
+  Indstillinger:
+  - Stoerrelse: Fast (Antal) eller ProcentAfKonto (Risiko %).
+  - Kurvefilter (kun SMT/Vergence): 10 paa SMT, 0 = slaaet fra.
+  - Discord trade-log: webhook til en kanal (tom = slaaet fra).
+  - ODIN-server / ODIN-token: sender lukkede handler til Magnus' dashboard.
+    BRUGER DU EN ANDEN KONTO END MAGNUS: slet feltet "ODIN-server", ellers afvises handlerne (og der skrives en fejl i Output).
+  - Lukkede handler skrives ogsaa til Dokumenter\NinjaTrader 8\ODIN\handler.csv.
+
+4. REGLER DER KUN FINDES I NINJATRADER
+  - SMT og Vergence: har den ene model et rigtigt trade aabent, og giver den anden signal den modsatte vej,
+    tages det nye kun paa papir (taeller stadig paa kurven). Kun live.
+  - Kurvefilteret handler alle signaler paa papir og tager kun det rigtigt, naar kurven staar paa eller over
+    snittet af de 10 seneste punkter. Kurven gemmes i ODIN\kurve_<model>.csv og overlever genstart.
+  - Flere modeller paa en gang (kun live): Market Open lukkes, naar SMT eller Vergence gaar ind den modsatte vej.
+    Alt samme vej holdes under "Maks micros i alt" (standard 40). "Halv stoerrelse hvis en anden model er inde samme
+    vej" findes, men er slaaet fra - paa 4 aar kostede den 3.446 $ og sparede kun 54 $ i drawdown.
+  - IKKE MED: Vergences dagsregler (max 2 trades og stop efter win) - de findes ikke i smt_backtest.py.
+
+5. LUCID
+  Alle fire tilsammen maa hoejst have 40 micros aabne. Strategierne holder selv alt samme vej under
+  "Maks micros i alt" (40), men kun naar de koerer i samme NinjaTrader paa samme konto.
+
+Output-vinduet (New -> NinjaScript Output) viser hvert signal, om det er RIGTIG eller papir, og BE-flyt.
