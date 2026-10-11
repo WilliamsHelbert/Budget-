@@ -45,6 +45,9 @@ EXEC='ES'            # symbol der handles paa
 TP_MODE='session'    # 'session' = naermeste session-niveau, 'fixed' = fast RR
 FIXED_RR=2.0         # RR for 'fixed' og for fallback 'fixed'
 FALLBACK='h4'        # naar session-TP mangler: 'h4', 'fixed' eller 'none'
+ENTRY='market'       # 'market' = close paa trin 4-candlen, 'ote' = limit paa fib-niveau
+OTE=0.62             # fib-niveau for OTE-entry
+FVG_LIQ=False        # swing high/low inde i 5m FVG'er i NY PRE taeller som likviditet
 EXIT_NY='16:00'      # tvungen exit (NY-tid)
 
 def bars(d,r):
@@ -95,6 +98,31 @@ def m30_levels(m1,o_m1,S):
         t=e
     return out
 
+def fvg_levels(m1,S):
+    """5m swing high/low i NY PRE der ligger inde i en 5m FVG dannet i NY PRE.
+    Gyldig hvis den ikke tages resten af NY PRE; sweep taeller efter open."""
+    pre,op=S['NY PRE']
+    m5=bars(m1[(m1.index>=pre-pd.Timedelta('5min'))&(m1.index<op+pd.Timedelta('5min'))],'5min')
+    t=m5.index; h=m5.high.values; l=m5.low.values
+    inny=[(x>=pre and x<op) for x in t]
+    w=m1[(m1.index>=pre)&(m1.index<op)]
+    if not len(w): return []
+    hi_pre,lo_pre=w.high.max(),w.low.min()
+    gaps=[(i,min(l[i],h[i-2]),max(l[i],h[i-2])) for i in range(2,len(t)) if inny[i] and inny[i-2] and (l[i-2]>h[i] or h[i-2]<l[i])]
+    gaps=[(i,min(l[i-2],h[i]) if l[i-2]>h[i] else h[i-2],max(l[i-2],h[i]) if l[i-2]>h[i] else l[i]) for i,_,_ in gaps]
+    out=[]; seen=set(); after=m1[m1.index>=op]
+    for j in range(1,len(t)-1):
+        if not inny[j] or t[j+1]>=op: continue
+        for side,v,isw in (('high',h[j],h[j]>h[j-1] and h[j]>h[j+1]),('low',l[j],l[j]<l[j-1] and l[j]<l[j+1])):
+            if not isw or (side,v) in seen or v in (hi_pre,lo_pre): continue
+            if not any(g<j and bot<=v<=top for g,bot,top in gaps): continue
+            rest=w[w.index>=t[j]+pd.Timedelta('5min')]
+            if (rest.high>=v).any() if side=='high' else (rest.low<=v).any(): continue
+            hit=after.index[(after.high>=v) if side=='high' else (after.low<=v)]
+            seen.add((side,v))
+            out.append(dict(name=f"NY PRE FVG-swing {t[j]:%H:%M}",side=side,lvl=v,end=op,taken=hit[0] if len(hit) else None))
+    return out
+
 def swings(h,l):
     sh=[i for i in range(1,len(h)-1) if h[i]>h[i-1] and h[i]>h[i+1]]
     sl=[i for i in range(1,len(l)-1) if l[i]<l[i-1] and l[i]<l[i+1]]
@@ -118,7 +146,8 @@ def run_dir(day,sym,oth,m1,m5,o_m1,S,ny_open,direction,ex):
     j_of=np.searchsorted(t5.values, t1.floor('5min').values)  # 5m-index for hver 1m
     # sweeps: lows (i spejlet rum) paa begge symboler
     sweeps=[]
-    for src,lv in ((sym,levels(m1,S)+m30_levels(m1,o_m1,S)),(oth,levels(o_m1,S)+m30_levels(o_m1,m1,S))):
+    extra=(lambda a: fvg_levels(a,S)) if FVG_LIQ else (lambda a: [])
+    for src,lv in ((sym,levels(m1,S)+m30_levels(m1,o_m1,S)+extra(m1)),(oth,levels(o_m1,S)+m30_levels(o_m1,m1,S)+extra(o_m1))):
         for x in lv:
             if x['side']=='low' and x['taken'] is not None and ny_open<=x['taken']<win_end:  # hele setup'et efter open
                 sweeps.append((x['taken'],f"{src}:{x['name']}"))
@@ -199,34 +228,59 @@ def run_dir(day,sym,oth,m1,m5,o_m1,S,ny_open,direction,ex):
             em1,em5,es15,elv=ex['m1'],ex['m5'],ex['s15'],ex['lv']
             if tk not in em1.index: continue
             entry=em1.loc[tk,'close']; et=tend
-            # SL paa ES: laveste low siden trin 2 vs. forrige 5m swing low
             seg=em1[(em1.index>=info['T2'])&(em1.index<=tk)]
             tcur=seg.low.idxmin(); cur=seg.low.min()
-            jc=em5.index.searchsorted(tcur.floor('5min'))
-            el5=em5.low.values; _,esl5=swings(em5.high.values,el5)
-            jk=em5.index.searchsorted(tk.floor('5min'))
-            prev=next((el5[s] for s in reversed(esl5) if s<jc and s+1<jk),None)
-            sl=min(cur,prev) if prev is not None else cur
-            if sl>=entry: continue
-            # TP: naermeste uroerte session-niveau paa ES over entry
-            fixed=dict(name=f"{FIXED_RR:g}R",side='high',lvl=entry+FIXED_RR*(entry-sl))
+            if ENTRY=='ote':
+                # Fib fra pullbackets swing low (= SL) op til high'en; limit paa OTE-niveauet
+                L=cur; H=em1[(em1.index>=tcur)&(em1.index<=tk)].high.max()
+                if H<=L: continue
+                sl=L; ref=H-OTE*(H-L)
+            else:
+                # SL paa ES: laveste low siden trin 2 vs. forrige 5m swing low
+                jc=em5.index.searchsorted(tcur.floor('5min'))
+                el5=em5.low.values; _,esl5=swings(em5.high.values,el5)
+                jk=em5.index.searchsorted(tk.floor('5min'))
+                prev=next((el5[s] for s in reversed(esl5) if s<jc and s+1<jk),None)
+                sl=min(cur,prev) if prev is not None else cur
+                ref=entry
+            if sl>=ref: continue
+            # TP: naermeste uroerte session-niveau paa ES over entry (ellers fallback)
+            fixed=dict(name=f"{FIXED_RR:g}R",side='high',lvl=ref+FIXED_RR*(ref-sl),fixed=True)
             if TP_MODE=='fixed':
                 tp=fixed
             else:
-                cands=[x for x in elv if x['end']<=et and x['lvl']>entry and (x['taken'] is None or x['taken']>=et)]
+                cands=[x for x in elv if x['end']<=et and x['lvl']>ref and (x['taken'] is None or x['taken']>=et)]
                 tp=min(cands,key=lambda x:x['lvl']) if cands else None
-                if tp is None and FALLBACK=='h4': tp=h4_tp(ex,entry,et)
+                if tp is None and FALLBACK=='h4': tp=h4_tp(ex,ref,et)
                 if tp is None and FALLBACK=='fixed': tp=fixed
             tr=dict(day=day,sym=EXEC,signal=sym,dir=direction,sweep_t=info['sweep_t'],sweep=info['sweep'],
-                    s2=info['s2'],T2=info['T2'],s3=info['s3'],T3=info['T3'],s4=why,entry_t=et,
-                    entry=entry,sl=sl,tp=tp['lvl'] if tp else None,tp_name=f"{tp['name']} {tp['side']}" if tp else None)
+                    s2=info['s2'],T2=info['T2'],s3=info['s3'],T3=info['T3'],s4=why,signal_t=et,entry_t=et,
+                    entry=ref,sl=sl,tp=tp['lvl'] if tp else None,tp_name=f"{tp['name']} {tp['side']}" if tp else None)
             if tp is None:
                 tr.update(result='INGEN TP',R=None,exit_t=None); trades.append(tr); st=0; continue
             w=es15[(es15.index>=et)&(es15.index<exit_t)]
+            start=0
+            if ENTRY=='ote':
+                fill=None
+                for i,(ts,r) in enumerate(w.iterrows()):
+                    if ts>=win_end: break
+                    lim=np.ceil((H-OTE*(H-L))*4)/4   # rundet til tick mod markedet
+                    if r.low<=lim:
+                        fill=(ts,min(r.open,lim),i); break
+                    if not tp.get('fixed') and r.high>=tp['lvl']: break   # TP naaet foer fill -> annulleret
+                    H=max(H,r.high)
+                if fill is None:
+                    tr.update(result='IKKE FYLDT',R=None,exit_t=None,entry=H-OTE*(H-L)); trades.append(tr); st=0; continue
+                entry=fill[1]; start=fill[2]; tr.update(entry=entry,entry_t=fill[0]+pd.Timedelta('15s'))
+                if tp.get('fixed'):
+                    tp=dict(tp,lvl=entry+FIXED_RR*(entry-sl)); tr['tp']=tp['lvl']
+            else:
+                entry=ref
             res=None
-            for ts,r in w.iterrows():
+            for i,(ts,r) in enumerate(w.iloc[start:].iterrows()):
                 if r.low<=sl: res=('SL',sl,ts); break
-                if r.high>=tp['lvl']: res=('TP',tp['lvl'],ts); break
+                if i>0 and r.high>=tp['lvl']: res=('TP',tp['lvl'],ts); break
+                if i==0 and ENTRY!='ote' and r.high>=tp['lvl']: res=('TP',tp['lvl'],ts); break
             if res is None: res=('EOD',w.close.iloc[-1],w.index[-1])
             risk=entry-sl
             tr.update(result=res[0],exit=res[1],exit_t=res[2]+pd.Timedelta('15s'),risk=risk,R=(res[1]-entry)/risk)
@@ -294,6 +348,7 @@ def portfolio(df):
     for r in df.itertuples():
         key=(r.day,r.dir,r.sweep_t,r.sweep)
         if r.result=='INGEN TP': status.append('Ingen TP'); continue
+        if r.result=='IKKE FYLDT': status.append('Ikke fyldt'); continue
         if open_until is not None and r.entry_t<open_until: status.append('Trade allerede aabent'); continue
         if key in used: status.append('Sweep allerede brugt'); continue
         status.append('Handlet'); open_until=r.exit_t
