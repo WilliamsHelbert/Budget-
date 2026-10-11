@@ -1,8 +1,9 @@
+"""Koer modellen for en periode: python3 run_year.py ES|NQ DATA_DIR FRA TIL NAVN"""
 import sys
 sys.path.insert(0,'.')
 import continuation_model as cm
-cm.DATA_DIR=sys.argv[2] if len(sys.argv)>2 else '.'
-ex=sys.argv[1]; cm.EXEC=ex; cm.PERIOD=('2024-01-02','2024-12-31')
+ex,cm.DATA_DIR,fra,til,navn=sys.argv[1:6]
+cm.EXEC=ex; cm.PERIOD=(fra,til)
 df=cm.run()
-df.to_csv(f'results/2024_trades_{ex}.csv',index=False)
-print(ex,len(df))
+df.to_csv(f'results/{navn}_trades_{ex}.csv',index=False)
+print(navn,ex,len(df))

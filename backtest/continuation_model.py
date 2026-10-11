@@ -24,10 +24,20 @@ DATA_DIR skal indeholde *ES_2024.parquet og *NQ_2024.parquet.
 import sys, glob, numpy as np, pandas as pd
 TZ_='Europe/Copenhagen'
 def load(s):
-    fs=sorted(glob.glob(f"{DATA_DIR}/*{s}_2024.parquet")+glob.glob(f"{DATA_DIR}/*{s}_2024_1.parquet"))
-    d=pd.concat([pd.read_parquet(f) for f in fs]).drop_duplicates('ts').sort_values('ts')
-    d['t']=pd.to_datetime(d.ts,unit='s',utc=True).dt.tz_convert(TZ_)
-    return d.set_index('t')[['open','high','low','close']]*0.25
+    """Alle filer for symbolet: *ES_2024.parquet / *ES_2024_1.parquet (ts + priser i
+    ticks) og *-ES.parquet (time + priser i point). Overlap fjernes."""
+    parts=[]
+    for f in sorted(glob.glob(f"{DATA_DIR}/*{s}_20*.parquet")+glob.glob(f"{DATA_DIR}/*-{s}.parquet")):
+        d=pd.read_parquet(f)
+        if 'ts' in d:
+            d['t']=pd.to_datetime(d.ts,unit='s',utc=True)
+            d[['open','high','low','close']]=d[['open','high','low','close']]*0.25
+        else:
+            d['t']=pd.to_datetime(d.time,utc=True)
+        parts.append(d[['t','open','high','low','close']])
+    d=pd.concat(parts).drop_duplicates('t').sort_values('t')
+    d['t']=d.t.dt.tz_convert(TZ_)
+    return d.set_index('t').astype(float)
 TZ='Europe/Copenhagen'; NY='America/New_York'
 T1=pd.Timedelta('1min'); T5=pd.Timedelta('5min')
 WIN_END_DK='17:00'   # sidste tidspunkt for sweep/entry (dansk tid)
