@@ -42,6 +42,9 @@ TZ='Europe/Copenhagen'; NY='America/New_York'
 T1=pd.Timedelta('1min'); T5=pd.Timedelta('5min')
 WIN_END_DK='17:00'   # sidste tidspunkt for sweep/entry (dansk tid)
 EXEC='ES'            # symbol der handles paa
+TP_MODE='session'    # 'session' = naermeste session-niveau, 'fixed' = fast RR
+FIXED_RR=2.0         # RR for 'fixed' og for fallback 'fixed'
+FALLBACK='h4'        # naar session-TP mangler: 'h4', 'fixed' eller 'none'
 EXIT_NY='16:00'      # tvungen exit (NY-tid)
 
 def bars(d,r):
@@ -206,9 +209,14 @@ def run_dir(day,sym,oth,m1,m5,o_m1,S,ny_open,direction,ex):
             sl=min(cur,prev) if prev is not None else cur
             if sl>=entry: continue
             # TP: naermeste uroerte session-niveau paa ES over entry
-            cands=[x for x in elv if x['end']<=et and x['lvl']>entry and (x['taken'] is None or x['taken']>=et)]
-            tp=min(cands,key=lambda x:x['lvl']) if cands else None
-            if tp is None: tp=h4_tp(ex,entry,et)
+            fixed=dict(name=f"{FIXED_RR:g}R",side='high',lvl=entry+FIXED_RR*(entry-sl))
+            if TP_MODE=='fixed':
+                tp=fixed
+            else:
+                cands=[x for x in elv if x['end']<=et and x['lvl']>entry and (x['taken'] is None or x['taken']>=et)]
+                tp=min(cands,key=lambda x:x['lvl']) if cands else None
+                if tp is None and FALLBACK=='h4': tp=h4_tp(ex,entry,et)
+                if tp is None and FALLBACK=='fixed': tp=fixed
             tr=dict(day=day,sym=EXEC,signal=sym,dir=direction,sweep_t=info['sweep_t'],sweep=info['sweep'],
                     s2=info['s2'],T2=info['T2'],s3=info['s3'],T3=info['T3'],s4=why,entry_t=et,
                     entry=entry,sl=sl,tp=tp['lvl'] if tp else None,tp_name=f"{tp['name']} {tp['side']}" if tp else None)
