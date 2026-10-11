@@ -1021,12 +1021,39 @@ def _run(nq_path, es_path, start, end, base):
     return out, stats
 
 
+def kurvefilter(trades, n=30, start=None):
+    """Kurvefilter: et trade er rigtigt naar papirkurven (alle OK-trades, afloest = 0R) staar
+    paa/over snittet af de sidste n punkter, ellers papir. start = tidligere R-vaerdier (startkurve).
+    Reglen om modsat aabent trade fra den anden model er kun i NinjaTrader (kraever begge modeller)."""
+    cur, cum = [], 0.0
+    for r in (start or []):
+        cum += r; cur.append(cum)
+    for r in trades:
+        if r.get("status") != "OK" or r.get("resultat") in ("AABEN", None):
+            continue
+        r["rigtig"] = "ja" if len(cur) < n or cur[-1] >= sum(cur[-n:]) / n else "nej"
+        R = r.get("R")
+        cum += 0.0 if R is None or R != R else R
+        cur.append(cum)
+    return trades
+
+
+# Brug:
+#   python smt_backtest.py NQ.parquet ES.parquet 2025-01-01 2026-10-09 smt.csv            (SMT)
+#   python smt_backtest.py NQ.parquet ES.parquet 2025-01-01 2026-10-09 vergence.csv vrg   (Vergence)
+# Kolonnen 'rigtig' er kurvefilteret (30). Datafilerne laves med tools/lav_15s.py.
 if __name__ == "__main__":
     nq, es, start, end, csv_out = sys.argv[1:6]
+    if len(sys.argv) > 6:
+        MODE = sys.argv[6]
     tr, stats = run(nq, es, start, end)
+    kurvefilter(tr)
     df = pd.DataFrame(tr)
     df.to_csv(csv_out, index=False)
     pd.set_option("display.width", 250)
     pd.set_option("display.max_rows", 500)
     print(df.to_string(index=False))
     print(stats)
+    ok = df[df.status == "OK"] if "status" in df else df
+    if len(ok) and "rigtig" in ok:
+        print(f"R uden filter: {ok.R.sum():+.1f}   R med kurvefilter: {ok[ok.rigtig == 'ja'].R.sum():+.1f}   ({MODE})")
