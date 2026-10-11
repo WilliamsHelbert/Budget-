@@ -17,19 +17,21 @@ Trin (long; short er spejlet). Hele setup'et efter NY open, entry altid paa ES:
      findes intet, naermeste uroerte 4h swing high/low.
  NY PRE = 90 min foer NY open (09:30 New York), London = 08:00 DK til NY PRE.
 
-Brug: python3 continuation_model.py DATA_DIR [2024-03-04 ...]
+Brug: python3 continuation_model.py DATA_DIR [ES|NQ] [2024-03-04 ...]
+Sweep og entry senest 17:00 dansk tid.
 DATA_DIR skal indeholde *ES_2024.parquet og *NQ_2024.parquet.
 """
 import sys, glob, numpy as np, pandas as pd
 TZ_='Europe/Copenhagen'
 def load(s):
-    f=[p for p in glob.glob(f"{DATA_DIR}/*{s}_2024.parquet")][0]
-    d=pd.read_parquet(f)
+    fs=sorted(glob.glob(f"{DATA_DIR}/*{s}_2024.parquet")+glob.glob(f"{DATA_DIR}/*{s}_2024_1.parquet"))
+    d=pd.concat([pd.read_parquet(f) for f in fs]).drop_duplicates('ts').sort_values('ts')
     d['t']=pd.to_datetime(d.ts,unit='s',utc=True).dt.tz_convert(TZ_)
     return d.set_index('t')[['open','high','low','close']]*0.25
 TZ='Europe/Copenhagen'; NY='America/New_York'
 T1=pd.Timedelta('1min'); T5=pd.Timedelta('5min')
-WIN_END_NY='12:00'   # sidste tidspunkt for sweep/entry (NY-tid)
+WIN_END_DK='17:00'   # sidste tidspunkt for sweep/entry (dansk tid)
+EXEC='ES'            # symbol der handles paa
 EXIT_NY='16:00'      # tvungen exit (NY-tid)
 
 def bars(d,r):
@@ -93,7 +95,7 @@ def fvgs(h,l):
 def run_dir(day,sym,oth,m1,m5,o_m1,S,ny_open,direction,ex):
     """Long-logik i (evt. spejlet) prisrum. Returnerer liste af trades."""
     win_start=S['NY PRE'][0]
-    win_end=pd.Timestamp(f'{day} {WIN_END_NY}',tz=NY).tz_convert(TZ)
+    win_end=pd.Timestamp(f'{day} {WIN_END_DK}',tz=TZ)
     exit_t=pd.Timestamp(f'{day} {EXIT_NY}',tz=NY).tz_convert(TZ)
     t1=m1.index; o,h,l,c=(m1[x].values for x in ['open','high','low','close'])
     t5=m5.index; h5,l5,c5=(m5[x].values for x in ['high','low','close'])
@@ -197,7 +199,7 @@ def run_dir(day,sym,oth,m1,m5,o_m1,S,ny_open,direction,ex):
             cands=[x for x in elv if x['end']<=et and x['lvl']>entry and (x['taken'] is None or x['taken']>=et)]
             tp=min(cands,key=lambda x:x['lvl']) if cands else None
             if tp is None: tp=h4_tp(ex,entry,et)
-            tr=dict(day=day,sym='ES',signal=sym,dir=direction,sweep_t=info['sweep_t'],sweep=info['sweep'],
+            tr=dict(day=day,sym=EXEC,signal=sym,dir=direction,sweep_t=info['sweep_t'],sweep=info['sweep'],
                     s2=info['s2'],T2=info['T2'],s3=info['s3'],T3=info['T3'],s4=why,entry_t=et,
                     entry=entry,sl=sl,tp=tp['lvl'] if tp else None,tp_name=f"{tp['name']} {tp['side']}" if tp else None)
             if tp is None:
@@ -234,10 +236,12 @@ def h4_tp(ex,entry,et):
             best=dict(name=f"4h {t[i]:%d/%m %H:%M}",side='high',lvl=h[i])
     return best
 
+PERIOD=('2024-03-01','2024-03-31')
 def run(days=None):
-    FULL={s:load(s).loc['2024-02-15':'2024-03-31'] for s in ['ES','NQ']}
-    D={s:FULL[s].loc['2024-03-01':'2024-03-31'] for s in FULL}
-    ESALL=bars(FULL['ES'],'1min')
+    a0=str((pd.Timestamp(PERIOD[0])-pd.Timedelta('15D')).date())
+    FULL={s:load(s).loc[a0:PERIOD[1]] for s in ['ES','NQ']}
+    D={s:FULL[s].loc[PERIOD[0]:PERIOD[1]] for s in FULL}
+    ESALL=bars(FULL[EXEC],'1min')
     XALL={'LONG':(ESALL,h4_bars(ESALL)),'SHORT':(mirror(ESALL),h4_bars(mirror(ESALL)))}
     M1={s:bars(D[s],'1min') for s in D}
     allt=[]
@@ -246,7 +250,7 @@ def run(days=None):
         if days and day not in days: continue
         S,ny_open=sessions(day)
         a=pd.Timestamp(f'{day} 00:00',tz=TZ); b=a+pd.Timedelta('1D')
-        es1=M1['ES'][a:b-pd.Timedelta('1ns')]; es15=D['ES'][a:b-pd.Timedelta('1ns')]
+        es1=M1[EXEC][a:b-pd.Timedelta('1ns')]; es15=D[EXEC][a:b-pd.Timedelta('1ns')]
         for sym,oth in (('ES','NQ'),('NQ','ES')):
             m1=M1[sym][a:b-pd.Timedelta('1ns')]; om=M1[oth][a:b-pd.Timedelta('1ns')]
             for dirn,f in (('LONG',lambda x:x),('SHORT',mirror)):
@@ -281,9 +285,10 @@ def portfolio(df):
 
 if __name__=='__main__':
     DATA_DIR=sys.argv[1]
+    if len(sys.argv)>2 and sys.argv[2] in ('ES','NQ'): EXEC=sys.argv.pop(2)
     df=run(sys.argv[2:] or None)
     pd.set_option('display.width',300); pd.set_option('display.max_columns',30)
     cols=['day','sym','signal','dir','status','sweep_t','sweep','s2','s3','s4','entry_t','entry','sl','tp','tp_name','result','exit_t','R']
     for c_ in ['sweep_t','entry_t','exit_t']: df[c_]=pd.to_datetime(df[c_]).dt.tz_convert(TZ).dt.strftime('%H:%M')
     print(df[cols].to_string())
-    df.to_csv('results/marts_2024_trades.csv',index=False)
+    df.to_csv('results/marts_2024_trades.csv' if EXEC=='ES' else f'results/marts_2024_trades_{EXEC}.csv',index=False)
