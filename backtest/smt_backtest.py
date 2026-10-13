@@ -99,7 +99,12 @@ NO_TRADE_DAYS = {
     "2025-01-01", "2025-01-09", "2025-01-20", "2025-02-17", "2025-04-18", "2025-05-26", "2025-06-19", "2025-07-04", "2025-09-01", "2025-11-27", "2025-12-25",
     "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25", "2026-06-19", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
     "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26", "2027-05-31", "2027-06-18", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24"}
-NYPRE_MIN_BARS = 300   # NY PRE har 360 15s-bars; faerre = data mangler -> ingen trades den dag
+NYPRE_MIN_BARS = 300
+# ── likviditets-test (13/10-26). Standard = som altid ──
+LIQ_SESS = ("Asia", "London", "NY PRE")  # sessioner hvis high/low er liq (entry-niveau, TP og BE)
+LIQ_15M = True        # NY PRE 15m-niveauer som entry-niveauer (BE-reglerne for 15m/5m er uaendrede)
+LIQ_EXTRA = None      # None / 'pdh' (forrige CME-dags high/low) / 7200 / 14400 (2h- / 4h-candles' high/low)
+LIQ_LOOKBACK = 24 * 3600  # 2h/4h: candles fra de sidste 24 timer; et niveau der er taget foer vinduet er doedt   # NY PRE har 360 15s-bars; faerre = data mangler -> ingen trades den dag
 
 
 def load(path):
@@ -165,6 +170,8 @@ class Lv:
     dead: bool = False
     st: St = field(default_factory=St)
     tm: int = None     # 15m-candlens start (epoch sek.)
+    nm: str = ""       # LIQ_EXTRA: navn (PDH, 2h, 4h)
+    tag: str = None
 
 
 @dataclass
@@ -266,6 +273,8 @@ def _run(nq_path, es_path, start, end, base):
     trades = []
     stats = {"noDir": 0, "slBad": 0, "both": 0, "ugyldig": 0}
     o = None  # aabent trade
+    xlv = []   # LIQ_EXTRA-niveauer
+    xd = dict(day=None, a=None, b=None, key=None, ka=None, kb=None, kt=None)
 
     for i in range(len(T)):
         t = int(T[i])
@@ -408,6 +417,39 @@ def _run(nq_path, es_path, start, end, base):
                 if (hi >= m.a) if m.isHi else (lo <= m.a):
                     m.st.aTook = True
 
+        # LIQ_EXTRA: forrige dags high/low eller 2h/4h-candles (CME-dagen starter 18:00 NY)
+        if LIQ_EXTRA:
+            m18 = (tMin - 18 * 60) % 1440
+            if LIQ_EXTRA == 'pdh':
+                cday = (lt - pd.Timedelta(hours=18)).strftime('%Y-%m-%d')
+                if xd['day'] != cday:
+                    if xd['a'] is not None and xd['b'] is not None:
+                        xlv = [Lv(xd['a'][0], xd['b'][0], True, nm="PDH"), Lv(xd['a'][1], xd['b'][1], False, nm="PDL")]
+                    else:
+                        xlv = []
+                    xd.update(day=cday, a=None, b=None)
+                xd['a'] = (hi, lo) if xd['a'] is None else (max(xd['a'][0], hi), min(xd['a'][1], lo))
+                if bok:
+                    xd['b'] = (bh, bl) if xd['b'] is None else (max(xd['b'][0], bh), min(xd['b'][1], bl))
+            else:
+                key = ((lt - pd.Timedelta(hours=18)).strftime('%Y-%m-%d'), m18 // (LIQ_EXTRA // 60))
+                if xd['key'] != key:
+                    if xd['ka'] is not None and xd['kb'] is not None:
+                        lab = f"{LIQ_EXTRA // 3600}h"
+                        tg_ = (pd.Timestamp(xd['kt'], unit="s", tz="UTC").tz_convert(TZ) + pd.Timedelta(hours=6)).strftime("%d/%m %H:%M")
+                        xlv += [Lv(xd['ka'][0], xd['kb'][0], True, tm=xd['kt'], nm=lab, tag=tg_),
+                                Lv(xd['ka'][1], xd['kb'][1], False, tm=xd['kt'], nm=lab, tag=tg_)]
+                    xd.update(key=key, ka=None, kb=None, kt=t)
+                    xlv = [m for m in xlv if m.tm >= t - LIQ_LOOKBACK and not m.dead]
+                xd['ka'] = (hi, lo) if xd['ka'] is None else (max(xd['ka'][0], hi), min(xd['ka'][1], lo))
+                if bok:
+                    xd['kb'] = (bh, bl) if xd['kb'] is None else (max(xd['kb'][0], bh), min(xd['kb'][1], bl))
+            if not inWin:
+                # taget foer vinduet (af et af indeksene) -> ikke laengere liq
+                for m in xlv:
+                    if not m.dead and ((hi >= m.a + TICK or (bok and bh >= m.b + TICK)) if m.isHi else (lo <= m.a - TICK or (bok and bl <= m.b - TICK))):
+                        m.dead = True
+
         # tjek niveauer
         if MODE == 'vrg' and inWin and vDay != dstr:
             vDay = dstr
@@ -549,7 +591,7 @@ def _run(nq_path, es_path, start, end, base):
                     h.who = "NQ + ES" if aBack and bBack else ("NQ" if aBack else "ES")
                     st.aDone = st.bDone = True
 
-        if not nOn:
+        if not nOn and "NY PRE" in LIQ_SESS:
             check(ny.hi, ny.aHi, ny.bHi, True, "NY PRE", *tg(ny, True))
             check(ny.lo, ny.aLo, ny.bLo, False, "NY PRE", *tg(ny, False))
         # har BEGGE indeks taget niveauet i en senere session, er det samme niveau som
@@ -557,21 +599,25 @@ def _run(nq_path, es_path, start, end, base):
         # MERGE_EITHER: er niveauet samlet med en senere session paa bare eet af indeksene
         # (fx NQ "NY PRE + London + Asia"), er det ikke laengere et selvstaendigt niveau (9/4/26)
         mrg = (lambda x, y: x or y) if MERGE_EITHER else (lambda x, y: x and y)
-        if not lOn:
+        if not lOn and "London" in LIQ_SESS:
             if not mrg(lon.maHi, lon.mbHi):
                 check(lon.hi, lon.aHi, lon.bHi, True, "London", *tg(lon, True))
             if not mrg(lon.maLo, lon.mbLo):
                 check(lon.lo, lon.aLo, lon.bLo, False, "London", *tg(lon, False))
-        if not aOn:
+        if not aOn and "Asia" in LIQ_SESS:
             if not mrg(asia.maHi, asia.mbHi):
                 check(asia.hi, asia.aHi, asia.bHi, True, "Asia", *tg(asia, True))
             if not mrg(asia.maLo, asia.mbLo):
                 check(asia.lo, asia.aLo, asia.bLo, False, "Asia", *tg(asia, False))
-        if not nOn and tMin < M15_END:
+        if LIQ_15M and not nOn and tMin < M15_END:
             for m in lv15:
                 isExt = abs(m.a - (ny.aHi or 0)) < TICK / 2 if m.isHi else abs(m.a - (ny.aLo or 0)) < TICK / 2
                 if not m.dead and not isExt:
                     check(m.st, m.a, m.b, m.isHi, "15m", tag=(pd.Timestamp(m.tm, unit="s", tz="UTC").tz_convert(TZ) + pd.Timedelta(hours=6)).strftime("%H:%M") if m.tm else None)
+        if inWin:
+            for m in xlv:
+                if not m.dead:
+                    check(m.st, m.a, m.b, m.isHi, m.nm.replace("PDH", "PD").replace("PDL", "PD"), tag=m.tag)
 
         if h.sHi and sHiM != minB:
             sHiM, sHiT = minB, t
@@ -915,10 +961,15 @@ def _run(nq_path, es_path, start, end, base):
                 if preUHitM is None:
                     cands.append((preU, "EQ foer open", False))
             for nm, s in ((("Asia", asia), ("London", lon), ("NY PRE", ny)) if USE_SESS_BE else ()):
+                if nm not in LIQ_SESS:
+                    continue
                 st = s.lo if sh else s.hi
                 # taget foer open -> ikke BE-kandidat. Taget i vinduet foer entry -> ugyldigt
                 if st is not None and not st.aPre:
                     cands.append(((s.aLo if sh else s.aHi), nm + (" low" if sh else " high"), st.aTook))
+            for m in (xlv if USE_SESS_BE else []):
+                if m.isHi != sh and not m.dead:
+                    cands.append((m.a, m.nm + (" low" if sh else " high"), m.st.aTook))
             for m in (lv15 if USE_15M_BE else []):
                 if m.isHi != sh and not m.dead and not m.st.aTook:
                     cands.append((m.a, "15m low" if sh else "15m high", False))
@@ -976,9 +1027,14 @@ def _run(nq_path, es_path, start, end, base):
             if dAct:
                 tcs.append(((dBot + dTop) / 2, "EQ"))
             for nm, s in (("Asia", asia), ("London", lon), ("NY PRE", ny)):
+                if nm not in LIQ_SESS:
+                    continue
                 st = s.lo if sh else s.hi
                 if st is not None and not st.aTook:
                     tcs.append(((s.aLo if sh else s.aHi), nm + (" low" if sh else " high")))
+            for m in xlv:
+                if m.isHi != sh and not m.dead and not m.st.aTook:
+                    tcs.append((m.a, m.nm + (" low" if sh else " high")))
             tp, tpS = None, "75p"
             for cv, cn in (tcs if TP_LIQ else []):
                 if cv is None:
