@@ -3,6 +3,8 @@
 //  Sweep Trade (SMT)  (v4.5)
 //  ---------------------------------------------------------------
 //  NYT I v4.5 (15/10-26)
+//    - Regel-boksen er gjort lille: kun de regler der afgoer tradet, korte
+//      tekster og lille skrift (kan aendres under Visning).
 //    - Regel-boksen: 'begge har taget niveauet' tjekkes nu kun paa SAMME
 //      niveau som muligheden - ikke hvis begge tog et andet niveau (fx et
 //      15m low) i samme bar.
@@ -280,6 +282,7 @@ boxSizeS = input.string("Normal", "Boksens tekststoerrelse", options = ["Lille",
 warn15s  = input.bool(true, "Advar hvis chartet ikke er 15s", group = g5)
 showRk   = input.bool(true, "Vis regel-boks ved mulighed for SMT", group = g5,
      tooltip = "Alle regler med flueben / kryds, opdateret live fra sweepet til tradet er taget eller muligheden er vaek.")
+rkSizeS  = input.string("Lille", "Regel-boksens tekststoerrelse", options = ["Mini", "Lille", "Normal"], group = g5)
 rkPosS   = input.string("Oeverst hoejre", "Regel-boksens placering",
      options = ["Oeverst hoejre", "Oeverst venstre", "Oeverst midt", "Nederst venstre", "Midt hoejre"], group = g5)
 
@@ -287,6 +290,11 @@ boxSize = switch boxSizeS
     "Lille" => size.small
     "Stor"  => size.large
     => size.normal
+
+rkSize = switch rkSizeS
+    "Mini"   => size.tiny
+    "Normal" => size.normal
+    => size.small
 
 rkPos = switch rkPosS
     "Oeverst venstre" => position.top_left
@@ -1416,7 +1424,7 @@ if inWin and hit.swTxt != "" and not mBad and not dayBad and not (ckOn and ckM =
 if ckOn and ckRes == 0
     if minB != ckM
         ckRes  := -1
-        ckWhy  := "Minuttet gik uden entry"
+        ckWhy  := "Intet trade - ingen entry"
         ckHide := minB
     else
         float sc  = ckByA ? close : bClose
@@ -1442,23 +1450,23 @@ if ckOn and ckRes == 0
         else if ok and beBadNow
             rLiq  := -1
             ckRes := -1
-            ckWhy := "Intet trade - liq paa BE-siden allerede taget"
+            ckWhy := "Intet trade - BE-liq taget"
         else if hit.slBad
             rSL   := -1
             ckRes := -1
             ckWhy := "Intet trade - SL > " + str.tostring(maxSL, "#") + "p"
         else if rDiv == -1
             ckRes := -1
-            ckWhy := "Intet trade - begge indeks har taget niveauet (Vergence)"
+            ckWhy := "Intet trade - begge tog det"
         else if mBad
             ckRes := -1
-            ckWhy := "Intet trade - high- og low-side taget i minuttet"
+            ckWhy := "Intet trade - begge sider taget"
         else if barstate.isconfirmed and rTid == -1
             ckRes := -1
-            ckWhy := "Intet trade - tid close (candle " + str.tostring(rN) + ")"
+            ckWhy := "Intet trade - tid close"
         else if rDay == -1 or rMin == -1
             ckRes := -1
-            ckWhy := "Intet trade - " + (rMin == -1 ? "der er allerede et trade i minuttet" : "dagen er slut (max trades / vundet trade)")
+            ckWhy := "Intet trade - " + (rMin == -1 ? "trade i minuttet" : "dagen er slut")
         if ckRes == -1
             ckHide := minB + 1
 
@@ -1467,40 +1475,33 @@ bool ckShow = showRk and ckOn and (ckRes == 0 or minB == ckM or (not na(ckHide) 
 
 rkRow(table t, int r, int st, string txt) =>
     string sym = st == 1 ? "✓" : st == -1 ? "✗" : "…"
-    color  sc  = st == 1 ? color.lime : st == -1 ? color.red : color.yellow
-    table.cell(t, 0, r, sym, text_color = sc, text_size = boxSize)
-    table.cell(t, 1, r, txt, text_color = st == -1 ? color.new(color.red, 20) : color.white, text_size = boxSize, text_halign = text.align_left)
+    color  syc = st == 1 ? color.lime : st == -1 ? color.red : color.yellow
+    table.cell(t, 0, r, sym, text_color = syc, text_size = rkSize)
+    table.cell(t, 1, r, txt, text_color = st == -1 ? color.new(color.red, 20) : color.white, text_size = rkSize, text_halign = text.align_left)
     r + 1
 
-var table rk = table.new(rkPos, 2, 16, bgcolor = color.new(color.black, 15), border_width = 1, border_color = color.new(color.gray, 70))
+var table rk = table.new(rkPos, 2, 10, bgcolor = color.new(color.black, 25), border_width = 0)
 if barstate.islast
-    table.clear(rk, 0, 0, 1, 15)
+    table.clear(rk, 0, 0, 1, 9)
     if ckShow
         string dirS = ckHi ? "SHORT" : "LONG"
-        string hd   = ckRes == 1 ? "SMT " + dirS + " - TRADE" : ckRes == -1 ? "SMT " + dirS + " - intet trade" : "Mulighed for SMT " + dirS
         color  hc   = ckRes == 1 ? (ckHi ? shortCol : longCol) : ckRes == -1 ? color.gray : color.yellow
         string swp  = ckByA ? aName : bName
-        table.cell(rk, 0, 0, hd, text_color = hc, text_size = boxSize, text_halign = text.align_left)
-        table.cell(rk, 1, 0, ckTime + "   " + ckLvl, text_color = color.gray, text_size = boxSize, text_halign = text.align_left)
+        table.cell(rk, 0, 0, "SMT " + dirS + (ckRes == 1 ? " ✓" : ckRes == -1 ? " ✗" : ""), text_color = hc, text_size = rkSize, text_halign = text.align_left)
+        table.cell(rk, 1, 0, ckLvl, text_color = color.gray, text_size = rkSize, text_halign = text.align_left)
         int r = 1
-        r := rkRow(rk, r, 1, "Vindue 15:30-16:00" + (use369 ? ", 3-6-9-minut" : "") + (noClosed ? ", boersen aaben" : ""))
-        r := rkRow(rk, r, 1, swp + " sweeper niveauet mindst 1 tick")
-        r := rkRow(rk, r, rDiv, "Kun " + swp + " har taget det (divergens, ikke Vergence)")
-        r := rkRow(rk, r, rOne, "Ikke baade high- og low-side taget i minuttet")
-        r := rkRow(rk, r, rBack, "15s close tilbage " + (ckHi ? "under" : "over") + " niveauet (" + swp + ")")
+        r := rkRow(rk, r, rDiv, "Kun " + swp)
+        r := rkRow(rk, r, rOne, "Een side")
+        r := rkRow(rk, r, rBack, "Close " + (ckHi ? "under" : "over"))
         if needBoth
-            r := rkRow(rk, r, rDir, "Begge indeks lukker " + (ckHi ? "bearish" : "bullish"))
+            r := rkRow(rk, r, rDir, "Begge " + (ckHi ? "bearish" : "bullish"))
         if tidClose > 0
-            r := rkRow(rk, r, rTid, "Tid close: candle " + str.tostring(math.min(rN, tidClose + 1)) + " (max " + str.tostring(tidClose) + ")")
+            r := rkRow(rk, r, rTid, "Tid close " + str.tostring(math.min(rN, tidClose + 1)) + "/" + str.tostring(tidClose))
         if blockMax
-            r := rkRow(rk, r, rSL, "SL " + (na(rSLv) ? "-" : str.tostring(rSLv, "#.##")) + "p <= max " + str.tostring(maxSL, "#") + "p")
-        r := rkRow(rk, r, rLiq, "Ingen liq paa BE-siden taget i minuttet")
-        if maxDay > 0 or stopWin
-            r := rkRow(rk, r, rDay, "Trades i dag " + str.tostring(dayTr) + (maxDay > 0 ? "/" + str.tostring(maxDay) : "") + (stopWin ? ", ingen vundet endnu" : ""))
-        r := rkRow(rk, r, rMin, "Foerste trade i minuttet")
-        if ckWhy != ""
-            table.cell(rk, 0, r, ckRes == 1 ? "✓" : "✗", text_color = ckRes == 1 ? color.lime : color.red, text_size = boxSize)
-            table.cell(rk, 1, r, ckWhy, text_color = hc, text_size = boxSize, text_halign = text.align_left)
+            r := rkRow(rk, r, rSL, "SL " + (na(rSLv) ? "-" : str.tostring(rSLv, "#.#")) + "/" + str.tostring(maxSL, "#"))
+        if ckRes == -1 and ckWhy != ""
+            table.cell(rk, 0, r, "✗", text_color = color.red, text_size = rkSize)
+            table.cell(rk, 1, r, str.replace(ckWhy, "Intet trade - ", ""), text_color = color.gray, text_size = rkSize, text_halign = text.align_left)
 
 // ═════════════════════ BOKSEN I HJOERNET ═════════════════════
 var table bx = table.new(boxPos, 2, 4, bgcolor = color.new(color.black, 20), border_width = 1)
