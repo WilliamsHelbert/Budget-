@@ -1,7 +1,12 @@
 //@version=6
 // =====================================================================
-//  Vergence  (v3.3)  - samme model som backtesten (oktober 2026)
+//  Vergence  (v3.4)  - samme model som backtesten (oktober 2026)
 //  ---------------------------------------------------------------
+//  NYT I v3.4 (15/10-26)
+//    - RETTET: hvert NY PRE 15m-niveau er sit eget niveau (som backtesten og
+//      NinjaTrader). Foer talte NQ's 15m low fra een candle og ES' 15m low fra en
+//      ANDEN candle som 'samme niveau', saa der kom Vergence uden at ES havde
+//      taget det rigtige niveau (15/10-26). Navnet viser nu candlen, fx '15m low 15:00'.
 //  NYT I v3.3 (15/10-26)
 //    - REGEL-BOKS: saa snart det ene indeks har taget et niveau (mulighed
 //      for Vergence), vises en boks med alle modellens regler og et
@@ -138,16 +143,16 @@ boxSizeS = input.string("Normal", "Boksens tekststoerrelse", options = ["Lille",
 warn15s  = input.bool(true, "Advar hvis chartet ikke er 15s", group = g5)
 showRk   = input.bool(true, "Vis regel-boks ved mulighed for Vergence", group = g5,
      tooltip = "Alle regler med flueben / kryds, opdateret live fra det foerste sweep til tradet er taget eller muligheden er vaek.")
-rkPosS   = input.string("Oeverst venstre", "Regel-boksens placering",
-     options = ["Oeverst venstre", "Oeverst hoejre", "Oeverst midt", "Nederst venstre", "Midt venstre"], group = g5,
-     tooltip = "Sweep Trade's regel-boks ligger oeverst til hoejre.")
+rkPosS   = input.string("Midt venstre", "Regel-boksens placering",
+     options = ["Midt venstre", "Oeverst venstre", "Oeverst hoejre", "Oeverst midt", "Nederst venstre"], group = g5,
+     tooltip = "Sweep Trade's regel-boks ligger oeverst til hoejre - saa ligger de ikke oven i hinanden.")
 
 rkPos = switch rkPosS
     "Oeverst hoejre"  => position.top_right
     "Oeverst midt"    => position.top_center
     "Nederst venstre" => position.bottom_left
-    "Midt venstre"    => position.middle_left
-    => position.top_left
+    "Oeverst venstre" => position.top_left
+    => position.middle_left
 
 boxPos = switch boxPosS
     "Nederst hoejre"  => position.bottom_right
@@ -237,6 +242,7 @@ type Lv
     bool  dead  = false
     bool  aTook = false
     St    st    = na
+    int   tm    = na     // 15m-candlens start (saa hvert 15m-niveau er sit eget niveau)
 
 // Frisk liq: minut, niveau, navn, brugt i en Vergence
 type Fr
@@ -309,10 +315,13 @@ build(Sess s, bool isStart) =>
     true
 
 // Tjek een side af eet niveau. Kun i vinduet.
-check(St st, float aL, float bL, bool isHi, string nm, Hit h, Side sd) =>
+check(St st, float aL, float bL, bool isHi, string nm, Hit h, Side sd, string tag = "") =>
     if not na(st) and not na(aL) and not na(bL)
         bool aSweep = isHi ? high >= aL + tick : low <= aL - tick
         string lvlNm = nm + (isHi ? " high" : " low")
+        // Hvert 15m-niveau er sit eget niveau: begge indeks skal tage SAMME 15m-candles high/low
+        // (som backtesten, VRG_15UNIQUE). Foer talte to forskellige 15m lows som samme niveau.
+        string vKey = tag == "" ? lvlNm : lvlNm + " " + tag
         // Session high/low taget i vinduet (kun foerste gang)
         if inWin and aSweep and not st.aTook and nm != "15m"
             if isHi
@@ -332,7 +341,7 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h, Side sd) =>
             bool frB = newB and na(st.bLv)
             if newA
                 if frA
-                    array.push(sd.aF, Fr.new(minB, aL, lvlNm, false))
+                    array.push(sd.aF, Fr.new(minB, aL, vKey, false))
                     sd.aFL := nz(sd.aFM, -1) != minB or na(sd.aFL) ? aL : (isHi ? math.max(sd.aFL, aL) : math.min(sd.aFL, aL))
                     sd.aFM := minB
                 if frA or not sd.had
@@ -341,7 +350,7 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h, Side sd) =>
                 st.aLv := isHi ? high : low
             if newB
                 if frB
-                    array.push(sd.bF, Fr.new(minB, bL, lvlNm, false))
+                    array.push(sd.bF, Fr.new(minB, bL, vKey, false))
                     sd.bFL := nz(sd.bFM, -1) != minB or na(sd.bFL) ? bL : (isHi ? math.max(sd.bFL, bL) : math.min(sd.bFL, bL))
                     sd.bFM := minB
                 if frB or not sd.had
@@ -355,8 +364,8 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h, Side sd) =>
                 h.first   := true
                 h.firstHi := isHi
                 h.firstBy := frA ? aName : bName
-                h.firstNm := lvlNm
-                h.firstTx := lvlNm + "  (" + (frA ? aName : bName) + " " + fmtM(minB)
+                h.firstNm := vKey
+                h.firstTx := vKey + "  (" + (frA ? aName : bName) + " " + fmtM(minB)
                      + ", venter paa " + (frA ? bName : aName) + " til " + fmtM(minB + maxGap) + ")"
     true
 
@@ -427,18 +436,20 @@ resolve(Side sd, bool isHi) =>
         sd.isNew := false
     out
 
-pushLv(array<Lv> arr, float ah, float al, float bh, float bl) =>
+pushLv(array<Lv> arr, float ah, float al, float bh, float bl, int tm) =>
     Lv h = Lv.new()
     h.a    := ah
     h.b    := bh
     h.isHi := true
     h.st   := St.new()
+    h.tm   := tm
     array.push(arr, h)
     Lv l = Lv.new()
     l.a    := al
     l.b    := bl
     l.isHi := false
     l.st   := St.new()
+    l.tm   := tm
     array.push(arr, l)
 
 // Taget mens NY PRE koerer (paa et af indeksene) -> ugyldigt
@@ -544,9 +555,9 @@ if nStart
     array.clear(lv15)
     array.clear(lv05)
 if newM15 and inNyAt(qT) and not na(qH) and not na(eH)
-    pushLv(lv15, qH, qL, eH, eL)
+    pushLv(lv15, qH, qL, eH, eL, qT)
 if newM05 and inNyAt(fT) and not na(fH) and not na(gH)
-    pushLv(lv05, fH, fL, gH, gL)
+    pushLv(lv05, fH, fL, gH, gL, fT)
 if nOn
     killInNy(lv15)
     killInNy(lv05)
@@ -591,7 +602,7 @@ if use15 and not nOn and tMin < m15H * 60 + m15M and array.size(lv15) > 0
         // NY PRE's eget high/low er allerede tjekket ovenfor
         bool isExt = m.isHi ? math.abs(m.a - nz(ny.aHi)) < tickHalf : math.abs(m.a - nz(ny.aLo)) < tickHalf
         if not m.dead and not isExt
-            check(m.st, m.a, m.b, m.isHi, "15m", hit, m.isHi ? sideHi : sideLo)
+            check(m.st, m.a, m.b, m.isHi, "15m", hit, m.isHi ? sideHi : sideLo, na(m.tm) ? "" : str.format_time(m.tm, "HH:mm", dispTz))
 
 // Minuttet hvor chartet sidst tog et session high / low i vinduet
 var int sHiM = na

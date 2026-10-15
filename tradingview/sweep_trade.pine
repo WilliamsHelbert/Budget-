@@ -1,7 +1,11 @@
 //@version=6
 // =====================================================================
-//  Sweep Trade (SMT)  (v4.4)
+//  Sweep Trade (SMT)  (v4.5)
 //  ---------------------------------------------------------------
+//  NYT I v4.5 (15/10-26)
+//    - Regel-boksen: 'begge har taget niveauet' tjekkes nu kun paa SAMME
+//      niveau som muligheden - ikke hvis begge tog et andet niveau (fx et
+//      15m low) i samme bar.
 //  NYT I v4.4 (15/10-26)
 //    - REGEL-BOKS: saa snart et niveau er swept (mulighed for SMT), vises
 //      en boks med alle modellens regler og et flueben / kryds ud for hver.
@@ -426,6 +430,8 @@ type Hit
     float  sHiV    = na      // hoejeste session high taget paa baren
     float  sLoV    = na      // laveste session low taget paa baren
     string bothTxt = ""
+    float  bothA   = na      // niveauet (chartets pris) som begge tog
+    bool   bothHi  = false
     // Muligheden (til regel-boksen): niveauet og det indeks der sweepede
     float  pA      = na
     float  pB      = na
@@ -536,6 +542,8 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h, float aTg = na, fl
             if (newA or newB or newTg) and aTk and bTk and not (st.aDone and st.bDone)
                 h.both    := true
                 h.bothTxt := lvlNm + (st.aTook and st.bTook ? "" : " (Taget)")
+                h.bothA   := aL
+                h.bothHi  := isHi
                 st.aDone  := true
                 st.bDone  := true
             // Kun det ene indeks har taget det -> mulighed for SMT
@@ -1370,6 +1378,7 @@ var int    ckHide = na      // vises til og med dette minut efter afgoerelsen
 var bool   ckHi   = false
 var bool   ckByA  = true
 var float  ckLv   = na
+var float  ckA    = na      // niveauet paa chartets symbol (til divergens-tjekket)
 var int    ckT    = na
 var string ckLvl  = ""
 var string ckTime = ""
@@ -1398,6 +1407,7 @@ if inWin and hit.swTxt != "" and not mBad and not dayBad and not (ckOn and ckM =
     ckHi   := hit.pHi
     ckByA  := hit.pByA
     ckLv   := hit.pByA ? hit.pA : hit.pB
+    ckA    := hit.pA
     ckT    := nz(hit.pT, time)
     ckLvl  := hit.swTxt
     ckTime := str.format_time(time, "HH:mm:ss", dispTz)
@@ -1421,7 +1431,8 @@ if ckOn and ckRes == 0
         rLiq  := eqT or slT ? -1 : 1
         rDay  := dayDone or dayBad ? -1 : 1
         rOne  := mBad ? -1 : 1
-        if hit.both
+        // Kun hvis det andet indeks tog SAMME niveau (ikke et andet niveau i samme bar)
+        if hit.both and hit.bothHi == ckHi and not na(hit.bothA) and math.abs(hit.bothA - ckA) < tickHalf
             rDiv := -1
         rMin  := mTraded and not ok ? -1 : 1
         // Afgoerelse
