@@ -1,7 +1,11 @@
 //@version=6
 // =====================================================================
-//  Session Levels  (v6)
+//  Session Levels  (v6.1)
 //  ---------------------------------------------------------------
+//  NYT I v6.1 (15/10-26)
+//    - Rettet: Asia-linjerne tegnes igen rigtigt. Efter skiftet til NY-tid
+//      starter Asia 20:00 NY dagen foer, og slut-tiden (10:00 NY) blev regnet
+//      paa samme dag, saa linjerne gik baglaens.
 //  NYT I v6
 //    - 5m highs/lows fra NY PRE vises nu OGSAA her (orange), paa samme
 //      maade som 15m: live under NY PRE, slettes naar de bliver taget.
@@ -173,7 +177,9 @@ paint(Sess s, color col, string txt) =>
 // ─────────────── HVOR STOPPER DAGENS LINJER? ───────────────
 int tMin = hour(time, tz) * 60 + minute(time, tz)
 int endM = endHour * 60 + endMin
-int endT = time - second(time, tz) * 1000 + (endM - tMin) * 60000
+// Altid FREMAD i tid: Asia starter 20:00 NY (dagen foer), saa 10:00 NY ligger paa naeste dag.
+// (Uden % 1440 sluttede Asia-linjerne 10 timer FOER de startede.)
+int endT = time - second(time, tz) * 1000 + ((endM - tMin + 1440) % 1440) * 60000
 
 // ─────────────────── ER VI I EN SESSION? ───────────────────
 int  aT = time(timeframe.period, asiaSess, tz)
