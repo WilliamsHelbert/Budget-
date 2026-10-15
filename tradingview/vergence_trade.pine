@@ -8,7 +8,8 @@
 //    - RETTET: hvert NY PRE 15m-niveau er sit eget niveau (som backtesten og
 //      NinjaTrader). Foer talte NQ's 15m low fra een candle og ES' 15m low fra en
 //      ANDEN candle som 'samme niveau', saa der kom Vergence uden at ES havde
-//      taget det rigtige niveau (15/10-26). Navnet viser nu candlen, fx '15m low 15:00'.
+//      taget det rigtige niveau (15/10-26). Navnet viser nu candlen, fx '15m low 15:00',
+//      og kun det niveau BEGGE har taget.
 //  NYT I v3.3 (15/10-26)
 //    - REGEL-BOKS: saa snart det ene indeks har taget et niveau (mulighed
 //      for Vergence), vises en boks med alle modellens regler og et
@@ -433,15 +434,17 @@ resolve(Side sd, bool isHi) =>
             float aLv = na
             float bLv = na
             string nms = ""
+            // Navnet viser kun det niveau BEGGE har taget (fx '15m low 15:15'), ikke
+            // et niveau kun det ene indeks tog i samme minut (fx NQ's NY PRE low)
             for f in fa2
                 aLv := na(aLv) ? f.l : (isHi ? math.max(aLv, f.l) : math.min(aLv, f.l))
                 f.u := true
-                if not str.contains(nms, f.n)
+                if not str.contains(nms, f.n) and hasName(sd.bF, f.n)
                     nms := nms == "" ? f.n : nms + " / " + f.n
             for f in fb2
                 bLv := na(bLv) ? f.l : (isHi ? math.max(bLv, f.l) : math.min(bLv, f.l))
                 f.u := true
-                if not str.contains(nms, f.n)
+                if not str.contains(nms, f.n) and hasName(sd.aF, f.n)
                     nms := nms == "" ? f.n : nms + " / " + f.n
             sd.had := true
             out := Arm.new(isHi, aLv, bLv, nms, time)
