@@ -1147,6 +1147,8 @@ namespace NinjaTrader.NinjaScript.Strategies.HelbertOdin
 		private const int WIN_S = 9 * 60 + 30, WIN_E = 10 * 60, M15_END = 9 * 60 + 31;
 		private const double MIN_SL = 10, MAX_SL = 30, TP_MIN = 35, TP_MAX = 75, BE_MIN = 2, BE_MAX = 50;
 		private const int VRG_GAP = 5, NYPRE_MIN_BARS = 300;
+		// Vergence: close tilbage maales kun mod niveauer BEGGE indeks har taget (15/10-26)
+		private const bool VRG_SHARED = true;
 		private static readonly HashSet<string> NO_TRADE_DAYS = new HashSet<string>(new string[] {
 			"2022-01-17", "2022-02-21", "2022-04-15", "2022-05-30", "2022-06-20", "2022-07-04", "2022-09-05", "2022-11-24", "2022-12-26",
 			"2023-01-02", "2023-01-16", "2023-02-20", "2023-04-07", "2023-05-29", "2023-06-19", "2023-07-04", "2023-09-04", "2023-11-23", "2023-12-25",
@@ -1722,6 +1724,13 @@ namespace NinjaTrader.NinjaScript.Strategies.HelbertOdin
 						foreach (Frisk f in fb) mB.Add(f.m);
 						fa = sd.aF.FindAll(f => mA.Contains(f.m));
 						fb = sd.bF.FindAll(f => mB.Contains(f.m));
+						if (VRG_SHARED)
+						{
+							// kun niveauer begge indeks har taget (fx 15m low 15:15) - ikke NQ's NY PRE low alene
+							List<Frisk> aAll = sd.aF, bAll = sd.bF;
+							fa = fa.FindAll(f => bAll.Exists(g => g.key == f.key));
+							fb = fb.FindAll(f => aAll.Exists(g => g.key == f.key));
+						}
 						double? aLv = null, bLv = null;
 						foreach (Frisk f in fa) aLv = !aLv.HasValue ? f.lv : (side ? Math.Max(aLv.Value, f.lv) : Math.Min(aLv.Value, f.lv));
 						foreach (Frisk f in fb) bLv = !bLv.HasValue ? f.lv : (side ? Math.Max(bLv.Value, f.lv) : Math.Min(bLv.Value, f.lv));
@@ -1750,7 +1759,7 @@ namespace NinjaTrader.NinjaScript.Strategies.HelbertOdin
 					VSide sdv = vSide[v.side];
 					long am = FloorDiv(v.t, 60);
 					double? va = v.va, vb = v.vb;
-					if (sdv.aFM.HasValue && sdv.aFM.Value == am && sdv.bFM.HasValue && sdv.bFM.Value == am)
+					if (!VRG_SHARED && sdv.aFM.HasValue && sdv.aFM.Value == am && sdv.bFM.HasValue && sdv.bFM.Value == am)
 					{
 						if (!va.HasValue) va = sdv.aFL;
 						if (!vb.HasValue) vb = sdv.bFL;

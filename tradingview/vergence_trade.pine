@@ -1,7 +1,11 @@
 //@version=6
 // =====================================================================
-//  Vergence  (v3.4)  - samme model som backtesten (oktober 2026)
+//  Vergence  (v3.5)  - samme model som backtesten (oktober 2026)
 //  ---------------------------------------------------------------
+//  NYT I v3.5 (15/10-26)
+//    - Close tilbage maales mod det FAELLES niveau begge indeks har taget (fx
+//      15m low 15:15), ikke mod et niveau det ene indeks tog alene i samme minut
+//      (fx NQ's NY PRE low). Som VRG_SHARED i backtesten. Kan slaas fra under Regler.
 //  NYT I v3.4 (15/10-26)
 //    - Regel-boksen er gjort lille: kun de regler der afgoer tradet, korte
 //      tekster og lille skrift (kan aendres under Visning).
@@ -86,6 +90,8 @@ maxGap   = input.int(5, "Max minutter mellem de to sweeps", minval = 0, maxval =
 
 g6 = "Regler"
 needBack  = input.bool(true, "Kraev luk tilbage forbi niveauet", group = g6)
+vShared   = input.bool(true, "Luk tilbage forbi det FAELLES niveau", group = g6,
+     tooltip = "Til: begge indeks skal lukke tilbage forbi det niveau BEGGE har taget (fx 15m low 15:15), ikke et niveau det ene tog alene i samme minut (fx NQ's NY PRE low). Fra: det yderste niveau indekset tog i minuttet (gammel regel).")
 tidClose  = input.int(2, "Tid close: entry senest paa candle nr. (0 = fra)", minval = 0, maxval = 4, group = g6,
      tooltip = "Taelles fra den 15s-candle der fuldender Vergence. 2 = den candle eller den naeste.")
 mergeEither = input.bool(true, "Samlet niveau paa eet indeks er ikke eget niveau", group = g6)
@@ -436,14 +442,18 @@ resolve(Side sd, bool isHi) =>
             string nms = ""
             // Navnet viser kun det niveau BEGGE har taget (fx '15m low 15:15'), ikke
             // et niveau kun det ene indeks tog i samme minut (fx NQ's NY PRE low)
+            // vShared: close tilbage maales KUN mod niveauer begge indeks har taget (fx 15m low
+            // 15:15) - ikke et niveau det ene indeks tog alene i samme minut (fx NQ's NY PRE low)
             for f in fa2
-                aLv := na(aLv) ? f.l : (isHi ? math.max(aLv, f.l) : math.min(aLv, f.l))
-                f.u := true
+                if not vShared or hasName(sd.bF, f.n)
+                    aLv := na(aLv) ? f.l : (isHi ? math.max(aLv, f.l) : math.min(aLv, f.l))
+                    f.u := true
                 if not str.contains(nms, f.n) and hasName(sd.bF, f.n)
                     nms := nms == "" ? f.n : nms + " / " + f.n
             for f in fb2
-                bLv := na(bLv) ? f.l : (isHi ? math.max(bLv, f.l) : math.min(bLv, f.l))
-                f.u := true
+                if not vShared or hasName(sd.aF, f.n)
+                    bLv := na(bLv) ? f.l : (isHi ? math.max(bLv, f.l) : math.min(bLv, f.l))
+                    f.u := true
                 if not str.contains(nms, f.n) and hasName(sd.aF, f.n)
                     nms := nms == "" ? f.n : nms + " / " + f.n
             sd.had := true
@@ -1026,7 +1036,7 @@ if anyArm and barstate.isconfirmed and not mBad
         float vb = v.b
         Side  sdv = v.sh ? sideHi : sideLo
         int   am  = int(v.t / 60000)
-        if nz(sdv.aFM, -1) == am and nz(sdv.bFM, -1) == am
+        if not vShared and nz(sdv.aFM, -1) == am and nz(sdv.bFM, -1) == am
             va := na(va) ? sdv.aFL : va
             vb := na(vb) ? sdv.bFL : vb
         bool backA = not needBack or na(va) or (v.sh ? close < va : close > va)
@@ -1327,7 +1337,7 @@ if ckOn and ckRes == 0
             float cvb = cv.b
             Side  csd = cv.sh ? sideHi : sideLo
             int   cam = int(cv.t / 60000)
-            if nz(csd.aFM, -1) == cam and nz(csd.bFM, -1) == cam
+            if not vShared and nz(csd.aFM, -1) == cam and nz(csd.bFM, -1) == cam
                 cva := na(cva) ? csd.aFL : cva
                 cvb := na(cvb) ? csd.bFL : cvb
             bool cbA = not needBack or na(cva) or (cv.sh ? close < cva : close > cva)

@@ -55,6 +55,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         private const int WIN_S = 9 * 60 + 30, WIN_E = 10 * 60;
         private const int M15_END = 9 * 60 + 31;
         private const double MIN_SL = 10, MAX_SL = 30, TP_MIN = 35, TP_MAX = 75, BE_MIN = 2, BE_MAX = 50;
+        private const bool VRG_SHARED = true;   // Vergence: close tilbage kun mod niveauer BEGGE indeks har taget (15/10-26)
         private const int VRG_GAP = 5;          // Vergence: max minutter mellem de to indeks' foerste take af samme niveau
         private const int NYPRE_MIN_BARS = 300; // NY PRE har 360 15s-bars; faerre end 300 = data mangler -> ingen trades
 
@@ -545,6 +546,13 @@ namespace NinjaTrader.NinjaScript.Strategies
                             var mb = new HashSet<long>(fb.Select(g => g.m));
                             fa = sd.aF.Where(f => ma.Contains(f.m)).ToList();
                             fb = sd.bF.Where(f => mb.Contains(f.m)).ToList();
+                            if (VRG_SHARED)
+                            {
+                                // kun niveauer begge indeks har taget (fx 15m low 15:15) - ikke NQ's NY PRE low alene
+                                var aAll = sd.aF; var bAll = sd.bF;
+                                fa = fa.Where(f => bAll.Any(g => g.key == f.key)).ToList();
+                                fb = fb.Where(f => aAll.Any(g => g.key == f.key)).ToList();
+                            }
                             double aLv = fa.Count > 0 ? (side ? fa.Max(f => f.lvl) : fa.Min(f => f.lvl)) : double.NaN;
                             double bLv = fb.Count > 0 ? (side ? fb.Max(f => f.lvl) : fb.Min(f => f.lvl)) : double.NaN;
                             var names = fa.Concat(fb).Select(f => f.key).Distinct().ToList();
@@ -570,7 +578,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     VSide sdv = v.shrt ? vHi : vLo;
                     long am = v.t / 60;
                     double va = v.va, vb = v.vb;
-                    if (sdv.aFM == am && sdv.bFM == am)
+                    if (!VRG_SHARED && sdv.aFM == am && sdv.bFM == am)
                     {
                         if (double.IsNaN(va)) va = sdv.aFL;
                         if (double.IsNaN(vb)) vb = sdv.bFL;
