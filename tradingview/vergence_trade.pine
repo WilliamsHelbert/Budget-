@@ -146,9 +146,9 @@ warn15s  = input.bool(true, "Advar hvis chartet ikke er 15s", group = g5)
 showRk   = input.bool(true, "Vis regel-boks ved mulighed for Vergence", group = g5,
      tooltip = "Alle regler med flueben / kryds, opdateret live fra det foerste sweep til tradet er taget eller muligheden er vaek.")
 rkSizeS  = input.string("Lille", "Regel-boksens tekststoerrelse", options = ["Mini", "Lille", "Normal"], group = g5)
-rkPosS   = input.string("Midt venstre", "Regel-boksens placering",
-     options = ["Midt venstre", "Oeverst venstre", "Oeverst hoejre", "Oeverst midt", "Nederst venstre"], group = g5,
-     tooltip = "Sweep Trade's regel-boks ligger oeverst til hoejre - saa ligger de ikke oven i hinanden.")
+rkPosS   = input.string("Under SMT-boksen", "Regel-boksens placering",
+     options = ["Under SMT-boksen", "Midt venstre", "Oeverst venstre", "Oeverst hoejre", "Oeverst midt", "Nederst venstre"], group = g5,
+     tooltip = "Under SMT-boksen = oeverst til hoejre, rykket ned under Sweep Trade's regel-boks.")
 
 rkSize = switch rkSizeS
     "Mini"   => size.tiny
@@ -156,11 +156,15 @@ rkSize = switch rkSizeS
     => size.small
 
 rkPos = switch rkPosS
+    "Under SMT-boksen" => position.top_right
     "Oeverst hoejre"  => position.top_right
     "Oeverst midt"    => position.top_center
     "Nederst venstre" => position.bottom_left
     "Oeverst venstre" => position.top_left
     => position.middle_left
+// Under SMT-boksen: tomme raekker foerst (SMT-boksen har hoejst 8 raekker)
+int rkOff = rkPosS == "Under SMT-boksen" ? 8 : 0
+color rkBg = color.new(color.black, 25)
 
 boxPos = switch boxPosS
     "Nederst hoejre"  => position.bottom_right
@@ -1380,20 +1384,23 @@ bool ckShow = showRk and ckOn and (ckRes == 0 or (not na(ckHide) and minB <= ckH
 rkRow(table t, int r, int st, string txt) =>
     string sym = st == 1 ? "✓" : st == -1 ? "✗" : "…"
     color  syc = st == 1 ? color.lime : st == -1 ? color.red : color.yellow
-    table.cell(t, 0, r, sym, text_color = syc, text_size = rkSize)
-    table.cell(t, 1, r, txt, text_color = st == -1 ? color.new(color.red, 20) : color.white, text_size = rkSize, text_halign = text.align_left)
+    table.cell(t, 0, r, sym, text_color = syc, text_size = rkSize, bgcolor = rkBg)
+    table.cell(t, 1, r, txt, text_color = st == -1 ? color.new(color.red, 20) : color.white, text_size = rkSize, text_halign = text.align_left, bgcolor = rkBg)
     r + 1
 
-var table rk = table.new(rkPos, 2, 10, bgcolor = color.new(color.black, 25), border_width = 0)
+var table rk = table.new(rkPos, 2, 18, border_width = 0)
 if barstate.islast
-    table.clear(rk, 0, 0, 1, 9)
+    table.clear(rk, 0, 0, 1, 17)
     if ckShow
+        if rkOff > 0
+            for k = 0 to rkOff - 1
+                table.cell(rk, 0, k, " ", text_size = rkSize)
         string ckDir = ckHi ? "SHORT" : "LONG"
         color  ckHc  = ckRes == 1 ? (ckHi ? bearCol : bullCol) : ckRes == -1 ? color.gray : color.yellow
-        table.cell(rk, 0, 0, "VRG " + ckDir + (ckRes == 1 ? " ✓" : ckRes == -1 ? " ✗" : ""), text_color = ckHc, text_size = rkSize, text_halign = text.align_left)
-        table.cell(rk, 1, 0, ckLvl, text_color = color.gray, text_size = rkSize, text_halign = text.align_left)
+        table.cell(rk, 0, rkOff, "VRG " + ckDir + (ckRes == 1 ? " ✓" : ckRes == -1 ? " ✗" : ""), text_color = ckHc, text_size = rkSize, text_halign = text.align_left, bgcolor = rkBg)
+        table.cell(rk, 1, rkOff, ckLvl, text_color = color.gray, text_size = rkSize, text_halign = text.align_left, bgcolor = rkBg)
         bool p2 = ckPh == 2
-        int  r  = 1
+        int  r  = rkOff + 1
         string othB = ckBy == aName ? bName : aName
         r := rkRow(rk, r, rOther, p2 ? "Begge tog det" : othB + " senest " + str.format_time(ckEnd * 60000, "HH:mm", dispTz))
         r := rkRow(rk, r, p2 ? rOne : (mBad ? -1 : 1), "Een side")
@@ -1406,8 +1413,8 @@ if barstate.islast
             if blockMax
                 r := rkRow(rk, r, rSL, "SL " + (na(rSLv) ? "-" : str.tostring(rSLv, "#.#")) + "/" + str.tostring(maxSL, "#"))
         if ckRes == -1 and ckWhy != ""
-            table.cell(rk, 0, r, "✗", text_color = color.red, text_size = rkSize)
-            table.cell(rk, 1, r, str.replace(ckWhy, "Intet trade - ", ""), text_color = color.gray, text_size = rkSize, text_halign = text.align_left)
+            table.cell(rk, 0, r, "✗", text_color = color.red, text_size = rkSize, bgcolor = rkBg)
+            table.cell(rk, 1, r, str.replace(ckWhy, "Intet trade - ", ""), text_color = color.gray, text_size = rkSize, text_halign = text.align_left, bgcolor = rkBg)
 
 // ═════════════════════ BOKSEN I HJOERNET ═════════════════════
 var table bx = table.new(boxPos, 2, 3, bgcolor = color.new(color.black, 20), border_width = 1)
