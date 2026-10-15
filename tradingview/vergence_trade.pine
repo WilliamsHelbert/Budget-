@@ -1,7 +1,13 @@
 //@version=6
 // =====================================================================
-//  Vergence  (v3.2)  - samme model som backtesten (oktober 2026)
+//  Vergence  (v3.3)  - samme model som backtesten (oktober 2026)
 //  ---------------------------------------------------------------
+//  NYT I v3.3 (15/10-26)
+//    - REGEL-BOKS: saa snart det ene indeks har taget et niveau (mulighed
+//      for Vergence), vises en boks med alle modellens regler og et
+//      flueben / kryds ud for hver. Den opdateres live paa hver tick, til
+//      tradet er taget eller muligheden er vaek. '...' = venter.
+//      Kan slaas fra / flyttes under Visning.
 //  NYT I v3.2 (11/10-26)
 //    - Ingen trades paa dage hvor New York-boersen er lukket (helligdage
 //      2025-2027, samme liste som backtesten og NinjaTrader). Futures handler
@@ -130,6 +136,18 @@ boxPosS  = input.string("Nederst midt", "Boksens placering",
      tooltip = "Sweep Trade-boksen ligger nederst til hoejre - saa ligger de ikke oven i hinanden.")
 boxSizeS = input.string("Normal", "Boksens tekststoerrelse", options = ["Lille", "Normal", "Stor"], group = g5)
 warn15s  = input.bool(true, "Advar hvis chartet ikke er 15s", group = g5)
+showRk   = input.bool(true, "Vis regel-boks ved mulighed for Vergence", group = g5,
+     tooltip = "Alle regler med flueben / kryds, opdateret live fra det foerste sweep til tradet er taget eller muligheden er vaek.")
+rkPosS   = input.string("Oeverst venstre", "Regel-boksens placering",
+     options = ["Oeverst venstre", "Oeverst hoejre", "Oeverst midt", "Nederst venstre", "Midt venstre"], group = g5,
+     tooltip = "Sweep Trade's regel-boks ligger oeverst til hoejre.")
+
+rkPos = switch rkPosS
+    "Oeverst hoejre"  => position.top_right
+    "Oeverst midt"    => position.top_center
+    "Nederst venstre" => position.bottom_left
+    "Midt venstre"    => position.middle_left
+    => position.top_left
 
 boxPos = switch boxPosS
     "Nederst hoejre"  => position.bottom_right
@@ -252,6 +270,9 @@ type Arm
 type Hit
     bool   first   = false   // det ene indeks tog et niveau
     string firstTx = ""
+    bool   firstHi = false   // high-siden (short)
+    string firstBy = ""      // indekset der tog niveauet
+    string firstNm = ""      // niveauet
     bool   swHi    = false   // et high-niveau blev taget i vinduet
     bool   swLo    = false
     bool   sHi     = false   // chartet tog et session high (foerste gang) i vinduet
@@ -332,6 +353,9 @@ check(St st, float aL, float bL, bool isHi, string nm, Hit h, Side sd) =>
                 h.swLo := h.swLo or not isHi
             if (frA and na(st.bLv)) or (frB and na(st.aLv))
                 h.first   := true
+                h.firstHi := isHi
+                h.firstBy := frA ? aName : bName
+                h.firstNm := lvlNm
                 h.firstTx := lvlNm + "  (" + (frA ? aName : bName) + " " + fmtM(minB)
                      + ", venter paa " + (frA ? bName : aName) + " til " + fmtM(minB + maxGap) + ")"
     true
@@ -998,6 +1022,7 @@ if anyArm and barstate.isconfirmed and not mBad
     arms := keep
 
 bool dayDone = (maxDay > 0 and dayTr >= maxDay) or (stopWin and dayWin)
+bool vFire0  = vFire      // til regel-boksen: close-reglerne var opfyldt
 if vFire and (mTraded or dayDone)
     vFire := false
 if vFire
@@ -1195,6 +1220,180 @@ if justBad or (dayBad and anyArm)
     bxCol    := color.gray
     bxLvl    := ""
     bxBE     := ""
+
+// ═════════════════════ REGEL-BOKSEN ═════════════════════
+// Alle regler for den aktuelle mulighed, med flueben / kryds. Live, saa
+// '...' / kryds paa en candle der ikke er lukket endnu kan naa at skifte.
+//   1 = opfyldt, 0 = venter, -1 = ikke opfyldt
+var bool   ckOn   = false
+var int    ckRes  = 0       // 0 = venter, 1 = trade, -1 = intet trade
+var int    ckPh   = 1       // 1 = venter paa det andet indeks, 2 = Vergence fuldendt
+var string ckWhy  = ""
+var int    ckM    = na      // minuttet Vergence blev fuldendt
+var int    ckEnd  = na      // det andet indeks skal tage niveauet senest dette minut
+var int    ckHide = na
+var bool   ckHi   = false
+var string ckBy   = ""
+var string ckLvl  = ""
+var string ckTime = ""
+var int    ckArmT = na
+var string ckBk   = ""      // hvem der skal lukke tilbage
+var int    rOther = 0
+var int    rOne  = 1
+var int    rTid  = 0
+var int    rN    = 1
+var int    rDir  = 0
+var int    rBack = 0
+var int    rSL   = 0
+var float  rSLv  = na
+var int    rLiq  = 0
+var int    rDay  = 1
+var int    rMin  = 1
+
+if newDay
+    ckOn := false
+
+// Fase 1: det ene indeks har taget et niveau
+if hit.first and not mBad and not dayBad and not (ckOn and ckRes == 1 and oLive) and not (ckOn and ckRes == 0 and ckPh == 2)
+    ckOn   := true
+    ckRes  := 0
+    ckPh   := 1
+    ckWhy  := ""
+    ckHide := na
+    ckHi   := hit.firstHi
+    ckBy   := hit.firstBy
+    ckLvl  := hit.firstNm
+    ckEnd  := minB + maxGap
+    ckTime := str.format_time(time, "HH:mm:ss", dispTz)
+    rOther := 0
+
+// Fase 2: Vergence fuldendt i dette minut (ogsaa uden fase 1, fx begge i samme minut)
+Arm ckNew = not na(nHi) ? nHi : nLo
+if not na(ckNew) and not mBad and not dayBad and not (ckOn and ckRes == 1 and ckM == minB)
+    if not (ckOn and ckRes == 0 and ckPh == 1 and ckHi == ckNew.sh)
+        ckTime := str.format_time(time, "HH:mm:ss", dispTz)
+        ckBy   := ""
+    ckOn   := true
+    ckRes  := 0
+    ckPh   := 2
+    ckWhy  := ""
+    ckHide := na
+    ckHi   := ckNew.sh
+    ckLvl  := ckNew.nm
+    ckM    := minB
+    ckArmT := ckNew.t
+    rOther := 1
+
+if ckOn and ckRes == 0
+    rDay := dayDone or dayBad ? -1 : 1
+    rOne := mBad ? -1 : 1
+    if ckPh == 1
+        if minB > ckEnd
+            rOther := -1
+            ckRes  := -1
+            ckWhy  := "Intet trade - " + (ckBy == aName ? bName : aName) + " tog ikke niveauet senest " + str.format_time(ckEnd * 60000, "HH:mm", dispTz)
+            ckHide := minB
+    else
+        // Live: den Vergence der venter paa close i dette minut
+        if array.size(arms) > 0
+            Arm   cv  = array.get(arms, 0)
+            float cva = cv.a
+            float cvb = cv.b
+            Side  csd = cv.sh ? sideHi : sideLo
+            int   cam = int(cv.t / 60000)
+            if nz(csd.aFM, -1) == cam and nz(csd.bFM, -1) == cam
+                cva := na(cva) ? csd.aFL : cva
+                cvb := na(cvb) ? csd.bFL : cvb
+            bool cbA = not needBack or na(cva) or (cv.sh ? close < cva : close > cva)
+            bool cbB = not needBack or na(cvb) or (not na(bClose) and (cv.sh ? bClose < cvb : bClose > cvb))
+            ckBk  := not needBack ? "" : not na(cva) and not na(cvb) ? "begge" : not na(cva) ? aName : bName
+            rBack := cbA and cbB ? 1 : 0
+            rDir  := (cv.sh ? close < open : close > open) and not na(bClose) and not na(bOpen) and (cv.sh ? bClose < bOpen : bClose > bOpen) ? 1 : 0
+            rN    := int((time - cv.t) / 15000) + 1
+            rTid  := tidClose == 0 or rN <= tidClose ? 1 : -1
+            rSLv  := cv.sh ? m1Hi - close : close - m1Lo
+            rSL   := not blockMax or rSLv <= maxSL ? 1 : -1
+            bool ceq = cv.sh ? (not na(uHitPrev) and close - uHitPrev >= -beMin) : (not na(dHitPrev) and dHitPrev - close >= -beMin)
+            bool csl = cv.sh ? (not na(sLoPrev) and close - sLoPrev >= -beMin) : (not na(sHiPrev) and sHiPrev - close >= -beMin)
+            rLiq  := ceq or csl ? -1 : 1
+            rMin  := mTraded ? -1 : 1
+        // Afgoerelse
+        if entShort or entLong
+            rDir  := 1
+            rBack := 1
+            rSL   := 1
+            rLiq  := 1
+            rMin  := 1
+            ckRes := 1
+            ckWhy := "TRADE " + (entShort ? "SHORT" : "LONG") + " - alle regler opfyldt"
+        else if vFire0
+            rDir  := 1
+            rBack := 1
+            rSL   := 1
+            ckRes := -1
+            if mTraded or dayDone
+                ckWhy := "Intet trade - " + (dayDone ? "dagen er slut (max trades / vundet trade)" : "der er allerede et trade i minuttet")
+                if dayDone
+                    rDay := -1
+                else
+                    rMin := -1
+            else
+                rLiq  := -1
+                ckWhy := "Intet trade - liq paa BE-siden allerede taget"
+        else if mBad
+            ckRes := -1
+            ckWhy := "Intet trade - high- og low-side taget i minuttet"
+        else if minB != ckM or array.size(arms) == 0
+            ckRes := -1
+            ckWhy := minB != ckM ? "Intet trade - minuttet gik uden entry" : "Intet trade - " + str.replace(bxStatus, "Ingen Vergence - ", "")
+            if str.contains(bxStatus, "SL >")
+                rSL := -1
+            if str.contains(bxStatus, "tid close")
+                rTid := -1
+            if str.contains(bxStatus, "close tilbage")
+                rBack := -1
+        if ckRes == -1
+            ckHide := minB != ckM ? minB : minB + 1
+
+// Trade er taget: boksen bliver staaende saa laenge tradet er aabent
+bool ckShow = showRk and ckOn and (ckRes == 0 or (not na(ckHide) and minB <= ckHide) or (ckRes == 1 and (minB == ckM or oLive)))
+
+rkRow(table t, int r, int st, string txt) =>
+    string sym = st == 1 ? "✓" : st == -1 ? "✗" : "…"
+    color  syc = st == 1 ? color.lime : st == -1 ? color.red : color.yellow
+    table.cell(t, 0, r, sym, text_color = syc, text_size = boxSize)
+    table.cell(t, 1, r, txt, text_color = st == -1 ? color.new(color.red, 20) : color.white, text_size = boxSize, text_halign = text.align_left)
+    r + 1
+
+var table rk = table.new(rkPos, 2, 16, bgcolor = color.new(color.black, 15), border_width = 1, border_color = color.new(color.gray, 70))
+if barstate.islast
+    table.clear(rk, 0, 0, 1, 15)
+    if ckShow
+        string ckDir = ckHi ? "SHORT" : "LONG"
+        string ckHd  = ckRes == 1 ? "VRG " + ckDir + " - TRADE" : ckRes == -1 ? "VRG " + ckDir + " - intet trade" : ckPh == 1 ? "Mulighed for Vergence " + ckDir : "Vergence " + ckDir + " - venter paa close"
+        color  ckHc  = ckRes == 1 ? (ckHi ? bearCol : bullCol) : ckRes == -1 ? color.gray : color.yellow
+        table.cell(rk, 0, 0, ckHd, text_color = ckHc, text_size = boxSize, text_halign = text.align_left)
+        table.cell(rk, 1, 0, ckTime + "   " + ckLvl, text_color = color.gray, text_size = boxSize, text_halign = text.align_left)
+        bool p2 = ckPh == 2
+        int  r  = 1
+        r := rkRow(rk, r, 1, "Vindue 15:30-16:00" + (noClosed ? ", boersen aaben" : ""))
+        string othTx = ckBy != "" ? ckBy + " tog " + ckLvl + ", " + (ckBy == aName ? bName : aName) + " senest " + str.format_time(ckEnd * 60000, "HH:mm", dispTz) : "Begge indeks tog samme niveau (max " + str.tostring(maxGap) + " min imellem)"
+        r := rkRow(rk, r, rOther, othTx)
+        r := rkRow(rk, r, p2 ? rOne : (mBad ? -1 : 0), "Ikke baade high- og low-side taget i minuttet")
+        if tidClose > 0
+            r := rkRow(rk, r, p2 ? rTid : 0, "Tid close: candle " + (p2 ? str.tostring(math.min(rN, tidClose + 1)) : "-") + " (max " + str.tostring(tidClose) + ")")
+        r := rkRow(rk, r, p2 ? rDir : 0, "Begge indeks lukker " + (ckHi ? "bearish" : "bullish"))
+        if needBack
+            r := rkRow(rk, r, p2 ? rBack : 0, "Close tilbage " + (ckHi ? "under" : "over") + " niveauet" + (p2 and ckBk != "" ? " (" + ckBk + ")" : ""))
+        if blockMax
+            r := rkRow(rk, r, p2 ? rSL : 0, "SL " + (p2 and not na(rSLv) ? str.tostring(rSLv, "#.##") : "-") + "p <= max " + str.tostring(maxSL, "#") + "p")
+        r := rkRow(rk, r, p2 ? rLiq : 0, "Ingen liq paa BE-siden taget i minuttet")
+        if maxDay > 0 or stopWin
+            r := rkRow(rk, r, rDay, "Trades i dag " + str.tostring(dayTr) + (maxDay > 0 ? "/" + str.tostring(maxDay) : "") + (stopWin ? ", ingen vundet endnu" : ""))
+        r := rkRow(rk, r, p2 ? rMin : 1, "Foerste trade i minuttet")
+        if ckWhy != ""
+            table.cell(rk, 0, r, ckRes == 1 ? "✓" : "✗", text_color = ckRes == 1 ? color.lime : color.red, text_size = boxSize)
+            table.cell(rk, 1, r, ckWhy, text_color = ckHc, text_size = boxSize, text_halign = text.align_left)
 
 // ═════════════════════ BOKSEN I HJOERNET ═════════════════════
 var table bx = table.new(boxPos, 2, 3, bgcolor = color.new(color.black, 20), border_width = 1)
