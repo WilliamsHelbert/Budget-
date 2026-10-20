@@ -190,6 +190,8 @@ paint(Sess s, color col, string txt) =>
         label.set_xy(s.loLb, s.loEnd, s.lo)
         label.set_text(s.hiLb, showLbl ? txt : "")
         label.set_text(s.loLb, showLbl ? txt : "")
+        label.set_text_formatting(s.hiLb, lblFmt)
+        label.set_text_formatting(s.loLb, lblFmt)
 
 // ─────────────── HVOR STOPPER DAGENS LINJER? ───────────────
 int tMin = hour(time, tz) * 60 + minute(time, tz)

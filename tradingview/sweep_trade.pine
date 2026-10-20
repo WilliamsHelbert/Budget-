@@ -1259,7 +1259,7 @@ if ok
         color c = sh ? shortCol : longCol
         label lb = label.new(time, sh ? high : low, "SMT", xloc = xloc.bar_time,
              style = sh ? label.style_label_down : label.style_label_up,
-             color = color.new(c, 10), textcolor = sh ? color.white : color.black, size = size.small)
+             color = color.new(c, 10), textcolor = sh ? color.white : color.black, size = size.small, text_formatting = text.format_bold)
         label.set_tooltip(lb, (sh ? "SHORT - " : "LONG - ") + hit.src + " swept (" + hit.who + ")")
         array.push(minLbls, lb)
         line beL = na
@@ -1351,11 +1351,11 @@ if ok
         if showBE and showPos and showPx
             int xr1 = time + beMins * 60000
             oSlLb := label.new(xr1, slX, str.tostring(slX, format.mintick), xloc = xloc.bar_time, style = label.style_label_left,
-                 color = color.new(color.black, 100), textcolor = color.new(#F23645, 0), size = size.small)
+                 color = color.new(color.black, 100), textcolor = color.new(#F23645, 0), size = size.small, text_formatting = text.format_bold)
             oEnLb := label.new(xr1, px,  str.tostring(px,  format.mintick), xloc = xloc.bar_time, style = label.style_label_left,
-                 color = color.new(color.black, 100), textcolor = pxCol, size = size.small)
+                 color = color.new(color.black, 100), textcolor = pxCol, size = size.small, text_formatting = text.format_bold)
             oTpLb := label.new(xr1, tpX, str.tostring(tpX, format.mintick), xloc = xloc.bar_time, style = label.style_label_left,
-                 color = color.new(color.black, 100), textcolor = color.new(#089981, 0), size = size.small)
+                 color = color.new(color.black, 100), textcolor = color.new(#089981, 0), size = size.small, text_formatting = text.format_bold)
             array.push(minLbls, oSlLb)
             array.push(minLbls, oEnLb)
             array.push(minLbls, oTpLb)
@@ -1476,8 +1476,8 @@ bool ckShow = showRk and ckOn and (ckRes == 0 or minB == ckM or (not na(ckHide) 
 rkRow(table t, int r, int st, string txt) =>
     string sym = st == 1 ? "✓" : st == -1 ? "✗" : "…"
     color  syc = st == 1 ? color.lime : st == -1 ? color.red : color.yellow
-    table.cell(t, 0, r, sym, text_color = syc, text_size = rkSize)
-    table.cell(t, 1, r, txt, text_color = st == -1 ? color.new(color.red, 20) : color.white, text_size = rkSize, text_halign = text.align_left)
+    table.cell(t, 0, r, sym, text_color = syc, text_size = rkSize, text_formatting = text.format_bold)
+    table.cell(t, 1, r, txt, text_color = st == -1 ? color.new(color.red, 20) : color.white, text_size = rkSize, text_halign = text.align_left, text_formatting = text.format_bold)
     r + 1
 
 var table rk = table.new(rkPos, 2, 10, bgcolor = color.new(color.black, 25), border_width = 0)
@@ -1487,8 +1487,8 @@ if barstate.islast
         string dirS = ckHi ? "SHORT" : "LONG"
         color  hc   = ckRes == 1 ? (ckHi ? shortCol : longCol) : ckRes == -1 ? color.gray : color.yellow
         string swp  = ckByA ? aName : bName
-        table.cell(rk, 0, 0, "SMT " + dirS + (ckRes == 1 ? " ✓" : ckRes == -1 ? " ✗" : ""), text_color = hc, text_size = rkSize, text_halign = text.align_left)
-        table.cell(rk, 1, 0, ckLvl, text_color = color.gray, text_size = rkSize, text_halign = text.align_left)
+        table.cell(rk, 0, 0, "SMT " + dirS + (ckRes == 1 ? " ✓" : ckRes == -1 ? " ✗" : ""), text_color = hc, text_size = rkSize, text_halign = text.align_left, text_formatting = text.format_bold)
+        table.cell(rk, 1, 0, ckLvl, text_color = color.gray, text_size = rkSize, text_halign = text.align_left, text_formatting = text.format_bold)
         int r = 1
         r := rkRow(rk, r, rDiv, "Kun " + swp)
         r := rkRow(rk, r, rOne, "Een side")
@@ -1500,22 +1500,22 @@ if barstate.islast
         if blockMax
             r := rkRow(rk, r, rSL, "SL " + (na(rSLv) ? "-" : str.tostring(rSLv, "#.#")) + "/" + str.tostring(maxSL, "#"))
         if ckRes == -1 and ckWhy != ""
-            table.cell(rk, 0, r, "✗", text_color = color.red, text_size = rkSize)
-            table.cell(rk, 1, r, str.replace(ckWhy, "Intet trade - ", ""), text_color = color.gray, text_size = rkSize, text_halign = text.align_left)
+            table.cell(rk, 0, r, "✗", text_color = color.red, text_size = rkSize, text_formatting = text.format_bold)
+            table.cell(rk, 1, r, str.replace(ckWhy, "Intet trade - ", ""), text_color = color.gray, text_size = rkSize, text_halign = text.align_left, text_formatting = text.format_bold)
 
 // ═════════════════════ BOKSEN I HJOERNET ═════════════════════
 var table bx = table.new(boxPos, 2, 4, bgcolor = color.new(color.black, 20), border_width = 1)
 if barstate.islast
     table.clear(bx, 0, 0, 1, 3)
     if bxStatus != ""
-        table.cell(bx, 0, 0, bxStatus, text_color = bxCol, text_size = boxSize)
-        table.cell(bx, 1, 0, bxTime,   text_color = color.gray, text_size = boxSize)
+        table.cell(bx, 0, 0, bxStatus, text_color = bxCol, text_size = boxSize, text_formatting = text.format_bold)
+        table.cell(bx, 1, 0, bxTime,   text_color = color.gray, text_size = boxSize, text_formatting = text.format_bold)
         if bxLvl != ""
-            table.cell(bx, 0, 1, "Swept", text_color = color.gray,  text_size = boxSize)
-            table.cell(bx, 1, 1, bxLvl,   text_color = color.white, text_size = boxSize)
+            table.cell(bx, 0, 1, "Swept", text_color = color.gray,  text_size = boxSize, text_formatting = text.format_bold)
+            table.cell(bx, 1, 1, bxLvl,   text_color = color.white, text_size = boxSize, text_formatting = text.format_bold)
         if bxBE != ""
-            table.cell(bx, 0, 2, "BE / TP",  text_color = color.gray,  text_size = boxSize)
-            table.cell(bx, 1, 2, bxBE,  text_color = beCol,       text_size = boxSize)
+            table.cell(bx, 0, 2, "BE / TP",  text_color = color.gray,  text_size = boxSize, text_formatting = text.format_bold)
+            table.cell(bx, 1, 2, bxBE,  text_color = beCol,       text_size = boxSize, text_formatting = text.format_bold)
 
 bool anySweep = inWin and hit.swTxt != "" and not mBad and not dayBad
 alertcondition(anySweep, "Mulighed for SMT", "Mulighed for SMT - et niveau er swept")
@@ -1527,4 +1527,4 @@ if warn15s and barstate.islast
     label.delete(tfWarn)
     tfWarn := timeframe.in_seconds() != 15 ? label.new(bar_index, high,
          "Laeg chartet paa 15s - entry laeses paa 15s-candles",
-         color = color.orange, textcolor = color.black, style = label.style_label_down, size = size.small) : na
+         color = color.orange, textcolor = color.black, style = label.style_label_down, size = size.small, text_formatting = text.format_bold) : na

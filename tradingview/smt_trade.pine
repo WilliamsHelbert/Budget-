@@ -220,7 +220,7 @@ sweepHi(Lvl s, Sig g, string nm, bool ok) =>
                 g.hiSide  := true
                 label lb = label.new(time, s.aHi, "SMT", xloc = xloc.bar_time,
                      style = label.style_label_down, color = color.new(bearCol, 15),
-                     textcolor = color.white, size = size.small)
+                     textcolor = color.white, size = size.small, text_formatting = text.format_bold)
                 label.set_tooltip(lb, nm + "-high taget af kun det ene indeks")
                 array.push(smtLbls, lb)
     fired
@@ -240,7 +240,7 @@ sweepLo(Lvl s, Sig g, string nm, bool ok) =>
                 g.loSide  := true
                 label lb = label.new(time, s.aLo, "SMT", xloc = xloc.bar_time,
                      style = label.style_label_up, color = color.new(bullCol, 15),
-                     textcolor = color.black, size = size.small)
+                     textcolor = color.black, size = size.small, text_formatting = text.format_bold)
                 label.set_tooltip(lb, nm + "-low taget af kun det ene indeks")
                 array.push(smtLbls, lb)
     fired
@@ -426,7 +426,7 @@ if useLv and lvLive and array.size(lvs) > 0
             label lb = label.new(time, m.aLvl, "SMT", xloc = xloc.bar_time,
                  style = m.isHi ? label.style_label_down : label.style_label_up,
                  color = color.new(c, 15), textcolor = m.isHi ? color.white : color.black,
-                 size = size.small)
+                 size = size.small, text_formatting = text.format_bold)
             label.set_tooltip(lb, m.src + "-niveau taget af kun det ene indeks")
             array.push(smtLbls, lb)
 
@@ -464,6 +464,7 @@ if array.size(trades) > 0
             line.set_x2(t.beLn, time)
             label.set_x(t.lb, time)
             label.set_text(t.lb, hitTP ? "TP" : (t.beHit ? "BE" : "SL"))
+            label.set_text_formatting(t.lb, text.format_bold)
             label.set_color(t.lb, color.new(hitTP ? tpCol : (t.beHit ? beCol : slCol), 10))
 
 bool roomLeft = maxPerDay <= 0 or tradesToday < maxPerDay
@@ -497,7 +498,7 @@ if useTrade and armed and barstate.isconfirmed and sameMin and dirOK and backOK 
     mxLn  := na     // stregen bliver staaende, saa man kan se hvorfor
     label.new(time, close, "SL > " + str.tostring(maxSL, "#"), xloc = xloc.bar_time,
          style = armShort ? label.style_label_down : label.style_label_up,
-         color = color.new(color.gray, 20), textcolor = color.white, size = size.small)
+         color = color.new(color.gray, 20), textcolor = color.white, size = size.small, text_formatting = text.format_bold)
 
 if useTrade and armed and barstate.isconfirmed and sameMin and dirOK and backOK and slOK
     armed       := false
@@ -579,7 +580,7 @@ if useTrade and armed and barstate.isconfirmed and sameMin and dirOK and backOK 
          + (na(t.be) ? "   BE -" : "   BE " + str.tostring(math.abs(t.be - t.entry), "#.#") + " (" + t.beSrc + ")")
          + "   " + str.tostring(rr, "#.#") + "R",
          xloc = xloc.bar_time, style = label.style_label_left,
-         color = color.new(below ? slCol : tpCol, 10), textcolor = color.white, size = size.normal)
+         color = color.new(below ? slCol : tpCol, 10), textcolor = color.white, size = size.normal, text_formatting = text.format_bold)
     array.push(trades, t)
 
 if useTrade and armed and minB != armMinB
@@ -606,14 +607,14 @@ while array.size(smtLbls) > maxKeep
 var table info = table.new(position.top_right, 1, 1, border_width = 1)
 if showInfo and barstate.islast
     table.cell(info, 0, 0, syminfo.ticker + "   vs   " + cmpSym,
-         text_color = color.gray, text_size = size.small, bgcolor = color.new(color.black, 80))
+         text_color = color.gray, text_size = size.small, bgcolor = color.new(color.black, 80), text_formatting = text.format_bold)
 
 var label tfWarn = na
 if warn15s and barstate.islast
     label.delete(tfWarn)
     tfWarn := timeframe.in_seconds() != 15 ? label.new(bar_index, high,
          "Laeg chartet paa 15s - entry laeses paa 15s-candles",
-         color = color.orange, textcolor = color.black, style = label.style_label_down, size = size.small) : na
+         color = color.orange, textcolor = color.black, style = label.style_label_down, size = size.small, text_formatting = text.format_bold) : na
 
 plotshape(entLong,  "Entry LONG",  style = shape.triangleup,
      location = location.belowbar, color = tpCol, size = size.normal)

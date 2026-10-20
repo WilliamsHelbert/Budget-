@@ -388,7 +388,7 @@ if pbOn
     if na(pbD)
         pbD  := preNormal ? newDraw(pbT, time, pbHi, pbLo, false) : newPreDraw(pbT, time, pbHi, pbLo)
         pbLb := label.new(time, (pbHi + pbLo) / 2, "EQ foer open", xloc = xloc.bar_time,
-             color = color.new(preCol, 100), textcolor = preCol, style = label.style_label_left, size = size.small)
+             color = color.new(preCol, 100), textcolor = preCol, style = label.style_label_left, size = size.small, text_formatting = text.format_bold)
     if pbNew
         pbNew := false
     else
@@ -407,7 +407,7 @@ if plOn
     if na(plD)
         plD  := preNormal ? newDraw(plT, time, plHi, plLo, true) : newPreDraw(plT, time, plHi, plLo)
         plLb := label.new(time, (plHi + plLo) / 2, "EQ foer open", xloc = xloc.bar_time,
-             color = color.new(preCol, 100), textcolor = preCol, style = label.style_label_left, size = size.small)
+             color = color.new(preCol, 100), textcolor = preCol, style = label.style_label_left, size = size.small, text_formatting = text.format_bold)
     if plNew
         plNew := false
     else
@@ -507,4 +507,4 @@ if warnTF and barstate.islast
     label.delete(tfLabel)
     tfLabel := timeframe.in_seconds() > timeframe.in_seconds(creationTF) ? label.new(bar_index, high,
          "Chartet er groevere end oprettelses-timeframet - laeg det paa " + creationTF + " eller finere",
-         color = color.orange, textcolor = color.black, style = label.style_label_down, size = size.small) : na
+         color = color.orange, textcolor = color.black, style = label.style_label_down, size = size.small, text_formatting = text.format_bold) : na
