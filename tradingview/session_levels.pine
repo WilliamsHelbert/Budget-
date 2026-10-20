@@ -9,6 +9,8 @@
 //      bliver selve NY PRE-linjen sort og hedder "Taget" - f.eks. ES' NY PRE
 //      low, naar NQ allerede har lavet et lavere low i den naeste 15m-candle.
 //      Tages niveauet senere ogsaa paa chartet, forsvinder det som foer.
+//    - Paa ES sammenlignes automatisk med NQ, hvis "Sammenlign med" staar
+//      paa ES (standard). Ellers sammenlignede ES med sig selv.
 //    - 5m highs/lows fra NY PRE er slaaet FRA som standard. Et 5m-niveau
 //      ses kun, naar et SMT- eller Vergence-trade bruger det som BE: saa
 //      tegner Sweep Trade / Vergence BE-linjen. Kan slaas til igen under
@@ -285,12 +287,16 @@ if showNy and not nOn and not na(nCur.hi) and time <= nCur.endT
 m15Bar() =>
     [high[1], low[1], time[1]]
 
-[qH, qL, qT] = request.security(syminfo.tickerid, m15TF, m15Bar(), lookahead = barmerge.lookahead_on)
-[eH, eL, eT] = request.security(cmpSym,           m15TF, m15Bar(), lookahead = barmerge.lookahead_on)
-[fH, fL, fT] = request.security(syminfo.tickerid, m05TF, m15Bar(), lookahead = barmerge.lookahead_on)
-[gH, gL, gT] = request.security(cmpSym,           m05TF, m15Bar(), lookahead = barmerge.lookahead_on)
+// Staar chartet paa ES og "Sammenlign med" ogsaa paa ES, sammenlignes ES med sig selv,
+// og intet kan vaere taget paa "det andet symbol". Saa bruges NQ automatisk.
+string cmpUse = str.contains(syminfo.root, "ES") and str.contains(cmpSym, "ES") ? "CME_MINI:NQ1!" : cmpSym
 
-[cBarH, cBarL] = request.security(cmpSym, timeframe.period, [high, low],
+[qH, qL, qT] = request.security(syminfo.tickerid, m15TF, m15Bar(), lookahead = barmerge.lookahead_on)
+[eH, eL, eT] = request.security(cmpUse,           m15TF, m15Bar(), lookahead = barmerge.lookahead_on)
+[fH, fL, fT] = request.security(syminfo.tickerid, m05TF, m15Bar(), lookahead = barmerge.lookahead_on)
+[gH, gL, gT] = request.security(cmpUse,           m05TF, m15Bar(), lookahead = barmerge.lookahead_on)
+
+[cBarH, cBarL] = request.security(cmpUse, timeframe.period, [high, low],
      gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)
 
 int  nyFrom  = nyFromH * 60 + nyFromM
