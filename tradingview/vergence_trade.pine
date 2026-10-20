@@ -149,7 +149,6 @@ boxPosS  = input.string("Nederst midt", "Boksens placering",
      options = ["Nederst midt", "Nederst hoejre", "Nederst venstre", "Oeverst midt", "Oeverst hoejre", "Oeverst venstre"], group = g5,
      tooltip = "Sweep Trade-boksen ligger nederst til hoejre - saa ligger de ikke oven i hinanden.")
 boxSizeS = input.string("Normal", "Boksens tekststoerrelse", options = ["Lille", "Normal", "Stor"], group = g5)
-warn15s  = input.bool(true, "Advar hvis chartet ikke er 15s", group = g5)
 showRk   = input.bool(true, "Vis regel-boks ved mulighed for Vergence", group = g5,
      tooltip = "Alle regler med flueben / kryds, opdateret live fra det foerste sweep til tradet er taget eller muligheden er vaek.")
 rkSizeS  = input.string("Lille", "Regel-boksens tekststoerrelse", options = ["Mini", "Lille", "Normal"], group = g5)
@@ -1454,9 +1453,3 @@ alertcondition(vrgBull,  "Bullish Vergence", "Bullish Vergence - begge indeks to
 alertcondition(entLong,  "Vergence LONG",    "Vergence long entry")
 alertcondition(entShort, "Vergence SHORT",   "Vergence short entry")
 
-var label tfWarn = na
-if warn15s and barstate.islast
-    label.delete(tfWarn)
-    tfWarn := timeframe.in_seconds() != 15 ? label.new(bar_index, high,
-         "Laeg chartet paa 15s - entry laeses paa 15s-candles",
-         color = color.orange, textcolor = color.black, style = label.style_label_down, size = size.small, text_formatting = text.format_bold) : na
