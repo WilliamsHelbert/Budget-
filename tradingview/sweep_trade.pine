@@ -285,6 +285,9 @@ showRk   = input.bool(true, "Vis regel-boks ved mulighed for SMT", group = g5,
 rkSizeS  = input.string("Lille", "Regel-boksens tekststoerrelse", options = ["Mini", "Lille", "Normal"], group = g5)
 rkPosS   = input.string("Oeverst hoejre", "Regel-boksens placering",
      options = ["Oeverst hoejre", "Oeverst venstre", "Oeverst midt", "Nederst venstre", "Midt hoejre"], group = g5)
+rkW0     = input.float(9,  "Regel-boksens bredde, venstre kolonne (% af chartet)", minval = 0, step = 0.5, group = g5,
+     tooltip = "Samme tal i Sweep Trade og Vergence, saa de to bokse staar lige under hinanden. 0 = automatisk.")
+rkW1     = input.float(15, "Regel-boksens bredde, hoejre kolonne (% af chartet)", minval = 0, step = 0.5, group = g5)
 
 boxSize = switch boxSizeS
     "Lille" => size.small
@@ -1476,8 +1479,8 @@ bool ckShow = showRk and ckOn and (ckRes == 0 or minB == ckM or (not na(ckHide) 
 rkRow(table t, int r, int st, string txt) =>
     string sym = st == 1 ? "✓" : st == -1 ? "✗" : "…"
     color  syc = st == 1 ? color.lime : st == -1 ? color.red : color.yellow
-    table.cell(t, 0, r, sym, text_color = syc, text_size = rkSize, text_formatting = text.format_bold)
-    table.cell(t, 1, r, txt, text_color = st == -1 ? color.new(color.red, 20) : color.white, text_size = rkSize, text_halign = text.align_left, text_formatting = text.format_bold)
+    table.cell(t, 0, r, sym, text_color = syc, text_size = rkSize, width = rkW0, text_formatting = text.format_bold)
+    table.cell(t, 1, r, txt, text_color = st == -1 ? color.new(color.red, 20) : color.white, text_size = rkSize, width = rkW1, text_halign = text.align_left, text_formatting = text.format_bold)
     r + 1
 
 var table rk = table.new(rkPos, 2, 10, bgcolor = color.new(color.black, 25), border_width = 0)
@@ -1487,8 +1490,8 @@ if barstate.islast
         string dirS = ckHi ? "SHORT" : "LONG"
         color  hc   = ckRes == 1 ? (ckHi ? shortCol : longCol) : ckRes == -1 ? color.gray : color.yellow
         string swp  = ckByA ? aName : bName
-        table.cell(rk, 0, 0, "SMT " + dirS + (ckRes == 1 ? " ✓" : ckRes == -1 ? " ✗" : ""), text_color = hc, text_size = rkSize, text_halign = text.align_left, text_formatting = text.format_bold)
-        table.cell(rk, 1, 0, ckLvl, text_color = color.gray, text_size = rkSize, text_halign = text.align_left, text_formatting = text.format_bold)
+        table.cell(rk, 0, 0, "SMT " + dirS + (ckRes == 1 ? " ✓" : ckRes == -1 ? " ✗" : ""), text_color = hc, text_size = rkSize, width = rkW0, text_halign = text.align_left, text_formatting = text.format_bold)
+        table.cell(rk, 1, 0, ckLvl, text_color = color.gray, text_size = rkSize, width = rkW1, text_halign = text.align_left, text_formatting = text.format_bold)
         int r = 1
         r := rkRow(rk, r, rDiv, "Kun " + swp)
         r := rkRow(rk, r, rOne, "Een side")
@@ -1500,8 +1503,8 @@ if barstate.islast
         if blockMax
             r := rkRow(rk, r, rSL, "SL " + (na(rSLv) ? "-" : str.tostring(rSLv, "#.#")) + "/" + str.tostring(maxSL, "#"))
         if ckRes == -1 and ckWhy != ""
-            table.cell(rk, 0, r, "✗", text_color = color.red, text_size = rkSize, text_formatting = text.format_bold)
-            table.cell(rk, 1, r, str.replace(ckWhy, "Intet trade - ", ""), text_color = color.gray, text_size = rkSize, text_halign = text.align_left, text_formatting = text.format_bold)
+            table.cell(rk, 0, r, "✗", text_color = color.red, text_size = rkSize, width = rkW0, text_formatting = text.format_bold)
+            table.cell(rk, 1, r, str.replace(ckWhy, "Intet trade - ", ""), text_color = color.gray, text_size = rkSize, width = rkW1, text_halign = text.align_left, text_formatting = text.format_bold)
 
 // ═════════════════════ BOKSEN I HJOERNET ═════════════════════
 var table bx = table.new(boxPos, 2, 4, bgcolor = color.new(color.black, 20), border_width = 1)
