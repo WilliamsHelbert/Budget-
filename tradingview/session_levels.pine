@@ -363,6 +363,7 @@ newLvl(float aL, float bL, int t, bool isHi, bool is15, int toT) =>
     m.is15 := is15
     m.ln   := line.new(t, aL, toT, aL, xloc = xloc.bar_time, color = c, width = lineW)
     m.lb   := label.new(toT, aL, showLbl ? (is15 ? "15m" : "5m") : "", xloc = xloc.bar_time, style = label.style_none, textcolor = c, size = lblSize, text_formatting = lblFmt)
+    label.set_text_formatting(m.lb, lblFmt)
     m
 
 killLvl(M15 m) =>
@@ -444,6 +445,7 @@ if (inNy or isOpenBar) and array.size(m15s) > 0
             line.set_color(m.ln, c)
             label.set_textcolor(m.lb, c)
             label.set_text(m.lb, showLbl ? (taget ? "Taget" : (m.is15 ? "15m" : "5m")) : "")
+            label.set_text_formatting(m.lb, lblFmt)
 
 // ── 15:31: vaek med dem igen. Det er kun en market open-ting. ──
 if m15Gone and array.size(m15s) > 0
