@@ -3,6 +3,12 @@
 //  Session Levels  (v6.2)
 //  ---------------------------------------------------------------
 //  NYT I v6.2 (20/10-26)
+//    - "Taget" (sort): er et 15m-niveau taget paa det ANDET symbol under
+//      NY PRE, men ikke paa chartets, slettes det ikke laengere. Det staar
+//      som en sort linje med "Taget". Er niveauet chartets NY PRE high/low,
+//      bliver selve NY PRE-linjen sort og hedder "Taget" - f.eks. ES' NY PRE
+//      low, naar NQ allerede har lavet et lavere low i den naeste 15m-candle.
+//      Tages niveauet senere ogsaa paa chartet, forsvinder det som foer.
 //    - 5m highs/lows fra NY PRE er slaaet FRA som standard. Et 5m-niveau
 //      ses kun, naar et SMT- eller Vergence-trade bruger det som BE: saa
 //      tegner Sweep Trade / Vergence BE-linjen. Kan slaas til igen under
@@ -103,6 +109,7 @@ keepDead = input.bool(false, "Vis taget 15m/5m-niveauer (stoppet linje)", group 
      tooltip = "Fra (standard): et niveau der bliver taget under NY PRE slettes, saa kun de aktive staar tilbage. Til: det bliver staaende som en stoppet linje.")
 m15Col  = input.color(color.red,    "Farve 15m", group = g5)
 m05Col  = input.color(color.orange, "Farve 5m",  group = g5)
+tagCol  = input.color(color.black,  "Farve taget (kun paa det andet symbol)", group = g5)
 m15TF   = input.timeframe("15", "Timeframe A (15m)", group = g5)
 m05TF   = input.timeframe("5",  "Timeframe B (5m)",  group = g5)
 cmpSym  = input.symbol("CME_MINI:ES1!", "Sammenlign med (gyldighed)", group = g5,
@@ -139,6 +146,7 @@ type M15
     bool  isHi = false
     bool  dead = false  // taget mens NY PRE koerte -> ugyldigt
     bool  is15 = true   // 15m (true) eller 5m (false)
+    bool  tag  = false  // kun taget paa det ANDET symbol -> "Taget" (sort)
     line  ln   = na
     label lb   = na
 
@@ -383,7 +391,7 @@ if inNy and array.size(m15s) > 0
         M15 m = array.get(m15s, i)
         bool aHit = m.isHi ? high >= m.aLvl : low <= m.aLvl
         bool bHit = m.isHi ? (not na(cBarH) and cBarH >= m.bLvl) : (not na(cBarL) and cBarL <= m.bLvl)
-        if not m.dead and (aHit or bHit)
+        if not m.dead and aHit
             m.dead := true
             if keepDead
                 line.set_x2(m.ln, time)
@@ -391,19 +399,50 @@ if inNy and array.size(m15s) > 0
             else
                 line.delete(m.ln)
                 label.delete(m.lb)
+        else if not m.dead and bHit and not m.tag and m.is15
+            // kun taget paa det andet symbol: bliver staaende som "Taget"
+            m.tag := true
+            label.set_text(m.lb, showLbl ? "Taget" : "")
+        else if not m.dead and bHit and not m.is15
+            m.dead := true
+            line.delete(m.ln)
+            label.delete(m.lb)
 
 // ── Skjul det niveau der ER NY PRE's high/low (den lilla linje) ──
+// Er det kun taget paa det andet symbol, bliver NY PRE-linjen i stedet sort "Taget".
+var bool nyHiTag = false
+var bool nyLoTag = false
+if nStart
+    nyHiTag := false
+    nyLoTag := false
 if (inNy or isOpenBar) and array.size(m15s) > 0
+    bool hiT = false
+    bool loT = false
     for i = 0 to array.size(m15s) - 1
         M15 m = array.get(m15s, i)
         if not m.dead
             bool isExtreme = m.isHi
                  ? (not na(nCur.hi) and math.abs(m.aLvl - nCur.hi) < tickHalf)
                  : (not na(nCur.lo) and math.abs(m.aLvl - nCur.lo) < tickHalf)
-            color base = m.is15 ? m15Col : m05Col
+            if isExtreme and m.tag
+                hiT := hiT or m.isHi
+                loT := loT or not m.isHi
+            color base = m.tag ? tagCol : (m.is15 ? m15Col : m05Col)
             color c    = isExtreme ? color.new(base, 100) : base
             line.set_color(m.ln, c)
             label.set_textcolor(m.lb, c)
+    nyHiTag := hiT
+    nyLoTag := loT
+
+// NY PRE-linjen: sort "Taget", saa laenge den staar (paint() saetter teksten igen hver gang)
+if showNy and not na(nCur.hiLn)
+    line.set_color(nCur.hiLn, nyHiTag ? tagCol : nyCol)
+    label.set_textcolor(nCur.hiLb, nyHiTag ? tagCol : nyCol)
+    label.set_text(nCur.hiLb, showLbl ? (nyHiTag ? "Taget" : "NY PRE") : "")
+if showNy and not na(nCur.loLn)
+    line.set_color(nCur.loLn, nyLoTag ? tagCol : nyCol)
+    label.set_textcolor(nCur.loLb, nyLoTag ? tagCol : nyCol)
+    label.set_text(nCur.loLb, showLbl ? (nyLoTag ? "Taget" : "NY PRE") : "")
 
 // ── 15:31: vaek med dem igen. Det er kun en market open-ting. ──
 if m15Gone and array.size(m15s) > 0
