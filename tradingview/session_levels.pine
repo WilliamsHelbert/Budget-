@@ -1,7 +1,12 @@
 //@version=6
 // =====================================================================
-//  Session Levels  (v6.1)
+//  Session Levels  (v6.2)
 //  ---------------------------------------------------------------
+//  NYT I v6.2 (20/10-26)
+//    - 5m highs/lows fra NY PRE er slaaet FRA som standard. Et 5m-niveau
+//      ses kun, naar et SMT- eller Vergence-trade bruger det som BE: saa
+//      tegner Sweep Trade / Vergence BE-linjen. Kan slaas til igen under
+//      "Vis 5m highs/lows fra NY PRE".
 //  NYT I v6.1 (15/10-26)
 //    - Rettet: Asia-linjerne tegnes igen rigtigt. Efter skiftet til NY-tid
 //      starter Asia 20:00 NY dagen foer, og slut-tiden (10:00 NY) blev regnet
@@ -92,7 +97,7 @@ nyCol    = input.color(color.purple, "", group = g3, inline = "n")
 g5 = "NY PRE - 15m / 5m niveauer (market open)"
 showM15 = input.bool(true, "Vis 15m highs/lows fra NY PRE", group = g5,
      tooltip = "Tegnes live under NY PRE, naar hver 15m-candle lukker. NY PRE's eget high og low skjules - de er allerede tegnet i lilla.")
-showM05 = input.bool(true, "Vis 5m highs/lows fra NY PRE", group = g5,
+showM05 = input.bool(false, "Vis 5m highs/lows fra NY PRE", group = g5,
      tooltip = "Som 15m. Et 5m-niveau paa samme pris som et 15m-niveau vises ikke.")
 keepDead = input.bool(false, "Vis taget 15m/5m-niveauer (stoppet linje)", group = g5,
      tooltip = "Fra (standard): et niveau der bliver taget under NY PRE slettes, saa kun de aktive staar tilbage. Til: det bliver staaende som en stoppet linje.")
