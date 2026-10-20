@@ -3,12 +3,15 @@
 //  Session Levels  (v6.2)
 //  ---------------------------------------------------------------
 //  NYT I v6.2 (20/10-26)
-//    - "Taget" (sort): er et 15m-niveau taget paa det ANDET symbol under
-//      NY PRE, men ikke paa chartets, slettes det ikke laengere. Det staar
-//      som en sort linje med "Taget". Er niveauet chartets NY PRE high/low,
-//      bliver selve NY PRE-linjen sort og hedder "Taget" - f.eks. ES' NY PRE
-//      low, naar NQ allerede har lavet et lavere low i den naeste 15m-candle.
+//    - "Taget" (sort): et 15m-niveau der ikke findes paa det ANDET symbol,
+//      staar som en sort linje med "Taget" i stedet for at blive slettet.
+//      Det gaelder, naar niveauet er taget paa det andet symbol under NY PRE,
+//      eller naar den samme 15m-candle paa det andet symbol ER dets NY PRE
+//      high/low. Eks.: NQ laver sit NY PRE low i 14:30-candlen og tager
+//      14:15-lowen, mens ES har sit NY PRE low i 14:15-candlen -> ES'
+//      14:30-low hedder "Taget". NY PRE high/low hedder altid NY PRE.
 //      Tages niveauet senere ogsaa paa chartet, forsvinder det som foer.
+//    - Al tekst er fed.
 //    - Paa ES sammenlignes automatisk med NQ, hvis "Sammenlign med" staar
 //      paa ES (standard). Ellers sammenlignede ES med sig selv.
 //    - 5m highs/lows fra NY PRE er slaaet FRA som standard. Et 5m-niveau
@@ -85,14 +88,13 @@ endMin   = input.int(0,  "Linjer stopper - minut (NY)", minval = 0, maxval = 59,
 lineW    = input.int(2, "Linjetykkelse", minval = 1, maxval = 4, group = g2)
 showLbl  = input.bool(true, "Vis navn ved linjen", group = g2)
 lblSizeS = input.string("Normal", "Tekststoerrelse", options = ["Lille", "Normal", "Stor", "Kaempe"], group = g2)
-lblBold  = input.bool(true, "Fed tekst", group = g2)
 
 lblSize = switch lblSizeS
     "Lille"  => size.small
     "Stor"   => size.large
     "Kaempe" => size.huge
     => size.normal
-lblFmt = lblBold ? text.format_bold : text.format_none
+lblFmt = text.format_bold
 
 g3 = "Vis / farver"
 showAsia = input.bool(true, "Asia",   group = g3, inline = "a")
@@ -111,7 +113,7 @@ keepDead = input.bool(false, "Vis taget 15m/5m-niveauer (stoppet linje)", group 
      tooltip = "Fra (standard): et niveau der bliver taget under NY PRE slettes, saa kun de aktive staar tilbage. Til: det bliver staaende som en stoppet linje.")
 m15Col  = input.color(color.red,    "Farve 15m", group = g5)
 m05Col  = input.color(color.orange, "Farve 5m",  group = g5)
-tagCol  = input.color(color.black,  "Farve taget (kun paa det andet symbol)", group = g5)
+tagCol  = input.color(#000000,  "Farve taget (kun paa det andet symbol)", group = g5)
 m15TF   = input.timeframe("15", "Timeframe A (15m)", group = g5)
 m05TF   = input.timeframe("5",  "Timeframe B (5m)",  group = g5)
 cmpSym  = input.symbol("CME_MINI:ES1!", "Sammenlign med (gyldighed)", group = g5,
@@ -333,6 +335,16 @@ float tickHalf = syminfo.mintick / 2
 
 var array<M15> m15s = array.new<M15>()
 
+// Det andet symbols NY PRE high/low indtil nu (til "Taget")
+var float oHi = na
+var float oLo = na
+if nyBegin
+    oHi := na
+    oLo := na
+if inNy and not na(cBarH)
+    oHi := na(oHi) ? cBarH : math.max(oHi, cBarH)
+    oLo := na(oLo) ? cBarL : math.min(oLo, cBarL)
+
 // ── Ny dag: ryd rester ──
 if nyBegin and array.size(m15s) > 0
     while array.size(m15s) > 0
@@ -408,47 +420,30 @@ if inNy and array.size(m15s) > 0
         else if not m.dead and bHit and not m.tag and m.is15
             // kun taget paa det andet symbol: bliver staaende som "Taget"
             m.tag := true
-            label.set_text(m.lb, showLbl ? "Taget" : "")
         else if not m.dead and bHit and not m.is15
             m.dead := true
             line.delete(m.ln)
             label.delete(m.lb)
 
 // ── Skjul det niveau der ER NY PRE's high/low (den lilla linje) ──
-// Er det kun taget paa det andet symbol, bliver NY PRE-linjen i stedet sort "Taget".
-var bool nyHiTag = false
-var bool nyLoTag = false
-if nStart
-    nyHiTag := false
-    nyLoTag := false
+// Et 15m-niveau der ikke findes paa det andet symbol, staar sort som "Taget":
+// enten taget dér, eller den samme candle ER det andet symbols NY PRE high/low.
 if (inNy or isOpenBar) and array.size(m15s) > 0
-    bool hiT = false
-    bool loT = false
     for i = 0 to array.size(m15s) - 1
         M15 m = array.get(m15s, i)
         if not m.dead
             bool isExtreme = m.isHi
                  ? (not na(nCur.hi) and math.abs(m.aLvl - nCur.hi) < tickHalf)
                  : (not na(nCur.lo) and math.abs(m.aLvl - nCur.lo) < tickHalf)
-            if isExtreme and m.tag
-                hiT := hiT or m.isHi
-                loT := loT or not m.isHi
-            color base = m.tag ? tagCol : (m.is15 ? m15Col : m05Col)
+            bool oExtreme = m.isHi
+                 ? (not na(oHi) and math.abs(m.bLvl - oHi) < tickHalf)
+                 : (not na(oLo) and math.abs(m.bLvl - oLo) < tickHalf)
+            bool taget = m.is15 and not isExtreme and (m.tag or oExtreme)
+            color base = taget ? tagCol : (m.is15 ? m15Col : m05Col)
             color c    = isExtreme ? color.new(base, 100) : base
             line.set_color(m.ln, c)
             label.set_textcolor(m.lb, c)
-    nyHiTag := hiT
-    nyLoTag := loT
-
-// NY PRE-linjen: sort "Taget", saa laenge den staar (paint() saetter teksten igen hver gang)
-if showNy and not na(nCur.hiLn)
-    line.set_color(nCur.hiLn, nyHiTag ? tagCol : nyCol)
-    label.set_textcolor(nCur.hiLb, nyHiTag ? tagCol : nyCol)
-    label.set_text(nCur.hiLb, showLbl ? (nyHiTag ? "Taget" : "NY PRE") : "")
-if showNy and not na(nCur.loLn)
-    line.set_color(nCur.loLn, nyLoTag ? tagCol : nyCol)
-    label.set_textcolor(nCur.loLb, nyLoTag ? tagCol : nyCol)
-    label.set_text(nCur.loLb, showLbl ? (nyLoTag ? "Taget" : "NY PRE") : "")
+            label.set_text(m.lb, showLbl ? (taget ? "Taget" : (m.is15 ? "15m" : "5m")) : "")
 
 // ── 15:31: vaek med dem igen. Det er kun en market open-ting. ──
 if m15Gone and array.size(m15s) > 0
