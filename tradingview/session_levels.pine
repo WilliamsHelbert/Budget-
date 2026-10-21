@@ -11,6 +11,7 @@
 //      14:15-lowen, mens ES har sit NY PRE low i 14:15-candlen -> ES'
 //      14:30-low hedder "Taget". NY PRE high/low hedder altid NY PRE.
 //      Tages niveauet senere ogsaa paa chartet, forsvinder det som foer.
+//    - Kun EET "Taget" pr. side: ved highs det laveste, ved lows det hoejeste.
 //    - Al tekst er fed.
 //    - Paa ES sammenlignes automatisk med NQ, hvis "Sammenlign med" staar
 //      paa ES (standard). Ellers sammenlignede ES med sig selv.
@@ -431,19 +432,34 @@ if inNy and array.size(m15s) > 0
 // ── Skjul det niveau der ER NY PRE's high/low (den lilla linje) ──
 // Et 15m-niveau der ikke findes paa det andet symbol, staar sort som "Taget":
 // enten taget dér, eller den samme candle ER det andet symbols NY PRE high/low.
+isExtremeLvl(M15 m) =>
+    m.isHi ? (not na(nCur.hi) and math.abs(m.aLvl - nCur.hi) < tickHalf) : (not na(nCur.lo) and math.abs(m.aLvl - nCur.lo) < tickHalf)
+
+isTaget(M15 m) =>
+    bool oExtreme = m.isHi
+         ? (not na(oHi) and math.abs(m.bLvl - oHi) < tickHalf)
+         : (not na(oLo) and math.abs(m.bLvl - oLo) < tickHalf)
+    m.is15 and not isExtremeLvl(m) and (m.tag or oExtreme)
+
 if (inNy or isOpenBar) and array.size(m15s) > 0
+    // Kun EET "Taget" pr. side: ved highs det laveste, ved lows det hoejeste
+    float bestHi = na
+    float bestLo = na
+    for i = 0 to array.size(m15s) - 1
+        M15 m = array.get(m15s, i)
+        if not m.dead and isTaget(m)
+            if m.isHi
+                bestHi := na(bestHi) ? m.aLvl : math.min(bestHi, m.aLvl)
+            else
+                bestLo := na(bestLo) ? m.aLvl : math.max(bestLo, m.aLvl)
     for i = 0 to array.size(m15s) - 1
         M15 m = array.get(m15s, i)
         if not m.dead
-            bool isExtreme = m.isHi
-                 ? (not na(nCur.hi) and math.abs(m.aLvl - nCur.hi) < tickHalf)
-                 : (not na(nCur.lo) and math.abs(m.aLvl - nCur.lo) < tickHalf)
-            bool oExtreme = m.isHi
-                 ? (not na(oHi) and math.abs(m.bLvl - oHi) < tickHalf)
-                 : (not na(oLo) and math.abs(m.bLvl - oLo) < tickHalf)
-            bool taget = m.is15 and not isExtreme and (m.tag or oExtreme)
+            bool isExtreme = isExtremeLvl(m)
+            bool taget = isTaget(m)
+            bool best  = taget and math.abs(m.aLvl - (m.isHi ? bestHi : bestLo)) < tickHalf
             color base = taget ? tagCol : (m.is15 ? m15Col : m05Col)
-            color c    = isExtreme ? color.new(base, 100) : base
+            color c    = isExtreme or (taget and not best) ? color.new(base, 100) : base
             line.set_color(m.ln, c)
             label.set_textcolor(m.lb, c)
             label.set_text(m.lb, showLbl ? (taget ? "Taget" : (m.is15 ? "15m" : "5m")) : "")
