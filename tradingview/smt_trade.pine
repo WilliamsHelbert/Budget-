@@ -1,7 +1,12 @@
 //@version=6
 // =====================================================================
-//  SMT - Session Sweep + Trade  (v12)
+//  SMT - Session Sweep + Trade  (v13)
 //  ---------------------------------------------------------------
+//  NYT I v13 (21/10-26)
+//    - SMT-labels vises kun, naar SMT'en bliver til et trade. SMT paa
+//      begge sider, SL > max, intet luk i retningen osv. -> ingen label.
+//      Kan slaas fra under "Trade".
+//
 //  NYT I v12
 //    - Tegner IKKE laengere 15m/5m-niveauerne. Det goer Session Levels
 //      nu (15m roed, 5m orange). SMT'en bruger dem stadig til SMT og BE.
@@ -89,6 +94,8 @@ showMaxLn = input.bool(true, "Tegn max SL-stregen", group = g7)
 blockMax  = input.bool(true, "Ugyldigt trade hvis SL > max", group = g7)
 mxCol     = input.color(color.red, "Max SL-streg", group = g7)
 boxMins   = input.int(30, "Trade-boksens bredde (minutter)", minval = 1, group = g7)
+onlyTradeLbl = input.bool(true, "Vis kun SMT-label naar der kommer et trade", group = g7,
+     tooltip = "Fra: alle SMT-labels vises, ogsaa naar der ikke blev noget trade (fx SMT paa begge sider)")
 keepTrades = input.int(20, "Antal trades beholdt", minval = 1, maxval = 100, group = g7)
 slCol     = input.color(color.red,  "SL", group = g7, inline = "t")
 tpCol     = input.color(color.teal, "TP", group = g7, inline = "t")
@@ -150,6 +157,7 @@ bool nyBegin = inNy and not inNy[1]
 bool lvLive  = tMin >= winS and tMin < remMin
 
 var array<label> smtLbls = array.new<label>()
+var array<label> pendLbls = array.new<label>()  // SMT-labels fra denne bar (slettes hvis intet trade)
 
 // ─────────────────────────── TYPER ───────────────────────────
 type Lvl
@@ -222,6 +230,7 @@ sweepHi(Lvl s, Sig g, string nm, bool ok) =>
                      textcolor = color.white, size = size.small, text_formatting = text.format_bold)
                 label.set_tooltip(lb, nm + "-high taget af kun det ene indeks")
                 array.push(smtLbls, lb)
+                array.push(pendLbls, lb)
     fired
 
 sweepLo(Lvl s, Sig g, string nm, bool ok) =>
@@ -242,6 +251,7 @@ sweepLo(Lvl s, Sig g, string nm, bool ok) =>
                      textcolor = color.black, size = size.small, text_formatting = text.format_bold)
                 label.set_tooltip(lb, nm + "-low taget af kun det ene indeks")
                 array.push(smtLbls, lb)
+                array.push(pendLbls, lb)
     fired
 
 // TP-kandidat: i profit-retningen og MELLEM tpMin og tpPoints fra entry.
@@ -428,6 +438,7 @@ if useLv and lvLive and array.size(lvs) > 0
                  size = size.small, text_formatting = text.format_bold)
             label.set_tooltip(lb, m.src + "-niveau taget af kun det ene indeks")
             array.push(smtLbls, lb)
+            array.push(pendLbls, lb)
 
 bool anyBear = bearA or bearL or bearN or lvBear
 bool anyBull = bullA or bullL or bullN or lvBull
@@ -469,7 +480,10 @@ if array.size(trades) > 0
 bool roomLeft = maxPerDay <= 0 or tradesToday < maxPerDay
 bool sidesOK  = not bothSideBlock or not (sig.hiSide and sig.loSide)
 
+bool armedNow  = false
+bool tradedNow = false
 if useTrade and sig.fired and not armed and roomLeft and sidesOK
+    armedNow := true
     armed    := true
     armShort := sig.isShort
     armLvl   := sig.lvl
@@ -501,6 +515,7 @@ if useTrade and armed and barstate.isconfirmed and sameMin and dirOK and backOK 
 
 if useTrade and armed and barstate.isconfirmed and sameMin and dirOK and backOK and slOK
     armed       := false
+    tradedNow   := true
     tradesToday += 1
     entShort    := armShort
     entLong     := not armShort
@@ -586,6 +601,23 @@ if useTrade and armed and minB != armMinB
     armed := false
 if useTrade and armed and bothSideBlock and sig.hiSide and sig.loSide
     armed := false
+// Kun SMT-labels der bliver til et trade: labelen der satte tradet op gemmes,
+// alle andre fra baren slettes. Bliver det ikke til et trade, slettes den ogsaa.
+var label armLb = na
+if armedNow and array.size(pendLbls) > 0
+    armLb := array.pop(pendLbls)
+if onlyTradeLbl
+    while array.size(pendLbls) > 0
+        label.delete(array.pop(pendLbls))
+else
+    array.clear(pendLbls)
+if tradedNow
+    armLb := na
+else if not armed and not na(armLb)
+    if onlyTradeLbl
+        label.delete(armLb)
+    armLb := na
+
 // Intet trade i minuttet -> stregen fjernes igen
 if not armed and not na(mxLn)
     line.delete(mxLn)
