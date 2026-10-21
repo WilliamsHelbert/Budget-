@@ -1132,6 +1132,12 @@ if vFire
             beL := line.new(time, bc.v, time + beMins * 60000, bc.v, xloc = xloc.bar_time,
                  color = beCol, width = 2, style = line.style_dashed)
             array.push(minLines, beL)
+            // EQ foer open vises kun her - naar den faktisk er tradets BE
+            if bc.src == "EQ foer open"
+                label pl = label.new(time + beMins * 60000, bc.v, "EQ foer open", xloc = xloc.bar_time,
+                     style = label.style_label_left, color = color.new(beCol, 100), textcolor = beCol,
+                     size = size.small, text_formatting = text.format_bold)
+                array.push(minLbls, pl)
 
         // ── SL / TP ──
         float slX = sh ? math.max(m1Hi, px + minSL) : math.min(m1Lo, px - minSL)

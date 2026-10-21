@@ -111,8 +111,8 @@ resetOnOpen    = input.bool(true, "Nulstil ALLE EQ'er ved market open", group = 
      tooltip = "Paa dagens foerste bar fra og med aabningstiden slettes baade aktive og frosne EQ'er, og dagen starter helt forfra.")
 showPreOpen    = input.bool(true, "Vis EQ'er fra foer market open", group = g4,
      tooltip = "Slaa fra for at holde chartet rent indtil aabningen - saa oprettes der slet ingen EQ'er i timerne foer market open.")
-showPreEq      = input.bool(true, "Vis EQ foer open efter open (til BE)", group = g4,
-     tooltip = "Den live EQ lige foer open (eller 15:29-candlens EQ) beholdes efter open som lilla linjer og vokser videre, indtil den rammes.")
+showPreEq      = input.bool(false, "Vis EQ foer open efter open (til BE)", group = g4,
+     tooltip = "Fra som standard (21/10-26): Sweep Trade / Vergence tegner EQ foer open som BE-linje, naar den bliver tradets BE. Til = den live EQ lige foer open (eller 15:29-candlens EQ) beholdes altid efter open og vokser videre, indtil den rammes.")
 preNormal      = input.bool(true, "EQ foer open ligner en normal EQ", group = g4,
      tooltip = "Fra = tegnes som lilla linjer i stedet.")
 preCol         = input.color(color.purple, "Farve EQ foer open (lilla linjer / label)", group = g4)
