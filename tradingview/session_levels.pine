@@ -587,6 +587,8 @@ drawTag(LTag g) =>
         label.set_xy(g.lb, g.e, g.lvl)
         label.set_text(g.lb, showLbl ? "Taget" : "")
         label.set_text_formatting(g.lb, lblFmt)
+    // (if/else-grenene giver forskellige typer - funktionen returnerer derfor bare true)
+    true
 
 if showLonTag
     if lStart
