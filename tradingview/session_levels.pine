@@ -1,7 +1,16 @@
 //@version=6
 // =====================================================================
-//  Session Levels  (v6.2)
+//  Session Levels  (v6.3)
 //  ---------------------------------------------------------------
+//  NYT I v6.3 (21/10-26)
+//    - London "Taget" (sort): laver NQ og ES deres London high i hver sin
+//      15m-candle, faar det symbol hvis high kom FOERST en sort "Taget" paa
+//      sin high i den candle, hvor det andet symbol lavede sin London high.
+//      Lows modsat. Er niveauet allerede taget senere i London, tegnes intet.
+//      Linjen stopper, naar prisen rammer den. Kan slaas fra under "Vis / farver".
+//    - "London + Asia": tog London Asia-high/low paa dette symbol, men har det
+//      andet symbol stadig baade London og Asia, hedder London-linjen her
+//      "London + Asia".
 //  NYT I v6.2 (20/10-26)
 //    - "Taget" (sort): et 15m-niveau der ikke findes paa det ANDET symbol,
 //      staar som en sort linje med "Taget" i stedet for at blive slettet.
@@ -104,6 +113,8 @@ showLon  = input.bool(true, "London", group = g3, inline = "l")
 lonCol   = input.color(color.green,  "", group = g3, inline = "l")
 showNy   = input.bool(true, "NY PRE", group = g3, inline = "n")
 nyCol    = input.color(color.purple, "", group = g3, inline = "n")
+showLonTag = input.bool(true, "London \"Taget\" (sort)", group = g3,
+     tooltip = "Lavede det andet symbol sin London high/low i en senere 15m-candle, faar dette symbol en sort Taget i den candle")
 
 g5 = "NY PRE - 15m / 5m niveauer (market open)"
 showM15 = input.bool(true, "Vis 15m highs/lows fra NY PRE", group = g5,
@@ -471,6 +482,147 @@ if m15Gone and array.size(m15s) > 0
         M15 m = array.pop(m15s)
         line.delete(m.ln)
         label.delete(m.lb)
+
+// ═════════════ LONDON: "Taget" og "London + Asia" ═════════════
+// Lavede NQ og ES deres London high i forskellige 15m-candles, har det symbol
+// hvis high kom FOERST stadig en lavere high i den candle hvor det andet symbol
+// lavede sin London high. Den faar en sort "Taget". Lows modsat.
+int bkt = time - time % 900000
+var array<int>   lB   = array.new<int>()
+var array<float> lBHi = array.new<float>()
+var array<float> lBLo = array.new<float>()
+var array<int>   lBHt = array.new<int>()
+var array<int>   lBLt = array.new<int>()
+var float oLonHi = na
+var float oLonLo = na
+var int   oLonHB = na
+var int   oLonLB = na
+var float oAsHi  = na
+var float oAsLo  = na
+
+if aStart
+    oAsHi := na
+    oAsLo := na
+if aOn and not na(cBarH)
+    oAsHi := na(oAsHi) ? cBarH : math.max(oAsHi, cBarH)
+    oAsLo := na(oAsLo) ? cBarL : math.min(oAsLo, cBarL)
+
+if lStart
+    array.clear(lB)
+    array.clear(lBHi)
+    array.clear(lBLo)
+    array.clear(lBHt)
+    array.clear(lBLt)
+    oLonHi := na
+    oLonLo := na
+    oLonHB := na
+    oLonLB := na
+if lOn
+    int n = array.size(lB)
+    if n == 0 or array.get(lB, n - 1) != bkt
+        array.push(lB, bkt)
+        array.push(lBHi, high)
+        array.push(lBLo, low)
+        array.push(lBHt, time)
+        array.push(lBLt, time)
+    else
+        if high > array.get(lBHi, n - 1)
+            array.set(lBHi, n - 1, high)
+            array.set(lBHt, n - 1, time)
+        if low < array.get(lBLo, n - 1)
+            array.set(lBLo, n - 1, low)
+            array.set(lBLt, n - 1, time)
+    if not na(cBarH)
+        if na(oLonHi) or cBarH > oLonHi
+            oLonHi := cBarH
+            oLonHB := bkt
+        if na(oLonLo) or cBarL < oLonLo
+            oLonLo := cBarL
+            oLonLB := bkt
+
+// Taget-niveau for een side. Kun hvis mit extreme kom foer det andets, og
+// niveauet ikke er taget af mig selv senere i London.
+lonTaget(bool isHi) =>
+    float lvl = na
+    int   lt  = na
+    int   myB = isHi ? lCur.hiT - lCur.hiT % 900000 : lCur.loT - lCur.loT % 900000
+    int   oB  = isHi ? oLonHB : oLonLB
+    int   n   = array.size(lB)
+    if not na(oB) and not na(myB) and oB > myB and n > 0
+        for i = 0 to n - 1
+            int b = array.get(lB, i)
+            if b == oB
+                lvl := isHi ? array.get(lBHi, i) : array.get(lBLo, i)
+                lt  := isHi ? array.get(lBHt, i) : array.get(lBLt, i)
+            else if b > oB and not na(lvl)
+                if isHi ? array.get(lBHi, i) >= lvl : array.get(lBLo, i) <= lvl
+                    lvl := na
+                    lt  := na
+                    break
+    [lvl, lt]
+
+type LTag
+    float lvl = na
+    int   t   = na
+    int   e   = na
+    bool  hit = false
+    line  ln  = na
+    label lb  = na
+
+var LTag tHi = LTag.new()
+var LTag tLo = LTag.new()
+
+drawTag(LTag g) =>
+    if na(g.lvl)
+        line.delete(g.ln)
+        label.delete(g.lb)
+        g.ln := na
+        g.lb := na
+    else
+        if na(g.ln)
+            g.ln := line.new(g.t, g.lvl, g.e, g.lvl, xloc = xloc.bar_time, color = tagCol, width = lineW)
+            g.lb := label.new(g.e, g.lvl, "", xloc = xloc.bar_time, style = label.style_none, textcolor = tagCol, size = lblSize, text_formatting = lblFmt)
+        line.set_xy1(g.ln, g.t, g.lvl)
+        line.set_xy2(g.ln, g.e, g.lvl)
+        label.set_xy(g.lb, g.e, g.lvl)
+        label.set_text(g.lb, showLbl ? "Taget" : "")
+        label.set_text_formatting(g.lb, lblFmt)
+
+if showLonTag
+    if lStart
+        // Ny dag: gamle linjer bliver staaende som historik, nye starter forfra
+        tHi := LTag.new()
+        tLo := LTag.new()
+    if lOn
+        [hl, ht] = lonTaget(true)
+        [ll, lw] = lonTaget(false)
+        tHi.lvl := hl
+        tHi.t   := ht
+        tHi.e   := lCur.endT
+        tLo.lvl := ll
+        tLo.t   := lw
+        tLo.e   := lCur.endT
+        drawTag(tHi)
+        drawTag(tLo)
+    else if not na(lCur.endT) and time <= lCur.endT
+        if not na(tHi.lvl) and not tHi.hit and high >= tHi.lvl
+            tHi.hit := true
+            tHi.e   := time
+            drawTag(tHi)
+        if not na(tLo.lvl) and not tLo.hit and low <= tLo.lvl
+            tLo.hit := true
+            tLo.e   := time
+            drawTag(tLo)
+
+// "London + Asia": London tog Asia her, men paa det andet symbol staar
+// baade London og Asia stadig. Saa er min London-linje begge dele.
+if showLon and not na(lCur.hiLb) and not na(aCur.hi)
+    bool laHi = lCur.hi > aCur.hi and not na(oLonHi) and not na(oAsHi) and oLonHi < oAsHi
+    bool laLo = lCur.lo < aCur.lo and not na(oLonLo) and not na(oAsLo) and oLonLo > oAsLo
+    label.set_text(lCur.hiLb, showLbl ? (laHi ? "London + Asia" : "London") : "")
+    label.set_text(lCur.loLb, showLbl ? (laLo ? "London + Asia" : "London") : "")
+    label.set_text_formatting(lCur.hiLb, lblFmt)
+    label.set_text_formatting(lCur.loLb, lblFmt)
 
 // ─────────────── EKSPORT til andre indikatorer ───────────────
 plot(aCur.hi, "Asia High",   color = asiaCol, display = display.data_window)
