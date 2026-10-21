@@ -43,6 +43,7 @@ BE_MIN, BE_MAX = 2.0, 50.0
 USE_369 = True   # kun minutter med tvaersum 3/6/9
 USE_PRE = True   # EQ fra foer market open som BE-kandidat
 USE_TAGET = True # Taget-regel (se scriptet v3.0)
+TAGET_SESS = ("Asia", "London", "NY PRE")  # sessioner hvor Taget-reglen gaelder (test 21/10-26: London med/uden)
 DBG = None   # saet af datoer ('YYYY-MM-DD') -> LOG faar forklaringer for de dage
 SNAP = None  # dict -> niveauer ved open pr. dag (til charts)
 LOG = []
@@ -347,7 +348,8 @@ def _run(nq_path, es_path, start, end, base):
                 s.aTgL = aq15Lo
 
         def tg(s, isHi):
-            if not USE_TAGET or ((s.maHi or s.mbHi) if isHi else (s.maLo or s.mbLo)):
+            nmS = "Asia" if s is asia else ("London" if s is lon else "NY PRE")
+            if not USE_TAGET or nmS not in TAGET_SESS or ((s.maHi or s.mbHi) if isHi else (s.maLo or s.mbLo)):
                 return None, None
             if isHi:
                 return (s.aTgH, s.bTgH) if s.aHiM != s.bHiM else (None, None)
