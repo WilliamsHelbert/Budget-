@@ -21,6 +21,7 @@ WIN = ("09:30", "12:00")       # sweep + entry (NY-tid) = 15:30-18:00 dansk
 LEG_FROM = "08:00"             # benets top kan ligge fra 14:00 dansk (fx NY PRE high kl. 15:00, 9/1-26)
 TFS = [5, 4, 3, 2, 1]
 EXTRA = set()                  # ekstra sweep-niveauer: "PDH" (forrige dags high/low), "4h" (4h-candles sidste 24 timer)
+FVG_FALLBACK = True            # kun 1 FVG i benet -> reaktion ind i den (12/1-26)
 FVG_NR = 2                     # hvilken 5m FVG (fra bunden af benet) retracementet skal ramme
 
 
@@ -127,10 +128,11 @@ def run_day(d, day, log=print):
             leg = [f for f in leg if f[2] + pd.Timedelta(minutes=5) <= tc]   # kun faerdige FVG'er
             leg = sorted(leg, key=lambda f: f[0])     # fra bunden
             if not tapped:
-                if len(leg) >= FVG_NR and hi >= leg[FVG_NR - 1][0]:
-                    f = leg[FVG_NR - 1]
+                nr = min(FVG_NR, len(leg)) if FVG_FALLBACK else FVG_NR
+                if nr >= 1 and len(leg) >= nr and hi >= leg[nr - 1][0]:
+                    f = leg[nr - 1]
                     tapped = True; rhi, rhiT = hi, t
-                    log(f"{t:%H:%M} rammer 5m FVG nr. {FVG_NR} {sgn*f[0]}-{sgn*f[1]} (benet {sgn*top} -> {sgn*low}, {len(leg)} FVG'er)")
+                    log(f"{t:%H:%M} rammer 5m FVG nr. {nr} {sgn*f[0]}-{sgn*f[1]} (benet {sgn*top} -> {sgn*low}, {len(leg)} FVG'er)")
                 continue
             if hi > rhi:
                 rhi, rhiT = hi, t
