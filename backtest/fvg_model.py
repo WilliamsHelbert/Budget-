@@ -89,14 +89,17 @@ def run_day(d, day, log=print):
             # benets top = hoejeste punkt siden vinduet startede; ny top -> forfra
             if top is None or hi > top:
                 top, topT, low, lowT = hi, t, lo, t
-                swept = None; tapped = False; rhi = None; pick = None
+                swept = None; gone = set(); tapped = False; rhi = None; pick = None
                 continue
             # benet ned: nyt low, og tager det et session-low = sweep
             if not tapped and lo < low:
                 low, lowT = lo, t
-                hit = [nm for nm, v in lvl.items() if lo < sgn * v and (swept is None or nm not in swept)]
+                hit = [nm for nm, v in lvl.items() if lo < sgn * v and nm not in gone]
                 if hit:
-                    swept = " + ".join(([swept] if swept else []) + hit)
+                    # det sweep der taeller er det SIDSTE niveau der tages foer reaktionen
+                    # (tidligere niveauer i samme displacement er bare en del af benet)
+                    gone |= set(hit)
+                    swept = " + ".join(hit)
                     log(f"{t:%H:%M} sweep {' + '.join(hit)} {'low' if short else 'high'} ({sgn*lo})")
                 continue
             if swept is None:
