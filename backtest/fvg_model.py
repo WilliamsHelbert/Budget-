@@ -18,6 +18,7 @@ import pandas as pd
 TZ = "America/New_York"
 SESS = {"Asia": ("20:00", "02:00"), "London": ("02:00", "08:00"), "NY PRE": ("08:00", "09:30")}
 WIN = ("09:30", "12:00")       # sweep + entry (NY-tid) = 15:30-18:00 dansk
+LEG_FROM = "08:00"             # benets top kan ligge fra 14:00 dansk (fx NY PRE high kl. 15:00, 9/1-26)
 TFS = [5, 4, 3, 2, 1]
 EXTRA = set()                  # ekstra sweep-niveauer: "PDH" (forrige dags high/low), "4h" (4h-candles sidste 24 timer)
 FVG_NR = 2                     # hvilken 5m FVG (fra bunden af benet) retracementet skal ramme
@@ -99,10 +100,11 @@ def run_day(d, day, log=print):
             continue
         swept = None; top = None; topT = None; low = None; lowT = None
         tapped = False; rhi = None; rhiT = None; pick = None
-        for t, r in m1[ws:we].iterrows():
+        ls = pd.Timestamp(f"{day} {LEG_FROM}").tz_localize(TZ)
+        for t, r in m1[ls:we].iterrows():
             tc = t + pd.Timedelta(minutes=1)            # candlen er lukket
             hi, lo = (r.high, r.low) if short else (-r.low, -r.high)
-            # benets top = hoejeste punkt siden vinduet startede; ny top -> forfra
+            # benets top = hoejeste punkt siden LEG_FROM; ny top -> forfra
             if top is None or hi > top:
                 top, topT, low, lowT = hi, t, lo, t
                 swept = None; gone = set(); tapped = False; rhi = None; pick = None
@@ -110,7 +112,7 @@ def run_day(d, day, log=print):
             # benet ned: nyt low, og tager det et session-low = sweep
             if not tapped and lo < low:
                 low, lowT = lo, t
-                hit = [nm for nm, v in lvl.items() if lo < sgn * v and nm not in gone]
+                hit = [nm for nm, v in lvl.items() if lo < sgn * v and nm not in gone] if t >= ws else []
                 if hit:
                     # det sweep der taeller er det SIDSTE niveau der tages foer reaktionen
                     # (tidligere niveauer i samme displacement er bare en del af benet)
