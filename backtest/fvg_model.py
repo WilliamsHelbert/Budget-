@@ -1,9 +1,9 @@
 """
 FVG-model (ny, 22/10-26) - foerste udkast.
 
-Short (lows spejlvendt):
- 1. Sweep: i vinduet tager prisen en session high (Asia / London / NY PRE).
- 2. Benet ned: fra toppen efter sweepet til det laveste punkt. Bearish 5m FVG'er
+Short (long spejlvendt):
+ 1. Benet ned fra dagens top (siden 15:30 dansk) tager et session LOW (Asia / London / NY PRE) = sweep.
+ 2. Benet ned: fra toppen til det laveste punkt (efter sweepet). Bearish 5m FVG'er
     i benet taelles fra BUNDEN (nr. 1 = naermest lowet).
  3. Reaktion: prisen retracer op og rammer 5m FVG nr. 2 (high >= dens bund).
  4. Retracement-benet = fra benets low op til toppen af retracementet. Her findes
@@ -74,9 +74,9 @@ def run_day(d, day, log=print):
         # niveauer der stadig er urorte fra sessionens slut til vinduet
         lvl = {}
         for nm, (hi, lo, e) in lv.items():
-            v = hi if short else lo
+            v = lo if short else hi                     # short: sweep af et LOW, reaktion op, short paa inversionen
             pre = d[e:ws - pd.Timedelta(seconds=1)]
-            taken = len(pre) and ((pre.high.max() > v) if short else (pre.low.min() < v))
+            taken = len(pre) and ((pre.low.min() < v) if short else (pre.high.max() > v))
             if not taken:
                 lvl[nm] = v
         if not lvl:
@@ -86,23 +86,20 @@ def run_day(d, day, log=print):
         for t, r in m1[ws:we].iterrows():
             tc = t + pd.Timedelta(minutes=1)            # candlen er lukket
             hi, lo = (r.high, r.low) if short else (-r.low, -r.high)
-            # 1. sweep
-            if swept is None:
-                hit = [nm for nm, v in lvl.items() if hi > sgn * v]
-                if hit:
-                    swept = " + ".join(hit); top, topT = hi, t; low, lowT = lo, t
-                    log(f"{t:%H:%M} sweep {swept} ({'high' if short else 'low'}) {sgn*hi}")
-                continue
-            # ny top over sweepet -> benet starter forfra
-            if hi > top:
-                more = [nm for nm, v in lvl.items() if hi > sgn * v and nm not in swept]
-                if more:
-                    swept += " + " + " + ".join(more)
+            # benets top = hoejeste punkt siden vinduet startede; ny top -> forfra
+            if top is None or hi > top:
                 top, topT, low, lowT = hi, t, lo, t
-                tapped = False; rhi = None; pick = None
+                swept = None; tapped = False; rhi = None; pick = None
                 continue
+            # benet ned: nyt low, og tager det et session-low = sweep
             if not tapped and lo < low:
                 low, lowT = lo, t
+                hit = [nm for nm, v in lvl.items() if lo < sgn * v and (swept is None or nm not in swept)]
+                if hit:
+                    swept = " + ".join(([swept] if swept else []) + hit)
+                    log(f"{t:%H:%M} sweep {' + '.join(hit)} {'low' if short else 'high'} ({sgn*lo})")
+                continue
+            if swept is None:
                 continue
             b5 = tfb[5]
             leg = fvgs(b5 if short else b5.assign(high=-b5.low, low=-b5.high), False, topT.floor("5min"), lowT.floor("5min"))
