@@ -19,6 +19,7 @@ TZ = "America/New_York"
 SESS = {"Asia": ("20:00", "02:00"), "London": ("02:00", "08:00"), "NY PRE": ("08:00", "09:30")}
 WIN = ("09:30", "12:00")       # sweep + entry (NY-tid) = 15:30-18:00 dansk
 TFS = [5, 4, 3, 2, 1]
+EXTRA = set()                  # ekstra sweep-niveauer: "PDH" (forrige dags high/low), "4h" (4h-candles sidste 24 timer)
 FVG_NR = 2                     # hvilken 5m FVG (fra bunden af benet) retracementet skal ramme
 
 
@@ -39,6 +40,21 @@ def levels(d, day):
         x = d[s:e - pd.Timedelta(seconds=1)]
         if len(x):
             out[nm] = (x.high.max(), x.low.min(), e)
+    ws = pd.Timestamp(f"{day.date()} {WIN[0]}").tz_localize(TZ)
+    if "PDH" in EXTRA:
+        # forrige CME-dag: 18:00 i forgaars -> 17:00 i gaar (NY)
+        y = d[pd.Timestamp(f"{(prev - pd.Timedelta(days=1)).date()} 18:00").tz_localize(TZ):pd.Timestamp(f"{prev.date()} 17:00").tz_localize(TZ) - pd.Timedelta(seconds=1)]
+        if day.weekday() == 0:   # mandag: fredagens dag
+            y = d[pd.Timestamp(f"{(day - pd.Timedelta(days=4)).date()} 18:00").tz_localize(TZ):pd.Timestamp(f"{(day - pd.Timedelta(days=3)).date()} 17:00").tz_localize(TZ) - pd.Timedelta(seconds=1)]
+        if len(y):
+            out["PDH/PDL"] = (y.high.max(), y.low.min(), y.index[-1] + pd.Timedelta(seconds=15))
+    if "4h" in EXTRA:
+        x = d[ws - pd.Timedelta(hours=28):ws - pd.Timedelta(seconds=1)]
+        h4 = x.resample("4h", offset="2h").agg({"high": "max", "low": "min"}).dropna()
+        for t, r in h4.iterrows():
+            e = t + pd.Timedelta(hours=4)
+            if ws - pd.Timedelta(hours=24) <= e <= ws:
+                out[f"4h {(t + pd.Timedelta(hours=6)):%H:%M}"] = (r.high, r.low, e)
     return out
 
 
