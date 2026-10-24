@@ -30,6 +30,11 @@ CLOSE = "16:59"
 def load_binance(paths):
     out = []
     for p in paths:
+        if p.endswith(".csv") and open(p).readline().startswith("time,"):      # TradingView-eksport
+            x = pd.read_csv(p)
+            x.index = pd.DatetimeIndex(pd.to_datetime(x.time, utc=True)).tz_convert(TZ)
+            out.append(x[["open", "high", "low", "close"]])
+            continue
         if p.endswith(".zip"):
             z = zipfile.ZipFile(p)
             fh = z.open(z.namelist()[0])
