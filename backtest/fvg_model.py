@@ -34,6 +34,8 @@ RECLAIM_ALL = False            # True: over det hoejeste low (laveste high) bene
 PRE = None                     # fx pd.Timedelta(hours=6): vinduet og benet starter saa meget foer (doegn-overlap, BTC)
 MAX_SWEEP_ENTRY = None         # fx pd.Timedelta(hours=2): max tid fra sweep til entry
 MIN_RR = 0.5                   # MULTI: trade under min RR til 4h TP tages ikke (setuppet springes over)
+OLDEST = False                 # True: entry paa inversion af den AELDSTE FVG i reaktionen (naermest benets ende), ikke den nyeste
+LEG_MID = False                # True: en 5m FVG hoerer til benet, naar dens MIDTERSTE candle er i benet (3. candle maa vaere efter lowet)
 
 
 def load(path):
@@ -188,7 +190,8 @@ def run_day(d, day, log=print):
                 if (c5 if short else -c5) > sweptV:
                     reclaimed = True
             b5 = tfb[5]
-            leg = fvgs(b5 if short else b5.assign(high=-b5.low, low=-b5.high), False, topT.floor("5min"), lowT.floor("5min"))
+            leg = fvgs(b5 if short else b5.assign(high=-b5.low, low=-b5.high), False, topT.floor("5min"),
+                       lowT.floor("5min") + pd.Timedelta(minutes=5 if LEG_MID else 0))
             leg = [f for f in leg if f[2] + pd.Timedelta(minutes=5) <= tc]   # kun faerdige FVG'er
             leg = sorted(leg, key=lambda f: f[0])     # fra bunden
             if not tapped:
@@ -207,7 +210,7 @@ def run_day(d, day, log=print):
                 fs = fvgs(bb, True, lowT.floor(f"{m}min"), tc)
                 fs = [f for f in fs if f[2] + pd.Timedelta(minutes=m) <= tc]
                 if fs:
-                    f = max(fs, key=lambda f: f[2])   # nyeste
+                    f = (min if OLDEST else max)(fs, key=lambda f: f[2])   # nyeste (eller aeldste)
                     if pick is None or m > pick[0]:
                         pick = (m, f)
                         log(f"{t:%H:%M} bruger {m}m FVG {sgn*f[0]}-{sgn*f[1]} (fra {f[2]:%H:%M})")
