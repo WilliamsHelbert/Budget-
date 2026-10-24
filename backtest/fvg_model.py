@@ -35,6 +35,10 @@ PRE = None                     # fx pd.Timedelta(hours=6): vinduet og benet star
 MAX_SWEEP_ENTRY = None         # fx pd.Timedelta(hours=2): max tid fra sweep til entry
 MIN_RR = 0.5                   # MULTI: trade under min RR til 4h TP tages ikke (setuppet springes over)
 OLDEST = False                 # True: entry paa inversion af den AELDSTE FVG i reaktionen (naermest benets ende), ikke den nyeste
+INSIDE = False                 # True: entry-closen skal ligge paa indersiden af det swept niveau (short: over swept low, long: under swept high)
+OWN_LEG = False                # True: et niveau, som benet selv har lavet, taeller ikke som sweep (fx 4h high lavet midt i benet)
+FVG_UNFILLED = False           # True: en 5m FVG i benet, der blev fyldt foer benets ende, taeller ikke
+FVG_NEAR = None                # fx 4: FVG nr. 1 og nr. 2 maa hoejst ligge 4 5m-candles fra hinanden
 LEG_MID = False                # True: en 5m FVG hoerer til benet, naar dens MIDTERSTE candle er i benet (3. candle maa vaere efter lowet)
 
 
@@ -172,6 +176,11 @@ def run_day(d, day, log=print):
             if not tapped and lo < low:
                 low, lowT = lo, t
                 hit = [nm for nm, v in lvl.items() if lo < sgn * v and nm not in gone and t >= lvE[nm]] if t >= ws else []
+                if OWN_LEG and hit:
+                    def own(nm):
+                        y = d[topT:lvE[nm] - pd.Timedelta(seconds=1)]
+                        return len(y) and ((y.low.min() <= lvl[nm]) if short else (y.high.max() >= lvl[nm]))
+                    hit = [nm for nm in hit if not own(nm)]
                 if hit:
                     # det sweep der taeller er det SIDSTE niveau der tages foer reaktionen
                     # (tidligere niveauer i samme displacement er bare en del af benet)
@@ -193,11 +202,18 @@ def run_day(d, day, log=print):
             leg = fvgs(b5 if short else b5.assign(high=-b5.low, low=-b5.high), False, topT.floor("5min"),
                        lowT.floor("5min") + pd.Timedelta(minutes=5 if LEG_MID else 0))
             leg = [f for f in leg if f[2] + pd.Timedelta(minutes=5) <= tc]   # kun faerdige FVG'er
+            if FVG_UNFILLED and not tapped:
+                bm = b5 if short else b5.assign(high=-b5.low, low=-b5.high)
+                lb = lowT.floor("5min")
+                leg = [g for g in leg if not (bm[(bm.index > g[2]) & (bm.index < lb)].high >= g[1]).any()]
             leg = sorted(leg, key=lambda f: f[0])     # fra bunden
             if not tapped:
                 nr = min(FVG_NR, len(leg)) if FVG_FALLBACK else FVG_NR
-                if nr >= 1 and len(leg) >= nr and hi >= leg[nr - 1][0]:
+                near = FVG_NEAR is None or nr < 2 or len(leg) < nr or \
+                    abs(leg[nr - 1][2] - leg[nr - 2][2]) <= pd.Timedelta(minutes=5 * FVG_NEAR)
+                if nr >= 1 and len(leg) >= nr and near and hi >= leg[nr - 1][0]:
                     f = leg[nr - 1]
+                    gaps = [(sgn * g[0], sgn * g[1], g[2]) for g in leg[max(nr - 2, 0):nr]]
                     tapped = True; rhi, rhiT = hi, t
                     log(f"{t:%H:%M} rammer 5m FVG nr. {nr} {sgn*f[0]}-{sgn*f[1]} (benet {sgn*top} -> {sgn*low}, {len(leg)} FVG'er)")
                 continue
@@ -224,13 +240,17 @@ def run_day(d, day, log=print):
             cl = cb.close if short else -cb.close
             if cl < f[0] and RECLAIM and not reclaimed:
                 continue
+            if cl < f[0] and INSIDE and cl <= sweptV:
+                # prisen er allerede forbi niveauet igen: setuppet er doedt, nyt ben starter her
+                top = None; swept = None; tapped = False; pick = None
+                continue
             if cl < f[0] and MAX_SWEEP_ENTRY is not None and tc - sweptT > MAX_SWEEP_ENTRY:
                 continue
             if cl < f[0]:
                 entry = sgn * cl; sl = sgn * rhi; risk = abs(sl - entry)
                 after = d[tc:we + pd.Timedelta(hours=4)]
                 row = dict(dato=day, tid=f"{tc:%H:%M}", retning="SHORT" if short else "LONG", sweep=swept, sweep_tid=f"{sweptT:%H:%M}", ts=tc, sweep_ts=sweptT,
-                           fvg_tf=f"{m}m", entry=entry, sl=sl, risk=risk, ben_top=sgn * top, ben_low=sgn * low,
+                           fvg_tf=f"{m}m", gaps5=gaps, efvg=(sgn * f[0], sgn * f[1], f[2]), rhiT=rhiT, lowT=lowT, topT=topT, entry=entry, sl=sl, risk=risk, ben_top=sgn * top, ben_low=sgn * low,
                            **outcome(after, short, entry, sl, risk))
                 if not MULTI:
                     res.append(row)

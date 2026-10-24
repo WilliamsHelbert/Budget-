@@ -46,6 +46,7 @@ def run(days, verbose=False, **kw):
     f.MULTI = True; f.TP_FUNC = tp_func; f.MIN_RR = 0.0
     f.EXIT_END = lambda day, tc: pd.Timestamp(f"{day} 16:59:45").tz_localize(TZ)
     f.RECLAIM = False; f.CONSUME = False; f.MAX_SWEEP_ENTRY = None
+    f.LEG_MID = False; f.OLDEST = False; f.INSIDE = False; f.OWN_LEG = False; f.FVG_UNFILLED = False; f.FVG_NEAR = None
     for k, v in kw.items(): setattr(f, k, v)
     rows = []
     for day in days:
