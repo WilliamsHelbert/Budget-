@@ -39,6 +39,7 @@ INSIDE = False                 # True: entry-closen skal ligge paa indersiden af
 OWN_LEG = False                # True: et niveau, som benet selv har lavet, taeller ikke som sweep (fx 4h high lavet midt i benet)
 FVG_UNFILLED = False           # True: en 5m FVG i benet, der blev fyldt foer benets ende, taeller ikke
 FVG_NEAR = None                # fx 4: FVG nr. 1 og nr. 2 maa hoejst ligge 4 5m-candles fra hinanden
+SWEEP_GAPS = False             # True: kun 5m gaps lavet til og med sweep-candlen taeller (gaps efter sweepet er ikke valide)
 LEG_MID = False                # True: en 5m FVG hoerer til benet, naar dens MIDTERSTE candle er i benet (3. candle maa vaere efter lowet)
 
 
@@ -202,6 +203,8 @@ def run_day(d, day, log=print):
             leg = fvgs(b5 if short else b5.assign(high=-b5.low, low=-b5.high), False, topT.floor("5min"),
                        lowT.floor("5min") + pd.Timedelta(minutes=5 if LEG_MID else 0))
             leg = [f for f in leg if f[2] + pd.Timedelta(minutes=5) <= tc]   # kun faerdige FVG'er
+            if SWEEP_GAPS and not tapped:
+                leg = [g for g in leg if g[2] - pd.Timedelta(minutes=5) <= sweptT.floor("5min")]
             if FVG_UNFILLED and not tapped:
                 bm = b5 if short else b5.assign(high=-b5.low, low=-b5.high)
                 lb = lowT.floor("5min")
