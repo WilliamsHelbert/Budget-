@@ -26,6 +26,8 @@ EXTRA = set()                  # ekstra sweep-niveauer: "PDH" (forrige dags high
 FVG_FALLBACK = True            # kun 1 FVG i benet -> reaktion ind i den (12/1-26)
 FVG_NR = 2                     # hvilken 5m FVG (fra bunden af benet) retracementet skal ramme
 MULTI = False                  # flere trades per dag: naeste setup kan starte naar forrige trade er ude (SL/TP)
+TP_FUNC = None                 # MULTI: egen TP-funktion (d, day, tc, ben_ende, short, entry, risk) -> pris/None
+EXIT_END = None                # MULTI: (day, tc) -> seneste exit-tid (standard 16:59:45 NY)
 MAX_SWEEP_ENTRY = None         # fx pd.Timedelta(hours=2): max tid fra sweep til entry
 MIN_RR = 0.5                   # MULTI: trade under min RR til 4h TP tages ikke (setuppet springes over)
 
@@ -211,12 +213,12 @@ def run_day(d, day, log=print):
                     res.append(row)
                     log(f"{tc:%H:%M} ENTRY {'SHORT' if short else 'LONG'} {entry} SL {sl} ({risk:.2f} p) - {m}m-candle lukkede gennem FVG")
                     break
-                tp = tp4h(d, tc, sgn * low, short)
+                tp = TP_FUNC(d, day, tc, sgn * low, short, entry, risk) if TP_FUNC else tp4h(d, tc, sgn * low, short)
                 rr = abs(tp - entry) / risk if tp is not None else 0
                 if rr >= MIN_RR:
                     res.append(dict(row, tp_4h=tp, rr=round(rr, 2)))
                     log(f"{tc:%H:%M} ENTRY {'SHORT' if short else 'LONG'} {entry} SL {sl} TP {tp} ({rr:.2f} RR) - {m}m-candle")
-                    ex = exit_time(d[tc:pd.Timestamp(f"{day} 16:59:45").tz_localize(TZ)], short, sl, tp)
+                    ex = exit_time(d[tc:EXIT_END(day, tc) if EXIT_END else pd.Timestamp(f"{day} 16:59:45").tz_localize(TZ)], short, sl, tp)
                     if ex is None:
                         break
                     free = ex
@@ -224,8 +226,10 @@ def run_day(d, day, log=print):
                     log(f"{tc:%H:%M} springer over: {rr:.2f} RR til 4h TP")
                     free = tc
                 # niveauer der er taget frem til nu er brugt; nyt setup kraever et urort niveau
-                y = d[ws:free - pd.Timedelta(seconds=1)]
-                lvl = {nm: v for nm, v in lvl.items() if not ((y.low.min() < v) if short else (y.high.max() > v))}
+                def used(nm, v):
+                    y = d[max(ws, lvE[nm]):free - pd.Timedelta(seconds=1)]
+                    return len(y) and ((y.low.min() < v) if short else (y.high.max() > v))
+                lvl = {nm: v for nm, v in lvl.items() if not used(nm, v)}
                 if not lvl:
                     break
                 top = None; swept = None; tapped = False; pick = None
