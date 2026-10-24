@@ -20,7 +20,9 @@ SESS = {"Asia": ("20:00", "02:00"), "London": ("02:00", "08:00"), "NY PRE": ("08
 WIN = ("09:30", "12:00")       # sweep + entry (NY-tid) = 15:30-18:00 dansk
 LEG_FROM = "08:00"             # benets top kan ligge fra 14:00 dansk (fx NY PRE high kl. 15:00, 9/1-26)
 TFS = [5, 4, 3, 2, 1]
-EXTRA = set()                  # ekstra sweep-niveauer: "PDH" (forrige dags high/low), "4h" (4h-candles sidste 24 timer)
+EXTRA = set()                  # ekstra sweep-niveauer: "PDH" (forrige dags high/low), "4h" (4h-candles sidste 24 timer),
+                               # "4h dag" (dagens 4h-candles fra 00:00 dansk, aktive naar de er lukket),
+                               # "4h alle" (alle urorte 4h highs/lows de sidste 7 dage + dagens)
 FVG_FALLBACK = True            # kun 1 FVG i benet -> reaktion ind i den (12/1-26)
 FVG_NR = 2                     # hvilken 5m FVG (fra bunden af benet) retracementet skal ramme
 MULTI = False                  # flere trades per dag: naeste setup kan starte naar forrige trade er ude (SL/TP)
@@ -52,6 +54,21 @@ def levels(d, day):
             y = d[pd.Timestamp(f"{(day - pd.Timedelta(days=4)).date()} 18:00").tz_localize(TZ):pd.Timestamp(f"{(day - pd.Timedelta(days=3)).date()} 17:00").tz_localize(TZ) - pd.Timedelta(seconds=1)]
         if len(y):
             out["PDH/PDL"] = (y.high.max(), y.low.min(), y.index[-1] + pd.Timedelta(seconds=15))
+    if "4h dag" in EXTRA or "4h alle" in EXTRA:
+        s0 = pd.Timestamp(f"{prev.date()} 18:00").tz_localize(TZ)       # 00:00 dansk
+        if day.weekday() == 0:
+            s0 = pd.Timestamp(f"{(day - pd.Timedelta(days=1)).date()} 18:00").tz_localize(TZ)
+        if "4h alle" in EXTRA:
+            s0 = s0 - pd.Timedelta(days=7)
+        we = pd.Timestamp(f"{day.date()} {WIN[1]}").tz_localize(TZ)
+        x = d[s0:we - pd.Timedelta(seconds=1)]
+        h4 = x.resample("4h", offset="2h").agg({"high": "max", "low": "min"}).dropna()
+        for t, r in h4.iterrows():
+            e = t + pd.Timedelta(hours=4)
+            if t < s0 or e > we:
+                continue
+            nm = f"4h {(t + pd.Timedelta(hours=6)):%d/%m %H:%M}" if "4h alle" in EXTRA else f"4h {(t + pd.Timedelta(hours=6)):%H:%M}"
+            out[nm] = (r.high, r.low, e)
     if "4h" in EXTRA:
         x = d[ws - pd.Timedelta(hours=28):ws - pd.Timedelta(seconds=1)]
         h4 = x.resample("4h", offset="2h").agg({"high": "max", "low": "min"}).dropna()
@@ -113,13 +130,13 @@ def run_day(d, day, log=print):
     for short in (True, False):
         sgn = 1 if short else -1
         # niveauer der stadig er urorte fra sessionens slut til vinduet
-        lvl = {}
+        lvl = {}; lvE = {}
         for nm, (hi, lo, e) in lv.items():
             v = lo if short else hi                     # short: sweep af et LOW, reaktion op, short paa inversionen
             pre = d[e:ws - pd.Timedelta(seconds=1)]
             taken = len(pre) and ((pre.low.min() < v) if short else (pre.high.max() > v))
             if not taken:
-                lvl[nm] = v
+                lvl[nm] = v; lvE[nm] = e
         if not lvl:
             continue
         swept = None; top = None; topT = None; low = None; lowT = None
@@ -139,7 +156,7 @@ def run_day(d, day, log=print):
             # benet ned: nyt low, og tager det et session-low = sweep
             if not tapped and lo < low:
                 low, lowT = lo, t
-                hit = [nm for nm, v in lvl.items() if lo < sgn * v and nm not in gone] if t >= ws else []
+                hit = [nm for nm, v in lvl.items() if lo < sgn * v and nm not in gone and t >= lvE[nm]] if t >= ws else []
                 if hit:
                     # det sweep der taeller er det SIDSTE niveau der tages foer reaktionen
                     # (tidligere niveauer i samme displacement er bare en del af benet)
