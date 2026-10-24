@@ -26,6 +26,7 @@ EXTRA = set()                  # ekstra sweep-niveauer: "PDH" (forrige dags high
 FVG_FALLBACK = True            # kun 1 FVG i benet -> reaktion ind i den (12/1-26)
 FVG_NR = 2                     # hvilken 5m FVG (fra bunden af benet) retracementet skal ramme
 MULTI = False                  # flere trades per dag: naeste setup kan starte naar forrige trade er ude (SL/TP)
+MAX_SWEEP_ENTRY = None         # fx pd.Timedelta(hours=2): max tid fra sweep til entry
 MIN_RR = 0.5                   # MULTI: trade under min RR til 4h TP tages ikke (setuppet springes over)
 
 
@@ -161,7 +162,7 @@ def run_day(d, day, log=print):
                     # det sweep der taeller er det SIDSTE niveau der tages foer reaktionen
                     # (tidligere niveauer i samme displacement er bare en del af benet)
                     gone |= set(hit)
-                    swept = " + ".join(hit)
+                    swept = " + ".join(hit); sweptT = t
                     log(f"{t:%H:%M} sweep {' + '.join(hit)} {'low' if short else 'high'} ({sgn*lo})")
                 continue
             if swept is None:
@@ -198,10 +199,12 @@ def run_day(d, day, log=print):
                 continue
             cb = tfb[m].loc[tc - pd.Timedelta(minutes=m)]
             cl = cb.close if short else -cb.close
+            if cl < f[0] and MAX_SWEEP_ENTRY is not None and tc - sweptT > MAX_SWEEP_ENTRY:
+                continue
             if cl < f[0]:
                 entry = sgn * cl; sl = sgn * rhi; risk = abs(sl - entry)
                 after = d[tc:we + pd.Timedelta(hours=4)]
-                row = dict(dato=day, tid=f"{tc:%H:%M}", retning="SHORT" if short else "LONG", sweep=swept,
+                row = dict(dato=day, tid=f"{tc:%H:%M}", retning="SHORT" if short else "LONG", sweep=swept, sweep_tid=f"{sweptT:%H:%M}",
                            fvg_tf=f"{m}m", entry=entry, sl=sl, risk=risk, ben_top=sgn * top, ben_low=sgn * low,
                            **outcome(after, short, entry, sl, risk))
                 if not MULTI:
