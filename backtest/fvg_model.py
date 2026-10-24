@@ -23,6 +23,8 @@ TFS = [5, 4, 3, 2, 1]
 EXTRA = set()                  # ekstra sweep-niveauer: "PDH" (forrige dags high/low), "4h" (4h-candles sidste 24 timer)
 FVG_FALLBACK = True            # kun 1 FVG i benet -> reaktion ind i den (12/1-26)
 FVG_NR = 2                     # hvilken 5m FVG (fra bunden af benet) retracementet skal ramme
+MULTI = False                  # flere trades per dag: naeste setup kan starte naar forrige trade er ude (SL/TP)
+MIN_RR = 0.5                   # MULTI: trade under min RR til 4h TP tages ikke (setuppet springes over)
 
 
 def load(path):
@@ -79,6 +81,27 @@ def fvgs(b, bull, t0, t1):
     return r
 
 
+def tp4h(d, s, ref, short):
+    """4h-trappen: foerste faerdige 4h low/high forbi ref (benets ende), saa videre bagud mens det bliver lavere/hoejere."""
+    h4 = d[s - pd.Timedelta(days=12):s].resample("4h", offset="2h").agg({"high": "max", "low": "min"}).dropna()
+    c = h4[h4.index + pd.Timedelta(hours=4) <= s].iloc[::-1]
+    v = c.low.values if short else c.high.values
+    better = (lambda a, b: a < b) if short else (lambda a, b: a > b)
+    i = next((k for k in range(len(v)) if better(v[k], ref)), None)
+    if i is None:
+        return None
+    while i + 1 < len(v) and better(v[i + 1], v[i]):
+        i += 1
+    return v[i]
+
+
+def exit_time(after, short, sl, tp):
+    for t, h, l in zip(after.index, after.high.values, after.low.values):
+        if ((h >= sl) if short else (l <= sl)) or (tp is not None and ((l <= tp) if short else (h >= tp))):
+            return t + pd.Timedelta(seconds=15)
+    return None
+
+
 def run_day(d, day, log=print):
     lv = levels(d, day)
     ws = pd.Timestamp(f"{day} {WIN[0]}").tz_localize(TZ)
@@ -102,8 +125,11 @@ def run_day(d, day, log=print):
         swept = None; top = None; topT = None; low = None; lowT = None
         tapped = False; rhi = None; rhiT = None; pick = None
         ls = pd.Timestamp(f"{day} {LEG_FROM}").tz_localize(TZ)
+        free = None                                     # MULTI: tidligst naeste setup (forrige trade ude)
         for t, r in m1[ls:we].iterrows():
             tc = t + pd.Timedelta(minutes=1)            # candlen er lukket
+            if free is not None and t < free:
+                continue
             hi, lo = (r.high, r.low) if short else (-r.low, -r.high)
             # benets top = hoejeste punkt siden LEG_FROM; ny top -> forfra
             if top is None or hi > top:
@@ -158,11 +184,31 @@ def run_day(d, day, log=print):
             if cl < f[0]:
                 entry = sgn * cl; sl = sgn * rhi; risk = abs(sl - entry)
                 after = d[tc:we + pd.Timedelta(hours=4)]
-                res.append(dict(dato=day, tid=f"{tc:%H:%M}", retning="SHORT" if short else "LONG", sweep=swept,
-                                fvg_tf=f"{m}m", entry=entry, sl=sl, risk=risk, ben_top=sgn * top, ben_low=sgn * low,
-                                **outcome(after, short, entry, sl, risk)))
-                log(f"{tc:%H:%M} ENTRY {'SHORT' if short else 'LONG'} {entry} SL {sl} ({risk:.2f} p) - {m}m-candle lukkede gennem FVG")
-                break
+                row = dict(dato=day, tid=f"{tc:%H:%M}", retning="SHORT" if short else "LONG", sweep=swept,
+                           fvg_tf=f"{m}m", entry=entry, sl=sl, risk=risk, ben_top=sgn * top, ben_low=sgn * low,
+                           **outcome(after, short, entry, sl, risk))
+                if not MULTI:
+                    res.append(row)
+                    log(f"{tc:%H:%M} ENTRY {'SHORT' if short else 'LONG'} {entry} SL {sl} ({risk:.2f} p) - {m}m-candle lukkede gennem FVG")
+                    break
+                tp = tp4h(d, tc, sgn * low, short)
+                rr = abs(tp - entry) / risk if tp is not None else 0
+                if rr >= MIN_RR:
+                    res.append(dict(row, tp_4h=tp, rr=round(rr, 2)))
+                    log(f"{tc:%H:%M} ENTRY {'SHORT' if short else 'LONG'} {entry} SL {sl} TP {tp} ({rr:.2f} RR) - {m}m-candle")
+                    ex = exit_time(d[tc:pd.Timestamp(f"{day} 16:59:45").tz_localize(TZ)], short, sl, tp)
+                    if ex is None:
+                        break
+                    free = ex
+                else:
+                    log(f"{tc:%H:%M} springer over: {rr:.2f} RR til 4h TP")
+                    free = tc
+                # niveauer der er taget frem til nu er brugt; nyt setup kraever et urort niveau
+                y = d[ws:free - pd.Timedelta(seconds=1)]
+                lvl = {nm: v for nm, v in lvl.items() if not ((y.low.min() < v) if short else (y.high.max() > v))}
+                if not lvl:
+                    break
+                top = None; swept = None; tapped = False; pick = None
     return res
 
 
@@ -184,6 +230,8 @@ def outcome(after, short, entry, sl, risk):
 
 
 if __name__ == "__main__":
+    if "--multi" in sys.argv:
+        sys.argv.remove("--multi"); MULTI = True
     path, a, b = sys.argv[1:4]
     d = load(path)
     rows = []
