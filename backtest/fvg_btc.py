@@ -161,6 +161,7 @@ def run(d, days):
     f.WIN = ("00:00", "23:59"); f.LEG_FROM = "00:00"
     f.MULTI = True; f.MIN_RR = MIN_TP_R
     f.MAX_SWEEP_ENTRY = pd.Timedelta(hours=2)
+    f.CONSUME = True                                 # et taget niveau kan ikke sweepes igen (2/9: 4h low taget 04:00)
     f.RECLAIM = True                                 # 5m close tilbage over/under liq efter sweepet
     f.TP_FUNC = tp_func
     f.EXIT_END = lambda day, tc: tc + pd.Timedelta(hours=24)

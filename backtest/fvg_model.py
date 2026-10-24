@@ -29,6 +29,8 @@ MULTI = False                  # flere trades per dag: naeste setup kan starte n
 TP_FUNC = None                 # MULTI: egen TP-funktion (d, day, tc, ben_ende, short, entry, risk) -> pris/None
 EXIT_END = None                # MULTI: (day, tc) -> seneste exit-tid (standard 16:59:45 NY)
 RECLAIM = False                # sweep kraever en 5m close tilbage over swept low (under swept high) foer entry
+CONSUME = False                # et niveau er brugt, naar foerste bar krydser det (kan ikke sweepes igen i et nyt ben)
+RECLAIM_ALL = False            # True: over det hoejeste low (laveste high) benet har taget, ikke kun det sidste
 PRE = None                     # fx pd.Timedelta(hours=6): vinduet og benet starter saa meget foer (doegn-overlap, BTC)
 MAX_SWEEP_ENTRY = None         # fx pd.Timedelta(hours=2): max tid fra sweep til entry
 MIN_RR = 0.5                   # MULTI: trade under min RR til 4h TP tages ikke (setuppet springes over)
@@ -148,11 +150,17 @@ def run_day(d, day, log=print):
         tapped = False; rhi = None; rhiT = None; pick = None
         ls = pd.Timestamp(f"{day} {LEG_FROM}").tz_localize(TZ) - (PRE or pd.Timedelta(0))
         free = None                                     # MULTI: tidligst naeste setup (forrige trade ude)
+        prev = None
         for t, r in m1[ls:we].iterrows():
             tc = t + pd.Timedelta(minutes=1)            # candlen er lukket
             if free is not None and t < free:
                 continue
             hi, lo = (r.high, r.low) if short else (-r.low, -r.high)
+            if CONSUME and prev is not None:
+                pl, pt = prev
+                for nm in [nm for nm, v in lvl.items() if pl < sgn * v and pt >= lvE[nm] and pt >= ws]:
+                    del lvl[nm]
+            prev = (lo, t)
             # benets top = hoejeste punkt siden LEG_FROM; ny top -> forfra
             if top is None or hi > top:
                 top, topT, low, lowT = hi, t, lo, t
@@ -167,12 +175,15 @@ def run_day(d, day, log=print):
                     # (tidligere niveauer i samme displacement er bare en del af benet)
                     gone |= set(hit)
                     swept = " + ".join(hit); sweptT = t
-                    sweptV = min(sgn * lvl[nm] for nm in hit); reclaimed = False
+                    sweptV = max(sgn * lvl[nm] for nm in gone if nm in lvl) if RECLAIM_ALL else min(sgn * lvl[nm] for nm in hit)
+                    reclaimed = False
                     log(f"{t:%H:%M} sweep {' + '.join(hit)} {'low' if short else 'high'} ({sgn*lo})")
                 continue
             if swept is None:
                 continue
-            if RECLAIM and not reclaimed and tc.minute % 5 == 0 and (tc - pd.Timedelta(minutes=5)) in tfb[5].index:
+            # sweep-candlen selv taeller ikke: det skal vaere en senere 5m close
+            if RECLAIM and not reclaimed and tc.minute % 5 == 0 and (tc - pd.Timedelta(minutes=5)) in tfb[5].index \
+                    and tc - pd.Timedelta(minutes=5) > sweptT.floor("5min"):
                 c5 = tfb[5].loc[tc - pd.Timedelta(minutes=5)].close
                 if (c5 if short else -c5) > sweptV:
                     reclaimed = True
