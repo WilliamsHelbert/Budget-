@@ -9,8 +9,8 @@
 //      giver et high og et low. Uroerte linjer forlaenges, taget linjer stopper.
 //      Ligger et 4h-niveau paa samme pris som Asia, London eller PDH/PDL,
 //      vises kun session-navnet. Ellers hedder det "4h High" / "4h Low".
+//      Standard: ALLE 4h-candles faar high og low ("Alle uroerte", 10 dage tilbage).
 //      "Dagens": kun 4h-candles fra dagens start (00:00 dansk).
-//      "Alle uroerte": ogsaa uroerte 4h highs/lows fra de sidste dage.
 //    - NY PRE er slaaet fra som standard (kan slaas til under "Vis / farver").
 //    - Linjerne stopper som standard 17:00 NY (23:00 dansk), hvor markedet lukker.
 //  ---------------------------------------------------------------
@@ -134,9 +134,9 @@ pdCol    = input.color(color.blue, "", group = g3, inline = "p")
 g6 = "4h High / Low"
 show4h  = input.bool(true, "Vis 4h highs/lows", group = g6, inline = "h")
 h4Col   = input.color(color.orange, "", group = g6, inline = "h")
-h4Mode  = input.string("Dagens", "Hvilke 4h", options = ["Dagens", "Alle uroerte"], group = g6,
+h4Mode  = input.string("Alle uroerte", "Hvilke 4h", options = ["Alle uroerte", "Dagens"], group = g6,
      tooltip = "Dagens: kun 4h-candles fra dagens start (00:00 dansk). Alle uroerte: ogsaa uroerte 4h highs/lows fra tidligere dage.")
-h4Days  = input.int(5, "Alle uroerte - antal dage tilbage", minval = 1, maxval = 20, group = g6)
+h4Days  = input.int(10, "Alle uroerte - antal dage tilbage", minval = 1, maxval = 30, group = g6)
 h4Keep  = input.bool(true, "Vis taget 4h-niveauer (stoppet linje)", group = g6)
 
 g5 = "NY PRE - 15m / 5m niveauer (market open)"
