@@ -95,6 +95,16 @@ def tp_levels(d, day, s, entry, short):
         if len(x) and ((x.low.min() < v) if short else (x.high.max() > v)):
             continue
         c.append((v, nm.replace(" i gaar", " (i gaar)")))
+    # session der koerer lige nu: dens high/low indtil nu (vises live i indikatoren)
+    for nm, a, b, back in (("Asia", "20:00", "02:00", 1), ("Asia", "20:00", "02:00", 0), ("London", "02:00", "08:00", 0)):
+        s0 = pd.Timestamp(f"{(s - pd.Timedelta(days=back)).date()} {a}").tz_localize(TZ)
+        e = s0 + (pd.Timedelta(hours=6))
+        if s0 <= s < e:
+            x = d[s0:s - pd.Timedelta(seconds=1)]
+            if len(x):
+                v = x.low.min() if short else x.high.max()
+                if (v < entry) if short else (v > entry):
+                    c.append((v, nm + " (live)"))
     return c
 
 
@@ -151,21 +161,24 @@ def run(d, days):
     f.WIN = ("00:00", "23:59"); f.LEG_FROM = "00:00"
     f.MULTI = True; f.MIN_RR = MIN_TP_R
     f.MAX_SWEEP_ENTRY = pd.Timedelta(hours=2)
+    f.RECLAIM = True                                 # 5m close tilbage over/under liq efter sweepet
     f.TP_FUNC = tp_func
     f.EXIT_END = lambda day, tc: tc + pd.Timedelta(hours=24)
+    f.PRE = pd.Timedelta(hours=6)                    # vinduet starter 18:00 NY dagen foer, saa sweeps over midnat ikke tabes
     rows = []
     for day in days:
         for r in f.run_day(d, day, log=lambda *a: None):
             short = r["retning"] == "SHORT"
-            s = pd.Timestamp(f"{day} {r['tid']}").tz_localize(TZ)
-            if r["tid"] < r["sweep_tid"]:                 # entry-candlen lukkede efter midnat
-                s += pd.Timedelta(days=1)
+            s = r["ts"]
+            d0 = pd.Timestamp(day).tz_localize(TZ)
+            if not (d0 <= s < d0 + pd.Timedelta(days=1)):   # hoerer til naboens doegn (overlap)
+                continue
             entry, sl, risk, tp = r["entry"], r["sl"], r["risk"], r["tp_4h"]
             tpn = next(nm for v, nm in tp_levels(d, day, s, entry, short) if v == tp)
             parts = h4_levels(d, s, entry, tp, short)
             R, log = simulate(d, s, s + pd.Timedelta(hours=24), short, entry, sl, tp, parts)
             rows.append(dict(dato=day, ugedag=pd.Timestamp(day).day_name(),
-                             sweep_dk=dk(pd.Timestamp(f"{day} {r['sweep_tid']}").tz_localize(TZ)), entry_dk=dk(s),
+                             sweep_dk=dk(r["sweep_ts"]), entry_dk=dk(s),
                              retning=r["retning"], sweep=r["sweep"], fvg_tf=r["fvg_tf"], entry=entry, sl=sl,
                              risk=round(risk, 2), tp=tp, tp_navn=tpn, tp_R=r["rr"],
                              partials=" / ".join(str(v) for v in parts), R=round(R, 2), forloeb=log))

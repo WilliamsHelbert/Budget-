@@ -28,6 +28,8 @@ FVG_NR = 2                     # hvilken 5m FVG (fra bunden af benet) retracemen
 MULTI = False                  # flere trades per dag: naeste setup kan starte naar forrige trade er ude (SL/TP)
 TP_FUNC = None                 # MULTI: egen TP-funktion (d, day, tc, ben_ende, short, entry, risk) -> pris/None
 EXIT_END = None                # MULTI: (day, tc) -> seneste exit-tid (standard 16:59:45 NY)
+RECLAIM = False                # sweep kraever en 5m close tilbage over swept low (under swept high) foer entry
+PRE = None                     # fx pd.Timedelta(hours=6): vinduet og benet starter saa meget foer (doegn-overlap, BTC)
 MAX_SWEEP_ENTRY = None         # fx pd.Timedelta(hours=2): max tid fra sweep til entry
 MIN_RR = 0.5                   # MULTI: trade under min RR til 4h TP tages ikke (setuppet springes over)
 
@@ -124,7 +126,7 @@ def exit_time(after, short, sl, tp):
 
 def run_day(d, day, log=print):
     lv = levels(d, day)
-    ws = pd.Timestamp(f"{day} {WIN[0]}").tz_localize(TZ)
+    ws = pd.Timestamp(f"{day} {WIN[0]}").tz_localize(TZ) - (PRE or pd.Timedelta(0))
     we = pd.Timestamp(f"{day} {WIN[1]}").tz_localize(TZ)
     x = d[ws - pd.Timedelta(hours=2):we + pd.Timedelta(hours=4)]
     m1 = bars(x, 1)
@@ -144,7 +146,7 @@ def run_day(d, day, log=print):
             continue
         swept = None; top = None; topT = None; low = None; lowT = None
         tapped = False; rhi = None; rhiT = None; pick = None
-        ls = pd.Timestamp(f"{day} {LEG_FROM}").tz_localize(TZ)
+        ls = pd.Timestamp(f"{day} {LEG_FROM}").tz_localize(TZ) - (PRE or pd.Timedelta(0))
         free = None                                     # MULTI: tidligst naeste setup (forrige trade ude)
         for t, r in m1[ls:we].iterrows():
             tc = t + pd.Timedelta(minutes=1)            # candlen er lukket
@@ -165,10 +167,15 @@ def run_day(d, day, log=print):
                     # (tidligere niveauer i samme displacement er bare en del af benet)
                     gone |= set(hit)
                     swept = " + ".join(hit); sweptT = t
+                    sweptV = min(sgn * lvl[nm] for nm in hit); reclaimed = False
                     log(f"{t:%H:%M} sweep {' + '.join(hit)} {'low' if short else 'high'} ({sgn*lo})")
                 continue
             if swept is None:
                 continue
+            if RECLAIM and not reclaimed and tc.minute % 5 == 0 and (tc - pd.Timedelta(minutes=5)) in tfb[5].index:
+                c5 = tfb[5].loc[tc - pd.Timedelta(minutes=5)].close
+                if (c5 if short else -c5) > sweptV:
+                    reclaimed = True
             b5 = tfb[5]
             leg = fvgs(b5 if short else b5.assign(high=-b5.low, low=-b5.high), False, topT.floor("5min"), lowT.floor("5min"))
             leg = [f for f in leg if f[2] + pd.Timedelta(minutes=5) <= tc]   # kun faerdige FVG'er
@@ -201,12 +208,14 @@ def run_day(d, day, log=print):
                 continue
             cb = tfb[m].loc[tc - pd.Timedelta(minutes=m)]
             cl = cb.close if short else -cb.close
+            if cl < f[0] and RECLAIM and not reclaimed:
+                continue
             if cl < f[0] and MAX_SWEEP_ENTRY is not None and tc - sweptT > MAX_SWEEP_ENTRY:
                 continue
             if cl < f[0]:
                 entry = sgn * cl; sl = sgn * rhi; risk = abs(sl - entry)
                 after = d[tc:we + pd.Timedelta(hours=4)]
-                row = dict(dato=day, tid=f"{tc:%H:%M}", retning="SHORT" if short else "LONG", sweep=swept, sweep_tid=f"{sweptT:%H:%M}",
+                row = dict(dato=day, tid=f"{tc:%H:%M}", retning="SHORT" if short else "LONG", sweep=swept, sweep_tid=f"{sweptT:%H:%M}", ts=tc, sweep_ts=sweptT,
                            fvg_tf=f"{m}m", entry=entry, sl=sl, risk=risk, ben_top=sgn * top, ben_low=sgn * low,
                            **outcome(after, short, entry, sl, risk))
                 if not MULTI:
