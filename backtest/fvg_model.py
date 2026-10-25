@@ -27,6 +27,7 @@ FVG_FALLBACK = True            # kun 1 FVG i benet -> reaktion ind i den (12/1-2
 FVG_NR = 2                     # hvilken 5m FVG (fra bunden af benet) retracementet skal ramme
 MULTI = False                  # flere trades per dag: naeste setup kan starte naar forrige trade er ude (SL/TP)
 TP_FUNC = None                 # MULTI: egen TP-funktion (d, day, tc, ben_ende, short, entry, risk) -> pris/None
+ENTRY_OK = None                # MULTI: (day, tc, short, entry) -> False = trade tages ikke (setuppet springes over)
 EXIT_END = None                # MULTI: (day, tc) -> seneste exit-tid (standard 16:59:45 NY)
 RECLAIM = False                # sweep kraever en 5m close tilbage over swept low (under swept high) foer entry
 CONSUME = False                # et niveau er brugt, naar foerste bar krydser det (kan ikke sweepes igen i et nyt ben)
@@ -308,7 +309,7 @@ def run_day(d, day, log=print):
                     break
                 tp = TP_FUNC(d, day, tc, sgn * low, short, entry, risk) if TP_FUNC else tp4h(d, tc, sgn * low, short)
                 rr = abs(tp - entry) / risk if tp is not None else 0
-                if rr >= MIN_RR:
+                if rr >= MIN_RR and (ENTRY_OK is None or ENTRY_OK(day, tc, short, entry)):
                     res.append(dict(row, tp_4h=tp, rr=round(rr, 2)))
                     log(f"{tc:%H:%M} ENTRY {'SHORT' if short else 'LONG'} {entry} SL {sl} TP {tp} ({rr:.2f} RR) - {m}m-candle")
                     ex = exit_time(d[tc:EXIT_END(day, tc) if EXIT_END else pd.Timestamp(f"{day} 16:59:45").tz_localize(TZ)], short, sl, tp)

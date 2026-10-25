@@ -33,6 +33,7 @@ CFG = dict(
 PARTIAL = True       # 25% ud paa high/low af en 4h-candle der lukker mens tradet er aabent
 OLD_SESS = True      # intet nyt liq -> naermeste gamle session, der ikke er taget, uanset hvor langt tilbage
 EXIT = "16:55"       # alt lukkes 16:55 NY = 22:55 DK
+RANGE = None         # (dage, lav, hoej): ingen short under `lav` og ingen long over `hoej` i rangen af de seneste `dage` CME-dage, fx (10, 0.25, 0.75)
 
 d = None             # 15s-data, saettes af load()
 _orig_levels = f.levels
@@ -95,8 +96,40 @@ def _tp_intern(d, day, tc, ref, short, entry, risk):
     return min(c, key=lambda q: abs(q[0] - entry))[0] if c else None
 
 
+_rng = None
+
+
+def _ranges():
+    """High/low af de seneste RANGE[0] afsluttede CME-dage (18:00-17:00 NY) foer hver CME-dag."""
+    global _rng
+    if _rng is not None or not RANGE:
+        return
+    x = d.resample("1min").agg({"high": "max", "low": "min"}).dropna()
+    cme = (x.index + pd.Timedelta(hours=6)).normalize().tz_localize(None)
+    dg = x.groupby(cme).agg({"high": "max", "low": "min"})
+    dg = dg[dg.index.weekday < 5]
+    n = RANGE[0]
+    _rng = pd.DataFrame({"hi": dg.high.rolling(n).max().shift(1), "lo": dg.low.rolling(n).min().shift(1)}).dropna()
+
+
+def range_pos(tc, entry):
+    k = (tc + pd.Timedelta(hours=6)).tz_localize(None).normalize()
+    if k not in _rng.index:
+        return None
+    hi, lo = _rng.loc[k]
+    return (entry - lo) / (hi - lo)
+
+
+def _entry_ok(day, tc, short, entry):
+    p = range_pos(tc, entry)
+    if p is None:
+        return True
+    return p >= RANGE[1] if short else p <= RANGE[2]
+
+
 def configure():
     f.levels = levels
+    f.ENTRY_OK = _entry_ok if RANGE else None
     f.TP_FUNC = _tp_intern
     f.EXIT_END = lambda day, tc: pd.Timestamp(f"{day} 16:59:45").tz_localize(TZ, nonexistent="shift_forward", ambiguous=False)
     for k, v in CFG.items():
@@ -237,6 +270,7 @@ def koer(fra, til, procs=None):
     from multiprocessing import Pool
     days = [f"{x.date()}" for x in pd.bdate_range(fra, til)]
     _sessions()                      # en gang foer fork
+    _ranges()
     with Pool(procs or os.cpu_count()) as p:
         res = p.map(_dag, days)
     return sorted([r for x in res for r in x], key=lambda r: r["ts"])
@@ -258,7 +292,10 @@ if __name__ == "__main__":
     ap.add_argument("--procs", type=int, default=None)
     ap.add_argument("--ingen-rapport", action="store_true")
     ap.add_argument("--tf", type=int, nargs="+", default=[5, 4, 3, 2, 1], help="timeframes (min) der maa give entry, fx --tf 5")
+    ap.add_argument("--range", type=float, nargs=3, metavar=("DAGE", "LAV", "HOEJ"), default=None,
+                    help="ingen short under LAV og ingen long over HOEJ i rangen af de seneste DAGE dage, fx --range 10 0.25 0.75")
     a = ap.parse_args()
+    RANGE = (int(a.range[0]), a.range[1], a.range[2]) if a.range else None
     CFG["TFS"] = sorted(set(a.tf) | {5}, reverse=True)   # 5m bruges altid til ben og sweep
     d = load(a.data)
     print(f"data {d.index[0]:%Y-%m-%d} -> {d.index[-1]:%Y-%m-%d %H:%M} NY, {len(d):,} bars")
