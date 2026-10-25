@@ -16,6 +16,7 @@ python3 backtest/nq_motor/motor.py 2026-10-01 2026-10-19 \
 - `--ud` er mappen, hvor `trades.csv` og `rapport.html` havner.
 - `--data` bruges til andre parquet-filer. De skal have kolonnerne `time` (UTC), `open`, `high`, `low` og `close` med 15s-bars. Står der flere filer, erstatter en senere fil perioden, den dækker.
 - `--ingen-rapport` springer HTML-rapporten over. Over 150 trades viser rapporten kun tabel og måneder, ikke et chart pr. trade.
+- Mangler `pyarrow` (og kan den ikke installeres), læser motoren selv parquet-filerne med `backtest/parquet_lite.py` (zstd via systemets libzstd, snappy, gzip). Resultatet er det samme.
 - Oktober tager ca. 20 sekunder på 4 kerner. Lange perioder deles automatisk over alle kerner.
 
 **Kontrol:** 2026-10-01 → 2026-10-19 skal give **24 trades, +13,98R, 54% vundne**. Giver den noget andet, er data eller regler ændret.
@@ -69,4 +70,5 @@ Setup-reglerne står som flag i `CFG` øverst i `motor.py` og bruges af `backtes
 
 - `motor.py`: regler, kørsel, TP/udfald og CSV.
 - `rapport.py` og `stil.html`: HTML-rapporten (nøgletal, equity-kurve, tabel, regler og et 5m-chart pr. trade).
+- `../parquet_lite.py`: reserve-læser til parquet, når pyarrow mangler.
 - `../fvg_model.py`: selve setup-motoren (ben, gaps, sweep og inversion).

@@ -53,7 +53,12 @@ LEG_MID = False                # True: en 5m FVG hoerer til benet, naar dens MID
 
 
 def load(path):
-    d = pd.read_parquet(path).set_index("time")
+    try:
+        d = pd.read_parquet(path)
+    except ImportError:            # ingen pyarrow: brug den indbyggede laeser
+        from parquet_lite import read_pandas
+        d = read_pandas(path)
+    d = d.set_index("time")
     d.index = d.index.tz_convert(TZ)
     return d[["open", "high", "low", "close"]]
 
