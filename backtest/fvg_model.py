@@ -41,6 +41,7 @@ OWN_LEG = False                # True: et niveau, som benet selv har lavet, tael
 FVG_UNFILLED = False           # True: en 5m FVG i benet, der blev fyldt foer benets ende, taeller ikke
 FVG_NEAR = None                # fx 4: FVG nr. 1 og nr. 2 maa hoejst ligge 4 5m-candles fra hinanden
 SWEEP_GAPS = False             # True: kun 5m gaps lavet til og med sweep-candlen taeller (gaps efter sweepet er ikke valide)
+OPP_SESS = False               # True: tages et session-niveau paa den anden side mellem sweep og entry, droppes setuppet
 RESET_FROM_EXT = False         # True: MAX_SWEEP_RESET maales fra benets seneste extreme i stedet for sweepet
 KEEP_LEG_EXIT = False          # True: samme ben fortsaetter efter et trades exit
 KEEP_LEG = False               # True: MAX_SWEEP_RESET nulstiller kun setuppet, benet fortsaetter
@@ -165,10 +166,28 @@ def run_day(d, day, log=print):
         ls = pd.Timestamp(f"{day} {LEG_FROM}").tz_localize(TZ) - (PRE or pd.Timedelta(0))
         free = None                                     # MULTI: tidligst naeste setup (forrige trade ude)
         prev = None
+        opp = {}                                        # OPP_SESS: session-niveauer paa den anden side (short: highs)
+        if OPP_SESS:
+            for nm, (hi_, lo_, e) in lv.items():
+                if nm.startswith("4h"):
+                    continue
+                v = hi_ if short else lo_
+                pre = d[e:ws - pd.Timedelta(seconds=1)]
+                if not (len(pre) and ((pre.high.max() > v) if short else (pre.low.min() < v))):
+                    opp[nm] = (v, e)
         for t, r in m1[ls:we].iterrows():
             tc = t + pd.Timedelta(minutes=1)            # candlen er lukket
             if free is not None and t < free:
                 continue
+            if opp:
+                hit_o = [nm for nm, (v, e) in opp.items() if t >= e and ((r.high > v) if short else (r.low < v))]
+                for nm in hit_o:
+                    del opp[nm]
+                if hit_o and swept is not None:
+                    # sessionen paa den anden side er taget foer entry: setuppet giver ingen mening
+                    log(f"{t:%H:%M} {' + '.join(hit_o)} taget paa den anden side - setup droppet")
+                    top = None; swept = None; tapped = False; pick = None
+                    continue
             hi, lo = (r.high, r.low) if short else (-r.low, -r.high)
             if CONSUME and prev is not None:
                 pl, pt = prev
