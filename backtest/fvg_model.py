@@ -41,6 +41,9 @@ OWN_LEG = False                # True: et niveau, som benet selv har lavet, tael
 FVG_UNFILLED = False           # True: en 5m FVG i benet, der blev fyldt foer benets ende, taeller ikke
 FVG_NEAR = None                # fx 4: FVG nr. 1 og nr. 2 maa hoejst ligge 4 5m-candles fra hinanden
 SWEEP_GAPS = False             # True: kun 5m gaps lavet til og med sweep-candlen taeller (gaps efter sweepet er ikke valide)
+RESET_FROM_EXT = False         # True: MAX_SWEEP_RESET maales fra benets seneste extreme i stedet for sweepet
+KEEP_LEG_EXIT = False          # True: samme ben fortsaetter efter et trades exit
+KEEP_LEG = False               # True: MAX_SWEEP_RESET nulstiller kun setuppet, benet fortsaetter
 GAP_NOINV = False              # True: et 5m gap der faar en close paa den anden side (inversion) foer sweepet er ugyldigt
 NEW_EXT = False                # True: nyt extreme forbi benets low efter tap -> tap/entry-FVG nulstilles, nyt sweep kan taelle
 GAP_RECENT = False             # True: de to NYESTE 5m gaps foer sweepet (ikke de to laveste); prisen skal ind i begge
@@ -199,9 +202,12 @@ def run_day(d, day, log=print):
                 continue
             if swept is None:
                 continue
-            if MAX_SWEEP_RESET is not None and t - sweptT > MAX_SWEEP_RESET:
-                # for gammelt: setuppet er doedt, nyt ben starter her
-                top = None; swept = None; tapped = False; pick = None
+            if MAX_SWEEP_RESET is not None and t - (lowT if RESET_FROM_EXT else sweptT) > MAX_SWEEP_RESET:
+                # for gammelt: setuppet er doedt (KEEP_LEG: benet fortsaetter, et nyt sweep kan taelle)
+                if KEEP_LEG:
+                    swept = None; tapped = False; pick = None; rhi = None
+                else:
+                    top = None; swept = None; tapped = False; pick = None
                 continue
             # sweep-candlen selv taeller ikke: det skal vaere en senere 5m close
             if RECLAIM and not reclaimed and tc.minute % 5 == 0 and (tc - pd.Timedelta(minutes=5)) in tfb[5].index \
@@ -283,7 +289,7 @@ def run_day(d, day, log=print):
                     ex = exit_time(d[tc:EXIT_END(day, tc) if EXIT_END else pd.Timestamp(f"{day} 16:59:45").tz_localize(TZ)], short, sl, tp)
                     if ex is None:
                         break
-                    free = ex
+                    free = ex.floor("1min") if KEEP_LEG_EXIT else ex
                 else:
                     log(f"{tc:%H:%M} springer over: {rr:.2f} RR til 4h TP")
                     free = tc
@@ -294,7 +300,10 @@ def run_day(d, day, log=print):
                 lvl = {nm: v for nm, v in lvl.items() if not used(nm, v)}
                 if not lvl:
                     break
-                top = None; swept = None; tapped = False; pick = None
+                if KEEP_LEG_EXIT:
+                    swept = None; tapped = False; pick = None; rhi = None; gone = set()
+                else:
+                    top = None; swept = None; tapped = False; pick = None
     return res
 
 
