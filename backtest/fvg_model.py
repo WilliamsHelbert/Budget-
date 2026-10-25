@@ -48,6 +48,7 @@ KEEP_LEG = False               # True: MAX_SWEEP_RESET nulstiller kun setuppet, 
 GAP_NOINV = False              # True: et 5m gap der faar en close paa den anden side (inversion) foer sweepet er ugyldigt
 NEW_EXT = False                # True: nyt extreme forbi benets low efter tap -> tap/entry-FVG nulstilles, nyt sweep kan taelle
 GAP_RECENT = False             # True: de to NYESTE 5m gaps foer sweepet (ikke de to laveste); prisen skal ind i begge
+INV_MIN = 0                    # entry-closen skal ligge mindst saa mange point forbi FVG'en (fx 1)
 LEG_MID = False                # True: en 5m FVG hoerer til benet, naar dens MIDTERSTE candle er i benet (3. candle maa vaere efter lowet)
 
 
@@ -282,15 +283,15 @@ def run_day(d, day, log=print):
                 continue
             cb = tfb[m].loc[tc - pd.Timedelta(minutes=m)]
             cl = cb.close if short else -cb.close
-            if cl < f[0] and RECLAIM and not reclaimed:
+            if cl < f[0] - INV_MIN and RECLAIM and not reclaimed:
                 continue
-            if cl < f[0] and MAX_SWEEP_ENTRY is not None and tc - sweptT > MAX_SWEEP_ENTRY:
+            if cl < f[0] - INV_MIN and MAX_SWEEP_ENTRY is not None and tc - sweptT > MAX_SWEEP_ENTRY:
                 continue
-            if cl < f[0] and INSIDE and cl <= sweptV:
+            if cl < f[0] - INV_MIN and INSIDE and cl <= sweptV:
                 # prisen er allerede forbi niveauet igen: setuppet er doedt, nyt ben starter her
                 top = None; swept = None; tapped = False; pick = None
                 continue
-            if cl < f[0]:
+            if cl < f[0] - INV_MIN:
                 entry = sgn * cl; sl = sgn * rhi; risk = abs(sl - entry)
                 after = d[tc:we + pd.Timedelta(hours=4)]
                 row = dict(dato=day, tid=f"{tc:%H:%M}", retning="SHORT" if short else "LONG", sweep=swept, sweep_tid=f"{sweptT:%H:%M}", ts=tc, sweep_ts=sweptT,
