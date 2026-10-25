@@ -637,8 +637,26 @@ namespace NinjaTrader.NinjaScript.Strategies
 			if (State != State.Realtime) return;
 			string instr = Instrument.MasterInstrument.Name, konto = Account != null ? Account.Name : "";
 			double stop = b.StopPris ?? (b.Kort ? b.IndPris + b.StopAfstand : b.IndPris - b.StopAfstand);
-			Send(string.Format(dk, "**ODIN {0}** {1} {2} {3} @ {4:N2} · stop {5:N2} · {6}", b.Model, b.Kort ? "SHORT" : "LONG",
-				b.IndAntal, instr, b.IndPris, stop, konto));
+			double riskPt = Math.Abs(b.IndPris - stop), riskUsd = riskPt * Instrument.MasterInstrument.PointValue * b.IndAntal;
+			CultureInfo ic = CultureInfo.InvariantCulture;
+			// ODIN | ÅBEN | dato tid DK | trade-id | model | retning antal instrument | fyld | stop | TP | risiko | konto
+			Send(string.Format(ic, "ODIN | ÅBEN | {0} DK | {1} | {2} ({3}) | {4} {5} {6} | fyld {7:0.00} | stop {8:0.00} | TP {9} | risk {10:0.00} pt / {11:0} $ | {12}",
+				DkTid(b.IndTid), TradeId(b), b.Model, b.Navn, b.Kort ? "SHORT" : "LONG", b.IndAntal, instr, b.IndPris, stop,
+				b.TpPris.HasValue ? b.TpPris.Value.ToString("0.00", ic) : "-", riskPt, riskUsd, konto));
+		}
+
+		// dansk tid til Discord-beskeden
+		private string DkTid(DateTime t)
+		{
+			TimeZoneInfo cph = TimeZoneInfo.FindSystemTimeZoneById("Romance Standard Time");
+			return TimeZoneInfo.ConvertTime(t, NinjaTrader.Core.Globals.GeneralOptions.TimeZoneInfo, cph).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+		}
+
+		// samme id paa aabning og lukning: model + entry-tid (NY)
+		private string TradeId(Ben b)
+		{
+			DateTime indNy = TimeZoneInfo.ConvertTime(b.IndTid, NinjaTrader.Core.Globals.GeneralOptions.TimeZoneInfo, newYork);
+			return string.Format(CultureInfo.InvariantCulture, "{0}-{1:yyyyMMdd-HHmmss}", b.Model, indNy);
 		}
 
 		private void LogUd(Ben b, string grund, double ud, DateTime tid)
@@ -647,8 +665,10 @@ namespace NinjaTrader.NinjaScript.Strategies
 			string instr = Instrument.MasterInstrument.Name, konto = Account != null ? Account.Name : "";
 			double pt = (ud - b.IndPris) * (b.Kort ? -1 : 1);
 			double usd = pt * Instrument.MasterInstrument.PointValue * b.IndAntal;
-			Send(string.Format(dk, "**ODIN {0}** lukket ({1}) · {2} {3} {4} {5:N2} → {6:N2} · {7:+0.00;-0.00} pt · **{8:+#,##0;-#,##0} $** · {9}",
-				b.Model, grund, b.Kort ? "SHORT" : "LONG", b.IndAntal, instr, b.IndPris, ud, pt, usd, konto));
+			double r = b.StopPt > 0 ? pt / b.StopPt : 0;
+			// ODIN | LUKKET | dato tid DK | trade-id | model | retning antal instrument | ind -> ud | grund | point | $ | R | konto
+			Send(string.Format(CultureInfo.InvariantCulture, "ODIN | LUKKET | {0} DK | {1} | {2} ({3}) | {4} {5} {6} | {7:0.00} → {8:0.00} | {9} | {10:+0.00;-0.00;0.00} pt | {11:+0;-0;0} $ | {12:+0.00;-0.00;0.00} R | {13}",
+				DkTid(tid), TradeId(b), b.Model, b.Navn, b.Kort ? "SHORT" : "LONG", b.IndAntal, instr, b.IndPris, ud, grund, pt, usd, r, konto));
 			TimeZoneInfo ntZone = NinjaTrader.Core.Globals.GeneralOptions.TimeZoneInfo;
 			DateTime indNy = TimeZoneInfo.ConvertTime(b.IndTid, ntZone, newYork), udNy = TimeZoneInfo.ConvertTime(tid, ntZone, newYork);
 			CultureInfo ic = CultureInfo.InvariantCulture;
