@@ -33,6 +33,7 @@ CONSUME = False                # et niveau er brugt, naar foerste bar krydser de
 RECLAIM_ALL = False            # True: over det hoejeste low (laveste high) benet har taget, ikke kun det sidste
 PRE = None                     # fx pd.Timedelta(hours=6): vinduet og benet starter saa meget foer (doegn-overlap, BTC)
 MAX_SWEEP_ENTRY = None         # fx pd.Timedelta(hours=2): max tid fra sweep til entry
+MAX_SWEEP_RESET = None         # som MAX_SWEEP_ENTRY, men setuppet nulstilles saa et nyt sweep kan taelle
 MIN_RR = 0.5                   # MULTI: trade under min RR til 4h TP tages ikke (setuppet springes over)
 OLDEST = False                 # True: entry paa inversion af den AELDSTE FVG i reaktionen (naermest benets ende), ikke den nyeste
 INSIDE = False                 # True: entry-closen skal ligge paa indersiden af det swept niveau (short: over swept low, long: under swept high)
@@ -40,6 +41,8 @@ OWN_LEG = False                # True: et niveau, som benet selv har lavet, tael
 FVG_UNFILLED = False           # True: en 5m FVG i benet, der blev fyldt foer benets ende, taeller ikke
 FVG_NEAR = None                # fx 4: FVG nr. 1 og nr. 2 maa hoejst ligge 4 5m-candles fra hinanden
 SWEEP_GAPS = False             # True: kun 5m gaps lavet til og med sweep-candlen taeller (gaps efter sweepet er ikke valide)
+NEW_EXT = False                # True: nyt extreme forbi benets low efter tap -> tap/entry-FVG nulstilles, nyt sweep kan taelle
+GAP_RECENT = False             # True: de to NYESTE 5m gaps foer sweepet (ikke de to laveste); prisen skal ind i begge
 LEG_MID = False                # True: en 5m FVG hoerer til benet, naar dens MIDTERSTE candle er i benet (3. candle maa vaere efter lowet)
 
 
@@ -173,6 +176,8 @@ def run_day(d, day, log=print):
                 top, topT, low, lowT = hi, t, lo, t
                 swept = None; gone = set(); tapped = False; rhi = None; pick = None
                 continue
+            if NEW_EXT and tapped and lo < low:
+                tapped = False; rhi = None; pick = None
             # benet ned: nyt low, og tager det et session-low = sweep
             if not tapped and lo < low:
                 low, lowT = lo, t
@@ -192,6 +197,10 @@ def run_day(d, day, log=print):
                     log(f"{t:%H:%M} sweep {' + '.join(hit)} {'low' if short else 'high'} ({sgn*lo})")
                 continue
             if swept is None:
+                continue
+            if MAX_SWEEP_RESET is not None and t - sweptT > MAX_SWEEP_RESET:
+                # for gammelt: setuppet er doedt, nyt ben starter her
+                top = None; swept = None; tapped = False; pick = None
                 continue
             # sweep-candlen selv taeller ikke: det skal vaere en senere 5m close
             if RECLAIM and not reclaimed and tc.minute % 5 == 0 and (tc - pd.Timedelta(minutes=5)) in tfb[5].index \
@@ -214,6 +223,8 @@ def run_day(d, day, log=print):
                 nr = min(FVG_NR, len(leg)) if FVG_FALLBACK else FVG_NR
                 near = FVG_NEAR is None or nr < 2 or len(leg) < nr or \
                     abs(leg[nr - 1][2] - leg[nr - 2][2]) <= pd.Timedelta(minutes=5 * FVG_NEAR)
+                if GAP_RECENT and len(leg) >= nr:
+                    leg = sorted(sorted(leg, key=lambda g: g[2])[-nr:], key=lambda g: g[0])
                 if nr >= 1 and len(leg) >= nr and near and hi >= leg[nr - 1][0]:
                     f = leg[nr - 1]
                     gaps = [(sgn * g[0], sgn * g[1], g[2]) for g in leg[max(nr - 2, 0):nr]]
@@ -243,11 +254,11 @@ def run_day(d, day, log=print):
             cl = cb.close if short else -cb.close
             if cl < f[0] and RECLAIM and not reclaimed:
                 continue
+            if cl < f[0] and MAX_SWEEP_ENTRY is not None and tc - sweptT > MAX_SWEEP_ENTRY:
+                continue
             if cl < f[0] and INSIDE and cl <= sweptV:
                 # prisen er allerede forbi niveauet igen: setuppet er doedt, nyt ben starter her
                 top = None; swept = None; tapped = False; pick = None
-                continue
-            if cl < f[0] and MAX_SWEEP_ENTRY is not None and tc - sweptT > MAX_SWEEP_ENTRY:
                 continue
             if cl < f[0]:
                 entry = sgn * cl; sl = sgn * rhi; risk = abs(sl - entry)
