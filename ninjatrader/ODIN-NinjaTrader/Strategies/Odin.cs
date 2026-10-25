@@ -131,6 +131,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 		// den aabne handel (til log)
 		protected double aabenStopPt;
+		protected double aabenTp = double.NaN, aabenTpPt;   // TP som pris (Gungner/Sleipner) eller point fra fyld (Hugin/Munin)
 		protected bool beFlyttet;
 
 		// log
@@ -309,8 +310,10 @@ namespace NinjaTrader.NinjaScript.Strategies
 						: o.Name == "Tid" ? "tid" : o.Name == Signal ? "afloest" : o.Name;
 					if (!erEntry || marketPosition != (indKort ? MarketPosition.Short : MarketPosition.Long))
 					{
-						Send(string.Format(dk, "**ODIN {0}** lukket ({1}) · {2} {3} {4} {5:N2} → {6:N2} · {7:+0.00;-0.00} pt · **{8:+#,##0;-#,##0} $** · {9}",
-							Model, grund, indKort ? "SHORT" : "LONG", indAntal, instr, indPris, ud, pt, usd, konto));
+						double r = aabenStopPt > 0 ? pt / aabenStopPt : 0;
+						// ODIN | LUKKET | dato tid DK | trade-id | model | retning antal instrument | ind -> ud | grund | point | $ | R | konto
+						Send(string.Format(CultureInfo.InvariantCulture, "ODIN | LUKKET | {0} DK | {1} | {2} | {3} {4} {5} | {6:0.00} → {7:0.00} | {8} | {9:+0.00;-0.00;0.00} pt | {10:+0;-0;0} $ | {11:+0.00;-0.00;0.00} R | {12}",
+							DkTid(time), TradeId(), Model, indKort ? "SHORT" : "LONG", indAntal, instr, indPris, ud, grund, pt, usd, r, konto));
 						if (SkrivLogfil)
 							SkrivHandel(grund, ud, pt, usd, time, instr, konto);
 						SendOdin(grund, ud, pt, usd, time, instr, konto);
@@ -323,8 +326,27 @@ namespace NinjaTrader.NinjaScript.Strategies
 			indPris = o.AverageFillPrice; indAntal = Position.Quantity > 0 ? Position.Quantity : o.Filled; indTid = time;
 			indKort = o.OrderAction == OrderAction.SellShort || o.OrderAction == OrderAction.Sell;
 			double stop = indKort ? indPris + aabenStopPt : indPris - aabenStopPt;
-			Send(string.Format(dk, "**ODIN {0}** {1} {2} {3} @ {4:N2} · stop {5:N2} · {6}", Model, indKort ? "SHORT" : "LONG",
-				indAntal, instr, indPris, stop, konto));
+			double tp = !double.IsNaN(aabenTp) ? aabenTp : aabenTpPt > 0 ? (indKort ? indPris - aabenTpPt : indPris + aabenTpPt) : double.NaN;
+			double riskUsd = aabenStopPt * Instrument.MasterInstrument.PointValue * indAntal;
+			CultureInfo ic = CultureInfo.InvariantCulture;
+			// ODIN | ÅBEN | dato tid DK | trade-id | model | retning antal instrument | fyld | stop | TP | risiko | konto
+			Send(string.Format(ic, "ODIN | ÅBEN | {0} DK | {1} | {2} | {3} {4} {5} | fyld {6:0.00} | stop {7:0.00} | TP {8} | risk {9:0.00} pt / {10:0} $ | {11}",
+				DkTid(indTid), TradeId(), Model, indKort ? "SHORT" : "LONG", indAntal, instr, indPris, stop,
+				double.IsNaN(tp) ? "-" : tp.ToString("0.00", ic), aabenStopPt, riskUsd, konto));
+		}
+
+		// dansk tid til Discord-beskeden
+		private string DkTid(DateTime t)
+		{
+			TimeZoneInfo cph = TimeZoneInfo.FindSystemTimeZoneById("Romance Standard Time");
+			return TimeZoneInfo.ConvertTime(t, NinjaTrader.Core.Globals.GeneralOptions.TimeZoneInfo, cph).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+		}
+
+		// samme id paa aabning og lukning: model + entry-tid (NY)
+		private string TradeId()
+		{
+			DateTime indNy = TimeZoneInfo.ConvertTime(indTid, NinjaTrader.Core.Globals.GeneralOptions.TimeZoneInfo, newYork);
+			return string.Format(CultureInfo.InvariantCulture, "{0}-{1:yyyyMMdd-HHmmss}", Model, indNy);
 		}
 
 		private void Send(string tekst)
@@ -530,6 +552,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 					SetProfitTarget(Signal, CalculationMode.Ticks, od.TpPt / TickSize);
 				aaben = od;
 				aabenStopPt = od.StopPt;
+				aabenTp = double.NaN; aabenTpPt = od.TpPt;
 				beFlyttet = false;
 				Meld(od.Kort, antal);
 				if (od.Kort) EnterShort(0, antal, Signal);
@@ -688,6 +711,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 			}
 			double stopPt = Math.Abs(x.Entry - x.Sl.Value);
 			aabenStopPt = stopPt;
+			aabenTp = x.Tp.Value; aabenTpPt = 0;
 			beFlyttet = false;
 			SetStopLoss(Signal, CalculationMode.Price, x.Sl.Value, false);
 			SetProfitTarget(Signal, CalculationMode.Price, x.Tp.Value);
