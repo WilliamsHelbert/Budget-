@@ -257,7 +257,9 @@ if __name__ == "__main__":
     ap.add_argument("--data", nargs="+", default=DATA, help="parquet-filer (time, open, high, low, close; 15s); senere filer vinder")
     ap.add_argument("--procs", type=int, default=None)
     ap.add_argument("--ingen-rapport", action="store_true")
+    ap.add_argument("--tf", type=int, nargs="+", default=[5, 4, 3, 2, 1], help="timeframes (min) der maa give entry, fx --tf 5")
     a = ap.parse_args()
+    CFG["TFS"] = sorted(set(a.tf) | {5}, reverse=True)   # 5m bruges altid til ben og sweep
     d = load(a.data)
     print(f"data {d.index[0]:%Y-%m-%d} -> {d.index[-1]:%Y-%m-%d %H:%M} NY, {len(d):,} bars")
     rows = koer(a.fra, a.til, a.procs)
