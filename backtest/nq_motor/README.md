@@ -1,7 +1,8 @@
 # NQ FVG-motoren
 
 Motoren tager Williams NQ-model (sweep, reaktion og inversion) og kører den på 15s-data. Ud kommer en CSV og en HTML-rapport med alle trades.
-Den er tunet på hans oktober 2026. Den finder 23 af hans 24 trades fra 1.–19. oktober, og den sidste (13/10 11:08) er ugyldig efter reglerne.
+Setup-reglerne er tunet på hans oktober 2026. Med entry på signalet finder de 23 af hans 24 trades fra 1.–19. oktober, og den sidste (13/10 11:08) er ugyldig efter reglerne.
+Siden 26/10-2026 tager motoren entry med en limit i 0,705 (golden pocket) og fuld TP på session-liq. Det er den kombination af entry, SL og TP, der klarede sig bedst over 2022–2026 uden ekstra filtre.
 
 ## Kør den
 
@@ -18,7 +19,7 @@ python3 backtest/nq_motor/motor.py 2026-10-01 2026-10-19 \
 - `--ingen-rapport` springer HTML-rapporten over. Over 150 trades viser rapporten kun tabel og måneder, ikke et chart pr. trade.
 - Oktober tager ca. 20 sekunder på 4 kerner. Lange perioder deles automatisk over alle kerner.
 
-**Kontrol:** 2026-10-01 → 2026-10-19 skal give **24 trades, +13,98R, 54% vundne**. Giver den noget andet, er data eller regler ændret.
+**Kontrol:** 2026-10-01 → 2026-10-19 skal give **16 trades, +28,71R, 31% vundne**. Med `ENTRY_GP = None`, `PARTIAL = True` og `H4_TP = True` (den gamle motor) giver den 24 trades og +13,98R. Giver den noget andet, er data eller regler ændret.
 
 ### Data
 
@@ -45,20 +46,22 @@ Short er beskrevet her. Long er det samme spejlvendt. Forløbet for en short: be
 4. **Sweep:** Prisen tager et low (liq) og laver en 5m close tilbage over det (`RECLAIM`).
 5. **Modsat session:** Tager prisen et session-high (short) eller session-low (long) på den anden side, før der er entry, er setuppet dødt (`OPP_SESS`).
 6. **2 timer:** Kommer der ingen entry inden for 2 timer efter sweepet, dør setuppet, men benet lever videre, og et nyt sweep i samme ben kan give en trade (`MAX_SWEEP_RESET`, `KEEP_LEG`).
-7. **Entry:** Reaktionen op skal nå ind i begge 5m gaps. Entry sker, når en candle (1–5m) **closer mindst 1 point** under det ældste bullish gap i reaktionen (`OLDEST`, `INV_MIN=1`). Den højeste timeframe vinder, så et 5m gap lavet til sidst efter sweepet bliver brugt.
+7. **Signal:** Reaktionen op skal nå ind i begge 5m gaps. Signalet kommer, når en candle (1–5m) **closer mindst 1 point** under det ældste bullish gap i reaktionen (`OLDEST`, `INV_MIN=1`). Den højeste timeframe vinder, så et 5m gap lavet til sidst efter sweepet bliver brugt.
+   **Entry:** En limit 0,705 af vejen fra signalets close op mod SL (`ENTRY_GP = 0.705`). Bliver den ikke fyldt inden 22:55 DK, eller når prisen TP først, er der intet trade. Risikoen er derfor kun ca. 30% af afstanden fra signalet til SL.
 8. **SL:** Toppen af reaktionen.
 9. **TP**, i denne rækkefølge:
    1. Nærmeste uberørte Asia/London/PDH/PDL (i dag eller i går) mindst 1R væk.
    2. Ellers den nærmeste **gamle session** (Asia/London), der ikke er taget siden, uanset hvor langt tilbage. William gør det samme.
-   3. Ellers nærmeste uberørte 4h mindst 1R væk.
-   4. Ellers 4R (ATH, hvor der intet liq er).
+   3. Ellers 4R (ATH, hvor der intet liq er). 4h-niveauer bruges ikke som TP (`H4_TP = False`).
+
+   TP vælges ud fra signalet, så 1R betyder afstanden fra signalet til SL. R i resultatet regnes fra den rigtige entry.
 
    Bliver en ny Asia/London færdig under tradet, og ligger dens low (short) i profit og tættere end TP, bliver den ny TP.
-10. **25% ud:** Lukker en 4h-candle, mens tradet er åbent, og prisen bagefter når dens low (short) eller high (long) før SL/TP, tages 25% ud der. Så er R = 0,25·R(4h) + 0,75·R(resten). CSV'en har begge tal.
+10. **Ingen partial:** Hele positionen går til TP (`PARTIAL = False`). Med `PARTIAL = True` tages 25% ud på high/low af en 4h-candle, der lukker under tradet.
 11. **Lukketid:** Alt lukkes 16:55 NY = 22:55 DK.
 12. Der kan være flere trades om dagen. Et nyt setup kan starte, når forrige trade er ude.
 
-Setup-reglerne står som flag i `CFG` øverst i `motor.py` og bruges af `backtest/fvg_model.py`. Resultat-reglerne er `PARTIAL`, `OLD_SESS` og `EXIT` i `motor.py`.
+Setup-reglerne står som flag i `CFG` øverst i `motor.py` og bruges af `backtest/fvg_model.py`. Resultat-reglerne er `ENTRY_GP`, `PARTIAL`, `H4_TP`, `OLD_SESS` og `EXIT` i `motor.py`. CSV'en har både signalets tid og pris (`signal_dk`, `signal_entry`) og den rigtige entry.
 
 ## Åbne punkter (ikke kodet endnu)
 

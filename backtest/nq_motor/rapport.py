@@ -119,7 +119,7 @@ def equity(rows):
     return "".join(o)
 
 
-def html_rapport(rows, titel, fra, til):
+def html_rapport(rows, titel, fra, til, gp=None, partial=False, h4=False):
     stil = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "stil.html")).read().replace("{TITEL}", html.escape(titel))
     Rs = [r["R"] for r in rows]; tot = sum(Rs)
     cum, peak, dd = 0, 0, 0
@@ -142,7 +142,7 @@ def html_rapport(rows, titel, fra, til):
   <header class="hero">
     <div class="eyebrow">NQ · FVG-motoren · {fra} – {til}</div>
     <h1>{html.escape(titel)}</h1>
-    <p class="lede">Alle trades motoren tager i perioden. Sweep af liq, reaktion ind i de to nyeste 5m gaps, entry på inversion af det ældste gap i reaktionen. Alle tider er dansk tid.</p>
+    <p class="lede">Alle trades motoren tager i perioden. Sweep af liq, reaktion ind i de to nyeste 5m gaps, {"entry med limit i " + f"{gp:.3f}".replace(".", ",") + " af vejen tilbage mod SL efter inversionen" if gp else "entry på inversion af det ældste gap i reaktionen"}. Alle tider er dansk tid.</p>
     <div class="stats">
       <div class="stat"><b>{len(rows)}</b><span>trades</span></div>
       <div class="stat"><b class="{"pos" if tot > 0 else "neg"}">{tot:+.2f}R</b><span>i alt</span></div>
@@ -161,9 +161,9 @@ def html_rapport(rows, titel, fra, til):
     <div class="rule"><b>Liq</b>Asia (02:00–08:00 DK), London (08:00–14:00 DK), PDH/PDL, gårsdagens sessions og 4h-candles en uge tilbage. Et niveau kan kun sweepes én gang.</div>
     <div class="rule"><b>Benet og gaps</b>De to nyeste 5m gaps i benet, lavet til og med sweep-candlen. Et gap, der blev inverseret før sweepet, tæller ikke.</div>
     <div class="rule"><b>Sweep</b>Sweep af liq og en 5m close tilbage over niveauet. Tager prisen et session-niveau på den anden side før entry, er setuppet dødt. Ingen entry inden for 2 timer: setuppet dør, men benet lever.</div>
-    <div class="rule"><b>Entry</b>Reaktionen skal ind i begge 5m gaps. Entry på close mindst 1 point forbi det ældste gap i reaktionen (1–5m, højeste timeframe vinder). SL på toppen af reaktionen.</div>
-    <div class="rule"><b>TP</b>Nærmeste uberørte session/PDH/PDL mindst 1R væk. Ellers den nærmeste gamle session, der ikke er taget, uanset hvor langt tilbage. Ellers 4h, og på ATH 4R. En session, der bliver færdig under tradet og ligger tættere, bliver ny TP.</div>
-    <div class="rule"><b>Styring</b>25% ud på high/low af en 4h-candle, der lukker under tradet. Alt lukkes 22:55 DK.</div>
+    <div class="rule"><b>Entry</b>Reaktionen skal ind i begge 5m gaps. Signal på close mindst 1 point forbi det ældste gap i reaktionen (1–5m, højeste timeframe vinder). {("Entry med limit " + f"{gp:.3f}".replace(".", ",") + " af vejen fra signalet mod SL. Fyldes den ikke, eller når prisen TP først, er der intet trade.") if gp else "Entry på signalet."} SL på toppen af reaktionen.</div>
+    <div class="rule"><b>TP</b>Nærmeste uberørte session/PDH/PDL mindst 1R væk. Ellers den nærmeste gamle session, der ikke er taget, uanset hvor langt tilbage. {"Ellers 4h, og" if h4 else "Ellers,"} på ATH 4R. En session, der bliver færdig under tradet og ligger tættere, bliver ny TP.</div>
+    <div class="rule"><b>Styring</b>{"25% ud på high/low af en 4h-candle, der lukker under tradet." if partial else "Hele positionen går til TP, ingen partial."} Alt lukkes 22:55 DK.</div>
   </div></section>
   {f'<section><h2>Hvert trade</h2>{cards}</section>' if med_chart else f'<p class="muted">Over {MAX_CHARTS} trades, så der er ingen charts pr. trade. Kør en kortere periode for at se dem.</p>'}
 </div>
