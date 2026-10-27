@@ -76,7 +76,7 @@ def card(r, i, med_chart):
 <article class="trade" id="t{i}" data-side="{side}">
   <header class="th">
     <div class="tn">#{i}</div>
-    <div class="tmeta"><span class="side {side}">{r["retning"].title()}</span><span>{DAYN[ts.weekday()]} {ts.day}. {MDR[ts.month - 1]} {ts.year}</span><span class="mono">{ts:%H:%M} DK</span><span class="pill">{r["fvg_tf"]} inversion</span></div>
+    <div class="tmeta"><span class="side {side}">{r["retning"].title()}</span><span>{DAYN[ts.weekday()]} {ts.day}. {MDR[ts.month - 1]} {ts.year}</span><span class="mono">{ts:%H:%M} DK</span><span class="pill">{r["fvg_tf"]} inversion</span><span class="pill">RR {abs(r.get("tp_start", r["tp"]) - r["entry"]) / r["risk"]:.2f}</span></div>
     <div class="res {"win" if r["R"] > 0 else "loss"}">{html.escape(r["udfald"])} <b class="mono">{r["R"]:+.2f}R</b> <small class="mono">{r["exit_dk"]}</small></div>
   </header>
   {f'<div class="chartwrap">{chart(r)}</div>' if med_chart else ''}
