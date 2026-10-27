@@ -67,8 +67,8 @@ def btc_levels(d, day):
         dd = day - pd.Timedelta(days=back)
         prev = dd - pd.Timedelta(days=1)
         for nm, (a, b) in (("Asia", ("20:00", "02:00")), ("London", ("02:00", "08:00"))):
-            s0 = pd.Timestamp(f"{(prev if nm == 'Asia' else dd).date()} {a}").tz_localize(TZ)
-            e = pd.Timestamp(f"{dd.date()} {b}").tz_localize(TZ)
+            s0 = pd.Timestamp(f"{(prev if nm == 'Asia' else dd).date()} {a}").tz_localize(TZ, nonexistent="shift_forward", ambiguous=False)
+            e = pd.Timestamp(f"{dd.date()} {b}").tz_localize(TZ, nonexistent="shift_forward", ambiguous=False)
             x = d[s0:e - pd.Timedelta(seconds=1)]
             if len(x):
                 out[nm + suf] = (x.high.max(), x.low.min(), e)
@@ -77,8 +77,8 @@ def btc_levels(d, day):
         y = d[(u1 - pd.Timedelta(days=1)).tz_convert(TZ):u1.tz_convert(TZ) - pd.Timedelta(seconds=1)]
         if len(y):
             out["PDH/PDL" + ("" if k == 0 else " (ny dag)")] = (y.high.max(), y.low.min(), u1.tz_convert(TZ))
-    s0 = day.tz_localize(TZ) - pd.Timedelta(days=H4_DAYS)
-    e1 = day.tz_localize(TZ) + pd.Timedelta(days=1)
+    s0 = day.tz_localize(TZ, nonexistent="shift_forward", ambiguous=False) - pd.Timedelta(days=H4_DAYS)
+    e1 = day.tz_localize(TZ, nonexistent="shift_forward", ambiguous=False) + pd.Timedelta(days=1)
     h4 = h4_utc(d[s0:e1])
     for t, c in h4.iterrows():
         e = t + pd.Timedelta(hours=4)
@@ -102,7 +102,7 @@ def tp_levels(d, day, s, entry, short):
         c.append((v, nm.replace(" i gaar", " (i gaar)")))
     # session der koerer lige nu: dens high/low indtil nu (vises live i indikatoren)
     for nm, a, b, back in (("Asia", "20:00", "02:00", 1), ("Asia", "20:00", "02:00", 0), ("London", "02:00", "08:00", 0)):
-        s0 = pd.Timestamp(f"{(s - pd.Timedelta(days=back)).date()} {a}").tz_localize(TZ)
+        s0 = pd.Timestamp(f"{(s - pd.Timedelta(days=back)).date()} {a}").tz_localize(TZ, nonexistent="shift_forward", ambiguous=False)
         e = s0 + (pd.Timedelta(hours=6))
         if s0 <= s < e:
             x = d[s0:s - pd.Timedelta(seconds=1)]
@@ -176,7 +176,7 @@ def run(d, days):
         for r in f.run_day(d, day, log=lambda *a: None):
             short = r["retning"] == "SHORT"
             s = r["ts"]
-            d0 = pd.Timestamp(day).tz_localize(TZ)
+            d0 = pd.Timestamp(day).tz_localize(TZ, nonexistent="shift_forward", ambiguous=False)
             if not (d0 <= s < d0 + pd.Timedelta(days=1)):   # hoerer til naboens doegn (overlap)
                 continue
             entry, sl, risk, tp = r["entry"], r["sl"], r["risk"], r["tp_4h"]

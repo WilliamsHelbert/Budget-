@@ -30,7 +30,9 @@ CFG = dict(
     OWN_LEG=False, FVG_NEAR=None, NEW_EXT=False, RESET_FROM_EXT=False, MAX_SWEEP_ENTRY=None,
 )
 # ---------------------------------------------------------------- regler (resultat)
-PARTIAL = True       # 25% ud paa high/low af en 4h-candle der lukker mens tradet er aabent
+ENTRY_GP = 0.705     # limit-entry: 0,705 af vejen fra signal-entry tilbage mod SL (None = entry paa signalet)
+PARTIAL = False      # True: 25% ud paa high/low af en 4h-candle der lukker mens tradet er aabent
+H4_TP = False        # True: 4h-niveauer som TP, hvis der ingen session-liq er
 OLD_SESS = True      # intet nyt liq -> naermeste gamle session, der ikke er taget, uanset hvor langt tilbage
 EXIT = "16:55"       # alt lukkes 16:55 NY = 22:55 DK
 RANGE = None         # (dage, lav, hoej): ingen short under `lav` og ingen long over `hoej` i rangen af de seneste `dage` CME-dage, fx (10, 0.25, 0.75)
@@ -218,11 +220,24 @@ def resultat(r):
         o = old_sess(r["ts"], entry, short, risk)
         if o:
             tp, tpn = o
-    if not tp:
+    if not tp and H4_TP:
         tp, tpn = h4(r["ts"], entry, short, risk)
     if not tp:
         tp, tpn = entry + (-4 if short else 4) * risk, "4R (intet liq)"
     end = pd.Timestamp(f"{r['dag']} {EXIT}").tz_localize(TZ, nonexistent="shift_forward", ambiguous=False)
+    r["signal_ts"], r["signal_entry"] = r["ts"], entry
+    if ENTRY_GP:
+        # limit i golden pocket; naas TP foer limit'en bliver fyldt, er der intet trade
+        lim = entry + ENTRY_GP * (r["sl"] - entry)
+        x = d[r["ts"]:end]
+        hit = (x.high >= lim) if short else (x.low <= lim)
+        if not hit.any():
+            return None
+        tf = hit.idxmax(); tph = (x.low <= tp) if short else (x.high >= tp)
+        if tph.any() and tph.idxmax() < tf:
+            return None
+        entry = lim; risk = abs(r["sl"] - lim)
+        r.update(ts=tf, entry=entry, risk=risk)
     # sessions der bliver faerdige under tradet: deres low/high bliver TP, hvis den er i profit og naermere
     sess = []
     for back in (1, 0):
@@ -235,8 +250,11 @@ def resultat(r):
     c4 = [(t + pd.Timedelta(hours=4), q.low if short else q.high) for t, q in c4.iterrows() if r["ts"] < t + pd.Timedelta(hours=4) <= end]
     R, how, tx, part = None, "", None, None
     for ts, b in d[r["ts"]:end].iterrows():
-        if sess and ts >= sess[0][0]:
-            e, nm, a = sess.pop(0); x = d[a:e - pd.Timedelta(seconds=1)]
+        while sess and ts >= sess[0][0]:
+            e, nm, a = sess.pop(0)
+            if e <= r["ts"]:
+                continue
+            x = d[a:e - pd.Timedelta(seconds=1)]
             v = x.low.min() if short else x.high.max()
             if ((v < entry) and v > tp) if short else ((v > entry) and v < tp):
                 tp, tpn = v, f"{nm} (lavet i tradet)"
@@ -263,7 +281,7 @@ def resultat(r):
 
 
 def _dag(day):
-    return [resultat(r) for r in setups(day)]
+    return [x for x in (resultat(r) for r in setups(day)) if x is not None]
 
 
 def koer(fra, til, procs=None):
@@ -278,7 +296,7 @@ def koer(fra, til, procs=None):
 
 def tabel(rows):
     return pd.DataFrame([dict(
-        dato=f"{r['ts'] + DK:%Y-%m-%d}", entry_dk=f"{r['ts'] + DK:%H:%M}", sweep_dk=f"{r['sweep_ts'] + DK:%H:%M}", retning=r["retning"],
+        dato=f"{r['ts'] + DK:%Y-%m-%d}", signal_dk=f"{r['signal_ts'] + DK:%H:%M}", signal_entry=r["signal_entry"], entry_dk=f"{r['ts'] + DK:%H:%M}", sweep_dk=f"{r['sweep_ts'] + DK:%H:%M}", retning=r["retning"],
         sweep=r["sweep"].replace("i gaar", "i går"), tf=r["fvg_tf"], entry=r["entry"], sl=r["sl"], risk=round(r["risk"], 2), tp=r["tp"], tp_navn=r["tp_navn"],
         udfald=r["udfald"], exit_dk=r["exit_dk"], partial_25=(r["partial"][0] if r["partial"] else None), R_uden_partial=r["R_uden"], R=r["R"]) for r in rows])
 
@@ -309,5 +327,5 @@ if __name__ == "__main__":
     if not a.ingen_rapport:
         import rapport
         rapport.d = d
-        open(os.path.join(a.ud, "rapport.html"), "w").write(rapport.html_rapport(rows, a.titel or f"NQ {a.fra} – {a.til}", a.fra, a.til))
+        open(os.path.join(a.ud, "rapport.html"), "w").write(rapport.html_rapport(rows, a.titel or f"NQ {a.fra} – {a.til}", a.fra, a.til, gp=ENTRY_GP, partial=PARTIAL, h4=H4_TP))
         print("rapport:", os.path.join(a.ud, "rapport.html"))
