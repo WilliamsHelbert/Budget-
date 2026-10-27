@@ -119,6 +119,21 @@ def equity(rows):
     return "".join(o)
 
 
+def variant_html(rows, partial):
+    if not rows or "R_4h3" not in rows[0]:
+        return ""
+    def st(v):
+        cum = peak = dd = 0
+        for x in v:
+            cum += x; peak = max(peak, cum); dd = min(dd, cum - peak)
+        return f'<td class="mono num">{len(v)}</td><td class="mono num">{sum(1 for x in v if x > 0) / len(v):.0%}</td><td class="mono num {"pos" if sum(v) > 0 else "neg"}">{sum(v):+.2f}</td><td class="mono num neg">{dd:.2f}</td>'
+    a, b = ("R_alt_partial", "R") if partial else ("R", "R_alt_partial")
+    rk = [("Session-liq, ingen partial", [r[a] for r in rows]), ("Session-liq + 25% på 4h", [r[b] for r in rows]),
+          ("Nærmeste af session-liq og 3. 4h, ingen partial", [r["R_4h3"] for r in rows]), ("Nærmeste af session-liq og 3. 4h + 25% på 4h", [r["R_4h3_partial"] for r in rows])]
+    trs = "".join(f'<tr><td>{n}</td>{st(v)}</tr>' for n, v in rk)
+    return f'<section><h2>TP-varianter</h2><div class="tablewrap"><table style="min-width:0"><thead><tr><th>TP</th><th class="num">Trades</th><th class="num">Vundne</th><th class="num">R</th><th class="num">Drawdown</th></tr></thead><tbody>{trs}</tbody></table></div></section>'
+
+
 def html_rapport(rows, titel, fra, til, gp=None, partial=False, h4=False):
     totf = sum(r.get("R_fuld", 0) for r in rows)
     stil = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "stil.html")).read().replace("{TITEL}", html.escape(titel))
@@ -132,7 +147,7 @@ def html_rapport(rows, titel, fra, til, gp=None, partial=False, h4=False):
         f'<tr data-side="{r["retning"].lower()}"><td class="mono"><a href="#t{i}">#{i}</a></td><td class="mono">{(r["ts"] + DK):%d/%m/%y %H:%M}</td>'
         f'<td><span class="side {r["retning"].lower()}">{r["retning"].title()}</span></td><td class="cs">{html.escape(r["sweep"].replace("i gaar", "i går"))}</td>'
         f'<td class="mono">{r["fvg_tf"]}</td><td class="mono num">{n(r["entry"])}</td><td class="mono num">{n(r["sl"])}</td>'
-        f'<td class="cs">{html.escape(r["tp_navn"])}</td><td class="mono num">{abs(r.get("tp_start", r["tp"]) - r["entry"]) / r["risk"]:.2f}</td><td class="cs">{html.escape(r["udfald"])}</td><td class="mono num {"pos" if r["R"] > 0 else "neg"}">{r["R"]:+.2f}</td><td class="mono num {"pos" if r.get("R_fuld", 0) > 0 else "neg"}">{r.get("R_fuld", float("nan")):+.2f}</td></tr>'
+        f'<td class="cs">{html.escape(r["tp_navn"])}</td><td class="mono num">{abs(r.get("tp_start", r["tp"]) - r["entry"]) / r["risk"]:.2f}</td><td class="cs">{html.escape(r["udfald"])}</td><td class="mono num {"pos" if r["R"] > 0 else "neg"}">{r["R"]:+.2f}</td><td class="mono num {"pos" if r.get("R_fuld", 0) > 0 else "neg"}">{r.get("R_fuld", float("nan")):+.2f}</td><td class="mono num {"pos" if r.get("R_4h3", 0) > 0 else "neg"}">{r.get("R_4h3", float("nan")):+.2f}</td></tr>'
         for i, r in enumerate(rows, 1))
     mdr = {}
     for r in rows:
@@ -154,10 +169,11 @@ def html_rapport(rows, titel, fra, til, gp=None, partial=False, h4=False):
     </div>
   </header>
   <section><h2>Samlet R</h2><div class="eq">{equity(rows) if rows else ''}</div></section>
+  {variant_html(rows, partial)}
   {f'<section><h2>Pr. måned</h2><div class="tablewrap"><table style="min-width:0"><thead><tr><th>Måned</th><th class="num">Trades</th><th class="num">Vundne</th><th class="num">R</th></tr></thead><tbody>{mrows}</tbody></table></div></section>' if len(mdr) > 1 else ''}
   <section><h2>Alle trades</h2>
     <div class="filters" role="group" aria-label="Filter"><button aria-pressed="true" data-f="alle">Alle</button><button aria-pressed="false" data-f="long">Long</button><button aria-pressed="false" data-f="short">Short</button></div>
-    <div class="tablewrap"><table><thead><tr><th>#</th><th>Entry DK</th><th>Retning</th><th>Sweep</th><th>TF</th><th class="num">Entry</th><th class="num">SL</th><th>TP</th><th class="num">RR</th><th>Udfald</th><th class="num">R</th><th class="num" title="Hold til start-TP eller SL, ingen ny TP og ingen lukning 22:55">R fuld TP</th></tr></thead><tbody>{trs}</tbody></table></div>
+    <div class="tablewrap"><table><thead><tr><th>#</th><th>Entry DK</th><th>Retning</th><th>Sweep</th><th>TF</th><th class="num">Entry</th><th class="num">SL</th><th>TP</th><th class="num">RR</th><th>Udfald</th><th class="num">R</th><th class="num" title="Hold til start-TP eller SL, ingen ny TP og ingen lukning 22:55">R fuld TP</th><th class="num" title="TP = naermeste af session-liq og 3. uberoerte 4h-liq, uden partial">R 3·4h</th></tr></thead><tbody>{trs}</tbody></table></div>
   </section>
   <section><h2>Reglerne</h2><div class="rules">
     <div class="rule"><b>Liq</b>Asia (02:00–08:00 DK), London (08:00–14:00 DK), PDH/PDL, gårsdagens sessions og 4h-candles en uge tilbage. Et niveau kan kun sweepes én gang.</div>

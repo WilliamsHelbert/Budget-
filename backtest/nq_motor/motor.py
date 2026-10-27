@@ -219,6 +219,25 @@ def h4(s, entry, short, risk):
     return min(c, key=lambda q: abs(q[0] - entry)) if c else (None, "")
 
 
+def h4_n(s, entry, short, n):
+    """n'te naermeste uberoerte 4h-liq (high for long, low for short) i profit, en uge tilbage."""
+    h = d[s - pd.Timedelta(days=10):s].resample("4h", offset="2h").agg({"high": "max", "low": "min"}).dropna()
+    c = set()
+    for t, q in h.iterrows():
+        e = t + pd.Timedelta(hours=4)
+        if e > s:
+            continue
+        v = q.low if short else q.high
+        if (v >= entry) if short else (v <= entry):
+            continue
+        y = d[e:s - pd.Timedelta(seconds=1)]
+        if len(y) and ((y.low.min() < v) if short else (y.high.max() > v)):
+            continue
+        c.add(v)
+    c = sorted(c, key=lambda v: abs(v - entry))
+    return (c[n - 1], f"{n}. 4h") if len(c) >= n else None
+
+
 def resultat(r):
     short = r["retning"] == "SHORT"; risk = r["risk"]; entry = r["entry"]
     # 1) naermeste uberoerte Asia/London/PDH/PDL (i dag og i gaar) mindst 1R vaek
@@ -258,27 +277,40 @@ def resultat(r):
     c4 = d[r["ts"] - pd.Timedelta(hours=4):end].resample("4h", offset="2h").agg({"high": "max", "low": "min"}).dropna()
     c4 = [(t + pd.Timedelta(hours=4), q.low if short else q.high) for t, q in c4.iterrows() if r["ts"] < t + pd.Timedelta(hours=4) <= end]
     r["tp_start"] = tp                          # TP ved entry (foer en session lavet i tradet kan flytte den)
-    R, how, tx, part = None, "", None, None
-    for ts, b in d[r["ts"]:end].iterrows():
-        while sess and ts >= sess[0][0]:
-            e, nm, a = sess.pop(0)
-            if e <= r["ts"]:
-                continue
-            x = d[a:e - pd.Timedelta(seconds=1)]
-            v = x.low.min() if short else x.high.max()
-            if ((v < entry) and v > tp) if short else ((v > entry) and v < tp):
-                tp, tpn = v, f"{nm} (lavet i tradet)"
-        if (b.high >= r["sl"]) if short else (b.low <= r["sl"]):
-            R, how, tx = -1.0, "SL", ts; break
-        if (b.low <= tp) if short else (b.high >= tp):
-            R, how, tx = abs(tp - entry) / risk, "TP", ts; break
-        if PARTIAL and part is None:
-            for e, v in c4:
-                if ts >= e and ((v < entry) if short else (v > entry)) and ((b.low <= v) if short else (b.high >= v)):
-                    part = (v, ts, abs(v - entry) / risk); break
-    if R is None:
-        x = d[r["ts"]:end]; cl = x.close.iloc[-1]; tx = x.index[-1]
-        R = ((entry - cl) if short else (cl - entry)) / risk; how = "Lukket 22:55"
+
+    def sim(tp, tpn, partial):
+        ss = list(sess); R, how, tx, part = None, "", None, None
+        for ts, b in d[r["ts"]:end].iterrows():
+            while ss and ts >= ss[0][0]:
+                e, nm, a = ss.pop(0)
+                if e <= r["ts"]:
+                    continue
+                x = d[a:e - pd.Timedelta(seconds=1)]
+                v = x.low.min() if short else x.high.max()
+                if ((v < entry) and v > tp) if short else ((v > entry) and v < tp):
+                    tp, tpn = v, f"{nm} (lavet i tradet)"
+            if (b.high >= r["sl"]) if short else (b.low <= r["sl"]):
+                R, how, tx = -1.0, "SL", ts; break
+            if (b.low <= tp) if short else (b.high >= tp):
+                R, how, tx = abs(tp - entry) / risk, "TP", ts; break
+            if partial and part is None:
+                for e, v in c4:
+                    if ts >= e and ((v < entry) if short else (v > entry)) and ((b.low <= v) if short else (b.high >= v)):
+                        part = (v, ts, abs(v - entry) / risk); break
+        if R is None:
+            x = d[r["ts"]:end]; cl = x.close.iloc[-1]; tx = x.index[-1]
+            R = ((entry - cl) if short else (cl - entry)) / risk; how = "Lukket 22:55"
+        return R, how, tx, tp, tpn, part
+
+    R, how, tx, tp, tpn, part = sim(tp, tpn, PARTIAL)
+    # sammenligning: med/uden 25% partial, og TP = naermeste af session-TP og 3. uberoerte 4h-liq
+    alt = lambda R_, p_: round(0.25 * p_[2] + 0.75 * R_ if p_ else R_, 2)
+    q = sim(r["tp_start"], tpn, not PARTIAL); r["R_alt_partial"] = alt(q[0], q[5]) if not PARTIAL else round(q[0], 2)
+    h3 = h4_n(r["ts"], entry, short, 3)
+    tp3 = h3[0] if h3 and abs(h3[0] - entry) < abs(r["tp_start"] - entry) else r["tp_start"]
+    r["tp_4h3"] = tp3
+    q = sim(tp3, tpn, False); r["R_4h3"] = round(q[0], 2)
+    q = sim(tp3, tpn, True); r["R_4h3_partial"] = alt(q[0], q[5])
     r["R_uden"] = round(R, 2)
     if part:
         R = 0.25 * part[2] + 0.75 * R
@@ -319,7 +351,8 @@ def tabel(rows):
     return pd.DataFrame([dict(
         dato=f"{r['ts'] + DK:%Y-%m-%d}", signal_dk=f"{r['signal_ts'] + DK:%H:%M}", signal_entry=r["signal_entry"], entry_dk=f"{r['ts'] + DK:%H:%M}", sweep_dk=f"{r['sweep_ts'] + DK:%H:%M}", retning=r["retning"],
         sweep=r["sweep"].replace("i gaar", "i går"), tf=r["fvg_tf"], entry=r["entry"], sl=r["sl"], risk=round(r["risk"], 2), tp=r["tp"], tp_navn=r["tp_navn"], tp_start=r["tp_start"], rr=round(abs(r["tp_start"] - r["entry"]) / r["risk"], 2),
-        udfald=r["udfald"], exit_dk=r["exit_dk"], partial_25=(r["partial"][0] if r["partial"] else None), R_uden_partial=r["R_uden"], R=r["R"], R_fuld_tp=r["R_fuld"]) for r in rows])
+        udfald=r["udfald"], exit_dk=r["exit_dk"], partial_25=(r["partial"][0] if r["partial"] else None), R_uden_partial=r["R_uden"], R=r["R"], R_fuld_tp=r["R_fuld"],
+        R_partial=r["R_alt_partial"], tp_4h3=r["tp_4h3"], R_4h3=r["R_4h3"], R_4h3_partial=r["R_4h3_partial"]) for r in rows])
 
 
 if __name__ == "__main__":
