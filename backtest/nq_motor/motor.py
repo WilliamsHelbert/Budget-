@@ -285,6 +285,17 @@ def resultat(r):
         r["partial"] = (part[0], f"{part[1] + DK:%H:%M}", round(part[2], 2))
     else:
         r["partial"] = None
+    # "fuld TP": hold til start-TP eller SL, ingen ny TP undervejs og ingen tidslukning
+    x = d[r["ts"]:]; tp0 = r["tp_start"]
+    hs = (x.high >= r["sl"]) if short else (x.low <= r["sl"])
+    ht = (x.low <= tp0) if short else (x.high >= tp0)
+    ts_, tt_ = (hs.idxmax() if hs.any() else None), (ht.idxmax() if ht.any() else None)
+    if tt_ is not None and (ts_ is None or tt_ < ts_):
+        r["R_fuld"] = round(abs(tp0 - entry) / risk, 2)
+    elif ts_ is not None:
+        r["R_fuld"] = -1.0
+    else:
+        r["R_fuld"] = round(((entry - x.close.iloc[-1]) if short else (x.close.iloc[-1] - entry)) / risk, 2)
     r.update(tp=tp, tp_navn=tpn.replace("i gaar", "i går").replace("PDH/PDL", "PDL" if short else "PDH"),
              R=round(R, 2), udfald=how, exit_dk=f"{tx + DK:%H:%M}", exit_ts=tx)
     return r
@@ -308,7 +319,7 @@ def tabel(rows):
     return pd.DataFrame([dict(
         dato=f"{r['ts'] + DK:%Y-%m-%d}", signal_dk=f"{r['signal_ts'] + DK:%H:%M}", signal_entry=r["signal_entry"], entry_dk=f"{r['ts'] + DK:%H:%M}", sweep_dk=f"{r['sweep_ts'] + DK:%H:%M}", retning=r["retning"],
         sweep=r["sweep"].replace("i gaar", "i går"), tf=r["fvg_tf"], entry=r["entry"], sl=r["sl"], risk=round(r["risk"], 2), tp=r["tp"], tp_navn=r["tp_navn"], tp_start=r["tp_start"], rr=round(abs(r["tp_start"] - r["entry"]) / r["risk"], 2),
-        udfald=r["udfald"], exit_dk=r["exit_dk"], partial_25=(r["partial"][0] if r["partial"] else None), R_uden_partial=r["R_uden"], R=r["R"]) for r in rows])
+        udfald=r["udfald"], exit_dk=r["exit_dk"], partial_25=(r["partial"][0] if r["partial"] else None), R_uden_partial=r["R_uden"], R=r["R"], R_fuld_tp=r["R_fuld"]) for r in rows])
 
 
 if __name__ == "__main__":

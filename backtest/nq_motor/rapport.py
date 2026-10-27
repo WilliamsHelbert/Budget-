@@ -120,6 +120,7 @@ def equity(rows):
 
 
 def html_rapport(rows, titel, fra, til, gp=None, partial=False, h4=False):
+    totf = sum(r.get("R_fuld", 0) for r in rows)
     stil = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "stil.html")).read().replace("{TITEL}", html.escape(titel))
     Rs = [r["R"] for r in rows]; tot = sum(Rs)
     cum, peak, dd = 0, 0, 0
@@ -131,7 +132,7 @@ def html_rapport(rows, titel, fra, til, gp=None, partial=False, h4=False):
         f'<tr data-side="{r["retning"].lower()}"><td class="mono"><a href="#t{i}">#{i}</a></td><td class="mono">{(r["ts"] + DK):%d/%m/%y %H:%M}</td>'
         f'<td><span class="side {r["retning"].lower()}">{r["retning"].title()}</span></td><td class="cs">{html.escape(r["sweep"].replace("i gaar", "i går"))}</td>'
         f'<td class="mono">{r["fvg_tf"]}</td><td class="mono num">{n(r["entry"])}</td><td class="mono num">{n(r["sl"])}</td>'
-        f'<td class="cs">{html.escape(r["tp_navn"])}</td><td class="mono num">{abs(r.get("tp_start", r["tp"]) - r["entry"]) / r["risk"]:.2f}</td><td>{html.escape(r["udfald"])}</td><td class="mono num {"pos" if r["R"] > 0 else "neg"}">{r["R"]:+.2f}</td></tr>'
+        f'<td class="cs">{html.escape(r["tp_navn"])}</td><td class="mono num">{abs(r.get("tp_start", r["tp"]) - r["entry"]) / r["risk"]:.2f}</td><td class="cs">{html.escape(r["udfald"])}</td><td class="mono num {"pos" if r["R"] > 0 else "neg"}">{r["R"]:+.2f}</td><td class="mono num {"pos" if r.get("R_fuld", 0) > 0 else "neg"}">{r.get("R_fuld", float("nan")):+.2f}</td></tr>'
         for i, r in enumerate(rows, 1))
     mdr = {}
     for r in rows:
@@ -146,6 +147,7 @@ def html_rapport(rows, titel, fra, til, gp=None, partial=False, h4=False):
     <div class="stats">
       <div class="stat"><b>{len(rows)}</b><span>trades</span></div>
       <div class="stat"><b class="{"pos" if tot > 0 else "neg"}">{tot:+.2f}R</b><span>i alt</span></div>
+      <div class="stat"><b class="{"pos" if totf > 0 else "neg"}">{totf:+.2f}R</b><span>med fuld TP</span></div>
       <div class="stat"><b>{win:.0%}</b><span>vundne</span></div>
       <div class="stat"><b>{(tot / len(rows) if rows else 0):+.2f}R</b><span>pr. trade</span></div>
       <div class="stat"><b>{dd:.2f}R</b><span>største drawdown</span></div>
@@ -155,7 +157,7 @@ def html_rapport(rows, titel, fra, til, gp=None, partial=False, h4=False):
   {f'<section><h2>Pr. måned</h2><div class="tablewrap"><table style="min-width:0"><thead><tr><th>Måned</th><th class="num">Trades</th><th class="num">Vundne</th><th class="num">R</th></tr></thead><tbody>{mrows}</tbody></table></div></section>' if len(mdr) > 1 else ''}
   <section><h2>Alle trades</h2>
     <div class="filters" role="group" aria-label="Filter"><button aria-pressed="true" data-f="alle">Alle</button><button aria-pressed="false" data-f="long">Long</button><button aria-pressed="false" data-f="short">Short</button></div>
-    <div class="tablewrap"><table><thead><tr><th>#</th><th>Entry DK</th><th>Retning</th><th>Sweep</th><th>TF</th><th class="num">Entry</th><th class="num">SL</th><th>TP</th><th class="num">RR</th><th>Udfald</th><th class="num">R</th></tr></thead><tbody>{trs}</tbody></table></div>
+    <div class="tablewrap"><table><thead><tr><th>#</th><th>Entry DK</th><th>Retning</th><th>Sweep</th><th>TF</th><th class="num">Entry</th><th class="num">SL</th><th>TP</th><th class="num">RR</th><th>Udfald</th><th class="num">R</th><th class="num" title="Hold til start-TP eller SL, ingen ny TP og ingen lukning 22:55">R fuld TP</th></tr></thead><tbody>{trs}</tbody></table></div>
   </section>
   <section><h2>Reglerne</h2><div class="rules">
     <div class="rule"><b>Liq</b>Asia (02:00–08:00 DK), London (08:00–14:00 DK), PDH/PDL, gårsdagens sessions og 4h-candles en uge tilbage. Et niveau kan kun sweepes én gang.</div>
