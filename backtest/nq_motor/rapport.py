@@ -131,7 +131,7 @@ def html_rapport(rows, titel, fra, til, gp=None, partial=False, h4=False):
         f'<tr data-side="{r["retning"].lower()}"><td class="mono"><a href="#t{i}">#{i}</a></td><td class="mono">{(r["ts"] + DK):%d/%m/%y %H:%M}</td>'
         f'<td><span class="side {r["retning"].lower()}">{r["retning"].title()}</span></td><td>{html.escape(r["sweep"].replace("i gaar", "i går"))}</td>'
         f'<td class="mono">{r["fvg_tf"]}</td><td class="mono num">{n(r["entry"])}</td><td class="mono num">{n(r["sl"])}</td>'
-        f'<td>{html.escape(r["tp_navn"])}</td><td>{html.escape(r["udfald"])}</td><td class="mono num {"pos" if r["R"] > 0 else "neg"}">{r["R"]:+.2f}</td></tr>'
+        f'<td>{html.escape(r["tp_navn"])}</td><td class="mono num">{abs(r.get("tp_start", r["tp"]) - r["entry"]) / r["risk"]:.2f}</td><td>{html.escape(r["udfald"])}</td><td class="mono num {"pos" if r["R"] > 0 else "neg"}">{r["R"]:+.2f}</td></tr>'
         for i, r in enumerate(rows, 1))
     mdr = {}
     for r in rows:
@@ -155,7 +155,7 @@ def html_rapport(rows, titel, fra, til, gp=None, partial=False, h4=False):
   {f'<section><h2>Pr. måned</h2><div class="tablewrap"><table style="min-width:0"><thead><tr><th>Måned</th><th class="num">Trades</th><th class="num">Vundne</th><th class="num">R</th></tr></thead><tbody>{mrows}</tbody></table></div></section>' if len(mdr) > 1 else ''}
   <section><h2>Alle trades</h2>
     <div class="filters" role="group" aria-label="Filter"><button aria-pressed="true" data-f="alle">Alle</button><button aria-pressed="false" data-f="long">Long</button><button aria-pressed="false" data-f="short">Short</button></div>
-    <div class="tablewrap"><table><thead><tr><th>#</th><th>Entry DK</th><th>Retning</th><th>Sweep</th><th>TF</th><th class="num">Entry</th><th class="num">SL</th><th>TP</th><th>Udfald</th><th class="num">R</th></tr></thead><tbody>{trs}</tbody></table></div>
+    <div class="tablewrap"><table><thead><tr><th>#</th><th>Entry DK</th><th>Retning</th><th>Sweep</th><th>TF</th><th class="num">Entry</th><th class="num">SL</th><th>TP</th><th class="num">RR</th><th>Udfald</th><th class="num">R</th></tr></thead><tbody>{trs}</tbody></table></div>
   </section>
   <section><h2>Reglerne</h2><div class="rules">
     <div class="rule"><b>Liq</b>Asia (02:00–08:00 DK), London (08:00–14:00 DK), PDH/PDL, gårsdagens sessions og 4h-candles en uge tilbage. Et niveau kan kun sweepes én gang.</div>

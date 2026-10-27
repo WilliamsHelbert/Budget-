@@ -18,6 +18,9 @@ python3 backtest/nq_motor/motor.py 2026-10-01 2026-10-19 \
 - `--data` bruges til andre parquet-filer. De skal have kolonnerne `time` (UTC), `open`, `high`, `low` og `close` med 15s-bars. Står der flere filer, erstatter en senere fil perioden, den dækker.
 - `--tf 5` lader kun 5m FVG'er give entry (standard er `--tf 5 4 3 2 1`). 5m bruges altid til benet og sweepet.
 - `--range 10 0.25 0.75`: ingen short, når entry ligger under 0,25, og ingen long over 0,75 i rangen (high/low) af de seneste 10 afsluttede CME-dage. Setuppet springes over som ved for lav RR. Testet 25/10-26: gør resultatet dårligere (−33,8R på al data).
+- `--trend 10`: kun long, når NQ er steget over de seneste 10 afsluttede CME-dage, og kun short, når den er faldet.
+- `--gp 0` slår limit-entry fra, `--partial` slår 25% ud på 4h til, og `--h4tp` bruger 4h som TP uden session-liq.
+- CSV og rapport har `rr`: afstand til TP **ved entry** (`tp_start`) delt med risiko.
 - `--ingen-rapport` springer HTML-rapporten over. Over 150 trades viser rapporten kun tabel og måneder, ikke et chart pr. trade.
 - Mangler `pyarrow` (og kan den ikke installeres), læser motoren selv parquet-filerne med `backtest/parquet_lite.py` (zstd via systemets libzstd, snappy, gzip). Resultatet er det samme.
 - Oktober tager ca. 20 sekunder på 4 kerner. Lange perioder deles automatisk over alle kerner.

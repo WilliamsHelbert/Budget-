@@ -35,6 +35,7 @@ PARTIAL = False      # True: 25% ud paa high/low af en 4h-candle der lukker mens
 H4_TP = False        # True: 4h-niveauer som TP, hvis der ingen session-liq er
 OLD_SESS = True      # intet nyt liq -> naermeste gamle session, der ikke er taget, uanset hvor langt tilbage
 EXIT = "16:55"       # alt lukkes 16:55 NY = 22:55 DK
+TREND = None         # N: kun long naar NQ er steget over de seneste N afsluttede CME-dage, kun short naar den er faldet
 RANGE = None         # (dage, lav, hoej): ingen short under `lav` og ingen long over `hoej` i rangen af de seneste `dage` CME-dage, fx (10, 0.25, 0.75)
 
 d = None             # 15s-data, saettes af load()
@@ -104,34 +105,42 @@ _rng = None
 def _ranges():
     """High/low af de seneste RANGE[0] afsluttede CME-dage (18:00-17:00 NY) foer hver CME-dag."""
     global _rng
-    if _rng is not None or not RANGE:
+    if _rng is not None or not (RANGE or TREND):
         return
     x = d.resample("1min").agg({"high": "max", "low": "min"}).dropna()
     cme = (x.index + pd.Timedelta(hours=6)).normalize().tz_localize(None)
     dg = x.groupby(cme).agg({"high": "max", "low": "min"})
     dg = dg[dg.index.weekday < 5]
-    n = RANGE[0]
-    _rng = pd.DataFrame({"hi": dg.high.rolling(n).max().shift(1), "lo": dg.low.rolling(n).min().shift(1)}).dropna()
+    n = RANGE[0] if RANGE else 10
+    _rng = pd.DataFrame({"hi": dg.high.rolling(n).max().shift(1), "lo": dg.low.rolling(n).min().shift(1)})
+    if TREND:
+        cl = d.close.groupby((d.index + pd.Timedelta(hours=6)).normalize().tz_localize(None)).last()
+        cl = cl[cl.index.weekday < 5]
+        _rng["trend"] = np.sign(cl - cl.shift(TREND)).shift(1)
 
 
 def range_pos(tc, entry):
     k = (tc + pd.Timedelta(hours=6)).tz_localize(None).normalize()
     if k not in _rng.index:
         return None
-    hi, lo = _rng.loc[k]
+    hi, lo = _rng.hi[k], _rng.lo[k]
     return (entry - lo) / (hi - lo)
 
 
 def _entry_ok(day, tc, short, entry):
-    p = range_pos(tc, entry)
-    if p is None:
+    k = (tc + pd.Timedelta(hours=6)).tz_localize(None).normalize()
+    if TREND and k in _rng.index and not np.isnan(_rng.trend[k]):
+        if _rng.trend[k] == (1 if short else -1):
+            return False
+    p = range_pos(tc, entry) if RANGE else None
+    if p is None or np.isnan(p):
         return True
     return p >= RANGE[1] if short else p <= RANGE[2]
 
 
 def configure():
     f.levels = levels
-    f.ENTRY_OK = _entry_ok if RANGE else None
+    f.ENTRY_OK = _entry_ok if (RANGE or TREND) else None
     f.TP_FUNC = _tp_intern
     f.EXIT_END = lambda day, tc: pd.Timestamp(f"{day} 16:59:45").tz_localize(TZ, nonexistent="shift_forward", ambiguous=False)
     for k, v in CFG.items():
@@ -248,6 +257,7 @@ def resultat(r):
                 sess.append((b, nm, a))
     c4 = d[r["ts"] - pd.Timedelta(hours=4):end].resample("4h", offset="2h").agg({"high": "max", "low": "min"}).dropna()
     c4 = [(t + pd.Timedelta(hours=4), q.low if short else q.high) for t, q in c4.iterrows() if r["ts"] < t + pd.Timedelta(hours=4) <= end]
+    r["tp_start"] = tp                          # TP ved entry (foer en session lavet i tradet kan flytte den)
     R, how, tx, part = None, "", None, None
     for ts, b in d[r["ts"]:end].iterrows():
         while sess and ts >= sess[0][0]:
@@ -297,7 +307,7 @@ def koer(fra, til, procs=None):
 def tabel(rows):
     return pd.DataFrame([dict(
         dato=f"{r['ts'] + DK:%Y-%m-%d}", signal_dk=f"{r['signal_ts'] + DK:%H:%M}", signal_entry=r["signal_entry"], entry_dk=f"{r['ts'] + DK:%H:%M}", sweep_dk=f"{r['sweep_ts'] + DK:%H:%M}", retning=r["retning"],
-        sweep=r["sweep"].replace("i gaar", "i går"), tf=r["fvg_tf"], entry=r["entry"], sl=r["sl"], risk=round(r["risk"], 2), tp=r["tp"], tp_navn=r["tp_navn"],
+        sweep=r["sweep"].replace("i gaar", "i går"), tf=r["fvg_tf"], entry=r["entry"], sl=r["sl"], risk=round(r["risk"], 2), tp=r["tp"], tp_navn=r["tp_navn"], tp_start=r["tp_start"], rr=round(abs(r["tp_start"] - r["entry"]) / r["risk"], 2),
         udfald=r["udfald"], exit_dk=r["exit_dk"], partial_25=(r["partial"][0] if r["partial"] else None), R_uden_partial=r["R_uden"], R=r["R"]) for r in rows])
 
 
@@ -312,7 +322,14 @@ if __name__ == "__main__":
     ap.add_argument("--tf", type=int, nargs="+", default=[5, 4, 3, 2, 1], help="timeframes (min) der maa give entry, fx --tf 5")
     ap.add_argument("--range", type=float, nargs=3, metavar=("DAGE", "LAV", "HOEJ"), default=None,
                     help="ingen short under LAV og ingen long over HOEJ i rangen af de seneste DAGE dage, fx --range 10 0.25 0.75")
+    ap.add_argument("--gp", type=float, default=ENTRY_GP, help="limit-entry i GP (0 = entry paa signalet)")
+    ap.add_argument("--partial", action="store_true", help="25%% ud paa 4h high/low")
+    ap.add_argument("--h4tp", action="store_true", help="4h-niveauer som TP, hvis der ingen session-liq er")
+    ap.add_argument("--trend", type=int, default=None, metavar="DAGE",
+                    help="kun long naar NQ er steget over de seneste DAGE dage, kun short naar den er faldet, fx --trend 10")
     a = ap.parse_args()
+    TREND = a.trend
+    ENTRY_GP = a.gp or None; PARTIAL = a.partial; H4_TP = a.h4tp
     RANGE = (int(a.range[0]), a.range[1], a.range[2]) if a.range else None
     CFG["TFS"] = sorted(set(a.tf) | {5}, reverse=True)   # 5m bruges altid til ben og sweep
     d = load(a.data)
