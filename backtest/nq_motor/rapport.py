@@ -129,9 +129,9 @@ def html_rapport(rows, titel, fra, til, gp=None, partial=False, h4=False):
     med_chart = len(rows) <= MAX_CHARTS
     trs = "".join(
         f'<tr data-side="{r["retning"].lower()}"><td class="mono"><a href="#t{i}">#{i}</a></td><td class="mono">{(r["ts"] + DK):%d/%m/%y %H:%M}</td>'
-        f'<td><span class="side {r["retning"].lower()}">{r["retning"].title()}</span></td><td>{html.escape(r["sweep"].replace("i gaar", "i går"))}</td>'
+        f'<td><span class="side {r["retning"].lower()}">{r["retning"].title()}</span></td><td class="cs">{html.escape(r["sweep"].replace("i gaar", "i går"))}</td>'
         f'<td class="mono">{r["fvg_tf"]}</td><td class="mono num">{n(r["entry"])}</td><td class="mono num">{n(r["sl"])}</td>'
-        f'<td>{html.escape(r["tp_navn"])}</td><td class="mono num">{abs(r.get("tp_start", r["tp"]) - r["entry"]) / r["risk"]:.2f}</td><td>{html.escape(r["udfald"])}</td><td class="mono num {"pos" if r["R"] > 0 else "neg"}">{r["R"]:+.2f}</td></tr>'
+        f'<td class="cs">{html.escape(r["tp_navn"])}</td><td class="mono num">{abs(r.get("tp_start", r["tp"]) - r["entry"]) / r["risk"]:.2f}</td><td>{html.escape(r["udfald"])}</td><td class="mono num {"pos" if r["R"] > 0 else "neg"}">{r["R"]:+.2f}</td></tr>'
         for i, r in enumerate(rows, 1))
     mdr = {}
     for r in rows:
