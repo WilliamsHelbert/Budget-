@@ -319,6 +319,7 @@ if __name__ == "__main__":
     ap.add_argument("--data", nargs="+", default=DATA, help="parquet-filer (time, open, high, low, close; 15s); senere filer vinder")
     ap.add_argument("--procs", type=int, default=None)
     ap.add_argument("--ingen-rapport", action="store_true")
+    ap.add_argument("--charts", type=int, default=None, help="vis charts pr. trade op til saa mange trades (standard 150)")
     ap.add_argument("--tf", type=int, nargs="+", default=[5, 4, 3, 2, 1], help="timeframes (min) der maa give entry, fx --tf 5")
     ap.add_argument("--range", type=float, nargs=3, metavar=("DAGE", "LAV", "HOEJ"), default=None,
                     help="ingen short under LAV og ingen long over HOEJ i rangen af de seneste DAGE dage, fx --range 10 0.25 0.75")
@@ -344,5 +345,7 @@ if __name__ == "__main__":
     if not a.ingen_rapport:
         import rapport
         rapport.d = d
+        if a.charts:
+            rapport.MAX_CHARTS = a.charts
         open(os.path.join(a.ud, "rapport.html"), "w").write(rapport.html_rapport(rows, a.titel or f"NQ {a.fra} – {a.til}", a.fra, a.til, gp=ENTRY_GP, partial=PARTIAL, h4=H4_TP))
         print("rapport:", os.path.join(a.ud, "rapport.html"))
