@@ -44,6 +44,8 @@ EXIT = "16:55"       # alt lukkes 16:55 NY = 22:55 DK
 TREND = None         # N: kun long naar NQ er steget over de seneste N afsluttede CME-dage, kun short naar den er faldet
 RANGE = None         # (dage, lav, hoej): ingen short under `lav` og ingen long over `hoej` i rangen af de seneste `dage` CME-dage, fx (10, 0.25, 0.75)
 RR_GR = (1.5, 99.0)   # (min, max): kun trades hvor RR til start-TP ligger i intervallet; ellers springes setuppet over, og dagens naeste setup kan tages
+NO_TID = None        # (fra, til): ingen entries fra kl. fra til kl. til DK, fx (8, 14)
+MAX_SL = None        # ingen trades med SL over saa mange % af prisen, fx 0.25
 
 d = None             # 15s-data, saettes af load()
 _orig_levels = f.levels
@@ -137,6 +139,10 @@ def range_pos(tc, entry):
 def _entry_ok(day, tc, short, entry, sweep="", risk=None):
     if KUN_1_LIQ and " + " in sweep:
         return False
+    if NO_TID and NO_TID[0] <= (tc + DK).hour < NO_TID[1]:
+        return False
+    if MAX_SL and risk and risk / entry * 100 > MAX_SL:
+        return False
     if RR_GR and risk:
         rr = abs(start_tp(day, tc, entry, short, risk)[0] - entry) / risk
         if not (RR_GR[0] <= rr <= RR_GR[1]):
@@ -153,7 +159,7 @@ def _entry_ok(day, tc, short, entry, sweep="", risk=None):
 
 def configure():
     f.levels = levels
-    f.ENTRY_OK = _entry_ok if (RANGE or TREND or KUN_1_LIQ or RR_GR) else None
+    f.ENTRY_OK = _entry_ok if (RANGE or TREND or KUN_1_LIQ or RR_GR or NO_TID or MAX_SL) else None
     f.TP_FUNC = _tp_intern
     f.EXIT_END = lambda day, tc: pd.Timestamp(f"{day} 16:59:45").tz_localize(TZ, nonexistent="shift_forward", ambiguous=False)
     for k, v in CFG.items():
@@ -407,7 +413,10 @@ if __name__ == "__main__":
                     help="kun trades med RR til start-TP mellem MIN og MAX (standard 1.5 99: over 99R er risk kun faa punkter; --rr 0 9999 slaar det fra)")
     ap.add_argument("--liq-alder", type=int, default=0, metavar="MIN",
                     help="liq skal vaere mindst MIN minutter gammelt (fra niveauet blev faerdigt) for at et sweep taeller")
+    ap.add_argument("--ingen-tid", type=int, nargs=2, metavar=("FRA", "TIL"), default=None, help="ingen entries fra FRA til TIL DK, fx --ingen-tid 8 14")
+    ap.add_argument("--max-sl", type=float, default=None, metavar="PCT", help="ingen trades med SL over PCT %% af prisen, fx 0.25")
     a = ap.parse_args()
+    NO_TID = tuple(a.ingen_tid) if a.ingen_tid else None; MAX_SL = a.max_sl
     CFG["MIN_LIQ_AGE"] = pd.Timedelta(minutes=a.liq_alder)
     RR_GR = tuple(a.rr) if a.rr else RR_GR
     TREND = a.trend
