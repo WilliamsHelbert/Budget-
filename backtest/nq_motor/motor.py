@@ -43,6 +43,7 @@ SL_CUT = (30, 40, 50, 60)   # SL-varianter i CSV: SL skaaret med saa mange proce
 EXIT = "16:55"       # alt lukkes 16:55 NY = 22:55 DK
 TREND = None         # N: kun long naar NQ er steget over de seneste N afsluttede CME-dage, kun short naar den er faldet
 RANGE = None         # (dage, lav, hoej): ingen short under `lav` og ingen long over `hoej` i rangen af de seneste `dage` CME-dage, fx (10, 0.25, 0.75)
+RR_GR = None         # (min, max): kun trades hvor RR til start-TP ligger i intervallet; ellers springes setuppet over, og dagens naeste setup kan tages
 
 d = None             # 15s-data, saettes af load()
 _orig_levels = f.levels
@@ -133,9 +134,13 @@ def range_pos(tc, entry):
     return (entry - lo) / (hi - lo)
 
 
-def _entry_ok(day, tc, short, entry, sweep=""):
+def _entry_ok(day, tc, short, entry, sweep="", risk=None):
     if KUN_1_LIQ and " + " in sweep:
         return False
+    if RR_GR and risk:
+        rr = abs(start_tp(day, tc, entry, short, risk)[0] - entry) / risk
+        if not (RR_GR[0] <= rr <= RR_GR[1]):
+            return False
     k = (tc + pd.Timedelta(hours=6)).tz_localize(None).normalize()
     if TREND and k in _rng.index and not np.isnan(_rng.trend[k]):
         if _rng.trend[k] == (1 if short else -1):
@@ -148,7 +153,7 @@ def _entry_ok(day, tc, short, entry, sweep=""):
 
 def configure():
     f.levels = levels
-    f.ENTRY_OK = _entry_ok if (RANGE or TREND or KUN_1_LIQ) else None
+    f.ENTRY_OK = _entry_ok if (RANGE or TREND or KUN_1_LIQ or RR_GR) else None
     f.TP_FUNC = _tp_intern
     f.EXIT_END = lambda day, tc: pd.Timestamp(f"{day} 16:59:45").tz_localize(TZ, nonexistent="shift_forward", ambiguous=False)
     for k, v in CFG.items():
@@ -247,20 +252,25 @@ def h4_n(s, entry, short, n):
     return (c[n - 1], f"{n}. 4h") if len(c) >= n else None
 
 
-def resultat(r):
-    short = r["retning"] == "SHORT"; risk = r["risk"]; entry = r["entry"]
+def start_tp(day, ts, entry, short, risk):
     # 1) naermeste uberoerte Asia/London/PDH/PDL (i dag og i gaar) mindst 1R vaek
-    c = [q for q in tp_levels(d, r["dag"], r["ts"], entry, short) if abs(q[0] - entry) >= risk]
+    c = [q for q in tp_levels(d, day, ts, entry, short) if abs(q[0] - entry) >= risk]
     tp, tpn = min(c, key=lambda q: abs(q[0] - entry)) if c else (None, "")
     # 2) gamle sessions, 3) 4h, 4) 4R
     if not tp and OLD_SESS:
-        o = old_sess(r["ts"], entry, short, risk)
+        o = old_sess(ts, entry, short, risk)
         if o:
             tp, tpn = o
     if not tp and H4_TP:
-        tp, tpn = h4(r["ts"], entry, short, risk)
+        tp, tpn = h4(ts, entry, short, risk)
     if not tp:
         tp, tpn = entry + (-4 if short else 4) * risk, "4R (intet liq)"
+    return tp, tpn
+
+
+def resultat(r):
+    short = r["retning"] == "SHORT"; risk = r["risk"]; entry = r["entry"]
+    tp, tpn = start_tp(r["dag"], r["ts"], entry, short, risk)
     end = pd.Timestamp(f"{r['dag']} {EXIT}").tz_localize(TZ, nonexistent="shift_forward", ambiguous=False)
     r["signal_ts"], r["signal_entry"] = r["ts"], entry
     if ENTRY_GP:
@@ -393,7 +403,10 @@ if __name__ == "__main__":
     ap.add_argument("--ingen-trail", action="store_true", help="ingen SL-flyt ved +2R")
     ap.add_argument("--trend", type=int, default=None, metavar="DAGE",
                     help="kun long naar NQ er steget over de seneste DAGE dage, kun short naar den er faldet, fx --trend 10")
+    ap.add_argument("--rr", type=float, nargs=2, metavar=("MIN", "MAX"), default=None,
+                    help="kun trades med RR til start-TP mellem MIN og MAX, fx --rr 1.5 10")
     a = ap.parse_args()
+    RR_GR = tuple(a.rr) if a.rr else None
     TREND = a.trend
     KUN_1_LIQ = not a.alle_liq; FOERSTE_TRADE = not a.alle_trades; FAST_TP = not a.flyt_tp
     if a.ingen_trail:

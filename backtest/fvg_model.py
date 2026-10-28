@@ -309,7 +309,7 @@ def run_day(d, day, log=print):
                     break
                 tp = TP_FUNC(d, day, tc, sgn * low, short, entry, risk) if TP_FUNC else tp4h(d, tc, sgn * low, short)
                 rr = abs(tp - entry) / risk if tp is not None else 0
-                if rr >= MIN_RR and (ENTRY_OK is None or ENTRY_OK(day, tc, short, entry, swept)):
+                if rr >= MIN_RR and (ENTRY_OK is None or ENTRY_OK(day, tc, short, entry, swept, risk=risk)):
                     res.append(dict(row, tp_4h=tp, rr=round(rr, 2)))
                     log(f"{tc:%H:%M} ENTRY {'SHORT' if short else 'LONG'} {entry} SL {sl} TP {tp} ({rr:.2f} RR) - {m}m-candle")
                     ex = exit_time(d[tc:EXIT_END(day, tc) if EXIT_END else pd.Timestamp(f"{day} 16:59:45").tz_localize(TZ)], short, sl, tp)
