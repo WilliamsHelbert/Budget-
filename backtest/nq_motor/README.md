@@ -42,6 +42,18 @@ Data og kode bruger New York-tid. **DK = NY + 6 timer** (i de få uger om året,
 Entry-tiden i CSV og rapport er DK-tid for **closen** på inversions-candlen.
 William noterer candlens **åbning**, så hans journal-tid ligger en candle tidligere (fx 15:55 hos ham og 16:00 i motoren for en 5m-candle).
 
+## Standard fra 28/10-2026
+
+Valgt for mindst drawdown over 2022–2026 (597 trades, +140,6R, max drawdown −15,9R; 2026: 140 trades, +24,6R):
+
+- **Kun sweeps af ét liq-niveau** (`KUN_1_LIQ`). Et sweep, der tager flere på én gang (fx "Asia + 4h"), giver ingen trade.
+- **Kun dagens første trade** (`FOERSTE_TRADE`, DK-dag).
+- **Entry på signalet** (`ENTRY_GP = None`), ikke limit i 0,705.
+- **Fast TP** (`FAST_TP`): TP sættes ved entry og flyttes ikke af en session lavet i tradet.
+- **SL til +1R ved +2R** (`TRAIL = (2.0, 1.0)`). Ingen partial.
+
+De gamle regler køres med `--alle-liq --alle-trades --flyt-tp --ingen-trail` (oktober giver så igen 24 trades, +13,65R).
+
 ## Reglerne
 
 Short er beskrevet her. Long er det samme spejlvendt. Forløbet for en short: benet går ned og sweeper et low, reaktionen går op ind i benets gaps, og der shortes på inversion af et gap i reaktionen.

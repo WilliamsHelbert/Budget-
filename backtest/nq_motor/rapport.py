@@ -6,6 +6,7 @@ import fvg_model as f
 DK = pd.Timedelta(hours=6)
 DAYN = ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"]
 MDR = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
+REGLER = {}               # saettes af motor.py: kun1, foerste, fast_tp, trail
 MAX_CHARTS = 150          # flere trades end det: kun tabel og maanedsoversigt (siden bliver ellers for stor)
 d = None                  # 15s-data, saettes af motor.py
 
@@ -176,12 +177,12 @@ def html_rapport(rows, titel, fra, til, gp=None, partial=False, h4=False):
     <div class="tablewrap"><table><thead><tr><th>#</th><th>Entry DK</th><th>Retning</th><th>Sweep</th><th>TF</th><th class="num">Entry</th><th class="num">SL</th><th>TP</th><th class="num">RR</th><th>Udfald</th><th class="num">R</th><th class="num" title="Hold til start-TP eller SL, ingen ny TP og ingen lukning 22:55">R fuld TP</th><th class="num" title="TP = naermeste af session-liq og 3. uberoerte 4h-liq, uden partial">R 3·4h</th></tr></thead><tbody>{trs}</tbody></table></div>
   </section>
   <section><h2>Reglerne</h2><div class="rules">
-    <div class="rule"><b>Liq</b>Asia (02:00–08:00 DK), London (08:00–14:00 DK), PDH/PDL, gårsdagens sessions og 4h-candles en uge tilbage. Et niveau kan kun sweepes én gang.</div>
+    <div class="rule"><b>Liq</b>Asia (02:00–08:00 DK), London (08:00–14:00 DK), PDH/PDL, gårsdagens sessions og 4h-candles en uge tilbage. Et niveau kan kun sweepes én gang.{" Kun sweeps af ét niveau tæller (ikke fx Asia + 4h)." if REGLER.get("kun1") else ""}</div>
     <div class="rule"><b>Benet og gaps</b>De to nyeste 5m gaps i benet, lavet til og med sweep-candlen. Et gap, der blev inverseret før sweepet, tæller ikke.</div>
     <div class="rule"><b>Sweep</b>Sweep af liq og en 5m close tilbage over niveauet. Tager prisen et session-niveau på den anden side før entry, er setuppet dødt. Ingen entry inden for 2 timer: setuppet dør, men benet lever.</div>
     <div class="rule"><b>Entry</b>Reaktionen skal ind i begge 5m gaps. Signal på close mindst 1 point forbi det ældste gap i reaktionen (1–5m, højeste timeframe vinder). {("Entry med limit " + f"{gp:.3f}".replace(".", ",") + " af vejen fra signalet mod SL. Fyldes den ikke, eller når prisen TP først, er der intet trade.") if gp else "Entry på signalet."} SL på toppen af reaktionen.</div>
-    <div class="rule"><b>TP</b>Nærmeste uberørte session/PDH/PDL mindst 1R væk. Ellers den nærmeste gamle session, der ikke er taget, uanset hvor langt tilbage. {"Ellers 4h, og" if h4 else "Ellers,"} på ATH 4R. En session, der bliver færdig under tradet og ligger tættere, bliver ny TP.</div>
-    <div class="rule"><b>Styring</b>{"25% ud på high/low af en 4h-candle, der lukker under tradet." if partial else "Hele positionen går til TP, ingen partial."} Alt lukkes 22:55 DK.</div>
+    <div class="rule"><b>TP</b>Nærmeste uberørte session/PDH/PDL mindst 1R væk. Ellers den nærmeste gamle session, der ikke er taget, uanset hvor langt tilbage. {"Ellers 4h, og" if h4 else "Ellers,"} på ATH 4R. {"TP sættes ved entry og flyttes ikke." if REGLER.get("fast_tp") else "En session, der bliver færdig under tradet og ligger tættere, bliver ny TP."}</div>
+    <div class="rule"><b>Styring</b>{"25% ud på high/low af en 4h-candle, der lukker under tradet." if partial else "Hele positionen går til TP, ingen partial."} {f" Ved +{REGLER['trail'][0]:g}R flyttes SL til +{REGLER['trail'][1]:g}R." if REGLER.get("trail") else ""} Alt lukkes 22:55 DK.{" Kun dagens første trade tages." if REGLER.get("foerste") else ""}</div>
   </div></section>
   {f'<section><h2>Hvert trade</h2>{cards}</section>' if med_chart else f'<p class="muted">Over {MAX_CHARTS} trades, så der er ingen charts pr. trade. Kør en kortere periode for at se dem.</p>'}
 </div>

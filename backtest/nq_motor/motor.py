@@ -30,10 +30,15 @@ CFG = dict(
     OWN_LEG=False, FVG_NEAR=None, NEW_EXT=False, RESET_FROM_EXT=False, MAX_SWEEP_ENTRY=None,
 )
 # ---------------------------------------------------------------- regler (resultat)
-ENTRY_GP = 0.705     # limit-entry: 0,705 af vejen fra signal-entry tilbage mod SL (None = entry paa signalet)
+ENTRY_GP = None      # fx 0.705: limit-entry 0,705 af vejen fra signal-entry tilbage mod SL (None = entry paa signalet)
 PARTIAL = False      # True: 25% ud paa high/low af en 4h-candle der lukker mens tradet er aabent
 H4_TP = False        # True: 4h-niveauer som TP, hvis der ingen session-liq er
 OLD_SESS = True      # intet nyt liq -> naermeste gamle session, der ikke er taget, uanset hvor langt tilbage
+# ---------------------------------------------------------------- standard fra 28/10-26 (mindst drawdown over 2022-2026)
+KUN_1_LIQ = True     # kun sweeps af eet liq-niveau (ikke fx "Asia + 4h")
+FOERSTE_TRADE = True # kun dagens foerste trade (DK-dag)
+FAST_TP = True       # TP saettes ved entry og flyttes ikke af en session lavet i tradet
+TRAIL = (2.0, 1.0)   # ved +2R flyttes SL til +1R (None = slaaet fra)
 SL_CUT = (30, 40, 50, 60)   # SL-varianter i CSV: SL skaaret med saa mange procent
 EXIT = "16:55"       # alt lukkes 16:55 NY = 22:55 DK
 TREND = None         # N: kun long naar NQ er steget over de seneste N afsluttede CME-dage, kun short naar den er faldet
@@ -128,7 +133,9 @@ def range_pos(tc, entry):
     return (entry - lo) / (hi - lo)
 
 
-def _entry_ok(day, tc, short, entry):
+def _entry_ok(day, tc, short, entry, sweep=""):
+    if KUN_1_LIQ and " + " in sweep:
+        return False
     k = (tc + pd.Timedelta(hours=6)).tz_localize(None).normalize()
     if TREND and k in _rng.index and not np.isnan(_rng.trend[k]):
         if _rng.trend[k] == (1 if short else -1):
@@ -141,7 +148,7 @@ def _entry_ok(day, tc, short, entry):
 
 def configure():
     f.levels = levels
-    f.ENTRY_OK = _entry_ok if (RANGE or TREND) else None
+    f.ENTRY_OK = _entry_ok if (RANGE or TREND or KUN_1_LIQ) else None
     f.TP_FUNC = _tp_intern
     f.EXIT_END = lambda day, tc: pd.Timestamp(f"{day} 16:59:45").tz_localize(TZ, nonexistent="shift_forward", ambiguous=False)
     for k, v in CFG.items():
@@ -160,7 +167,8 @@ def setups(day):
         lv = levels(d, day)
         vals = [(lv[n][1] if short else lv[n][0]) for n in r["sweep"].split(" + ") if n in lv]
         out.append(dict(r, dag=day, entry_dk=f"{r['ts'] + DK:%d/%m %H:%M}", lvl=(min(vals) if short else max(vals)) if vals else r["ben_low"]))
-    return out
+    out.sort(key=lambda r: r["ts"])
+    return out[:1] if FOERSTE_TRADE else out
 
 
 # ---------------------------------------------------------------- TP og udfald
@@ -279,11 +287,11 @@ def resultat(r):
     c4 = [(t + pd.Timedelta(hours=4), q.low if short else q.high) for t, q in c4.iterrows() if r["ts"] < t + pd.Timedelta(hours=4) <= end]
     r["tp_start"] = tp                          # TP ved entry (foer en session lavet i tradet kan flytte den)
 
-    def sim(tp, tpn, partial, sl=None):
+    def sim(tp, tpn, partial, sl=None, trail=TRAIL):
         sl = r["sl"] if sl is None else sl; rk = abs(sl - entry)
         ss = list(sess); R, how, tx, part = None, "", None, None
         for ts, b in d[r["ts"]:end].iterrows():
-            while ss and ts >= ss[0][0]:
+            while ss and ts >= ss[0][0] and not FAST_TP:
                 e, nm, a = ss.pop(0)
                 if e <= r["ts"]:
                     continue
@@ -292,9 +300,12 @@ def resultat(r):
                 if ((v < entry) and v > tp) if short else ((v > entry) and v < tp):
                     tp, tpn = v, f"{nm} (lavet i tradet)"
             if (b.high >= sl) if short else (b.low <= sl):
-                R, how, tx = -1.0, "SL", ts; break
+                R = ((entry - sl) if short else (sl - entry)) / rk
+                R, how, tx = R, ("SL" if R < 0 else f"SL +{R:.0f}R"), ts; break
             if (b.low <= tp) if short else (b.high >= tp):
                 R, how, tx = abs(tp - entry) / rk, "TP", ts; break
+            if trail and abs(sl - entry) == rk and ((entry - b.low) if short else (b.high - entry)) >= trail[0] * rk:
+                sl = entry + (-1 if short else 1) * trail[1] * rk
             if partial and part is None:
                 for e, v in c4:
                     if ts >= e and ((v < entry) if short else (v > entry)) and ((b.low <= v) if short else (b.high >= v)):
@@ -376,10 +387,17 @@ if __name__ == "__main__":
     ap.add_argument("--partial", action="store_true", help="25%% ud paa 4h high/low")
     ap.add_argument("--h4tp", action="store_true", help="4h-niveauer som TP, hvis der ingen session-liq er")
     ap.add_argument("--nyeste", action="store_true", help="entry paa inversion af det NYESTE gap i reaktionen (foerste inversion), ikke det aeldste")
+    ap.add_argument("--alle-liq", action="store_true", help="tillad sweeps af flere liq paa een gang")
+    ap.add_argument("--alle-trades", action="store_true", help="flere trades om dagen (ikke kun den foerste)")
+    ap.add_argument("--flyt-tp", action="store_true", help="en session lavet i tradet bliver ny TP, hvis den er naermere")
+    ap.add_argument("--ingen-trail", action="store_true", help="ingen SL-flyt ved +2R")
     ap.add_argument("--trend", type=int, default=None, metavar="DAGE",
                     help="kun long naar NQ er steget over de seneste DAGE dage, kun short naar den er faldet, fx --trend 10")
     a = ap.parse_args()
     TREND = a.trend
+    KUN_1_LIQ = not a.alle_liq; FOERSTE_TRADE = not a.alle_trades; FAST_TP = not a.flyt_tp
+    if a.ingen_trail:
+        TRAIL = None
     if a.nyeste:
         CFG["OLDEST"] = False
     ENTRY_GP = a.gp or None; PARTIAL = a.partial; H4_TP = a.h4tp
@@ -397,6 +415,7 @@ if __name__ == "__main__":
     if not a.ingen_rapport:
         import rapport
         rapport.d = d
+        rapport.REGLER = dict(kun1=KUN_1_LIQ, foerste=FOERSTE_TRADE, fast_tp=FAST_TP, trail=TRAIL)
         if a.charts:
             rapport.MAX_CHARTS = a.charts
         open(os.path.join(a.ud, "rapport.html"), "w").write(rapport.html_rapport(rows, a.titel or f"NQ {a.fra} – {a.til}", a.fra, a.til, gp=ENTRY_GP, partial=PARTIAL, h4=H4_TP))
