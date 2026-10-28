@@ -405,7 +405,10 @@ if __name__ == "__main__":
                     help="kun long naar NQ er steget over de seneste DAGE dage, kun short naar den er faldet, fx --trend 10")
     ap.add_argument("--rr", type=float, nargs=2, metavar=("MIN", "MAX"), default=None,
                     help="kun trades med RR til start-TP mellem MIN og MAX (standard 1.5 99: over 99R er risk kun faa punkter; --rr 0 9999 slaar det fra)")
+    ap.add_argument("--liq-alder", type=int, default=0, metavar="MIN",
+                    help="liq skal vaere mindst MIN minutter gammelt (fra niveauet blev faerdigt) for at et sweep taeller")
     a = ap.parse_args()
+    CFG["MIN_LIQ_AGE"] = pd.Timedelta(minutes=a.liq_alder)
     RR_GR = tuple(a.rr) if a.rr else RR_GR
     TREND = a.trend
     KUN_1_LIQ = not a.alle_liq; FOERSTE_TRADE = not a.alle_trades; FAST_TP = not a.flyt_tp

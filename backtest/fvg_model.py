@@ -36,6 +36,7 @@ PRE = None                     # fx pd.Timedelta(hours=6): vinduet og benet star
 MAX_SWEEP_ENTRY = None         # fx pd.Timedelta(hours=2): max tid fra sweep til entry
 MAX_SWEEP_RESET = None         # som MAX_SWEEP_ENTRY, men setuppet nulstilles saa et nyt sweep kan taelle
 MIN_RR = 0.5                   # MULTI: trade under min RR til 4h TP tages ikke (setuppet springes over)
+MIN_LIQ_AGE = pd.Timedelta(0)  # et niveau skal vaere mindst saa gammelt (fra det blev faerdigt) for at et sweep af det taeller
 OLDEST = False                 # True: entry paa inversion af den AELDSTE FVG i reaktionen (naermest benets ende), ikke den nyeste
 INSIDE = False                 # True: entry-closen skal ligge paa indersiden af det swept niveau (short: over swept low, long: under swept high)
 OWN_LEG = False                # True: et niveau, som benet selv har lavet, taeller ikke som sweep (fx 4h high lavet midt i benet)
@@ -211,7 +212,7 @@ def run_day(d, day, log=print):
             # benet ned: nyt low, og tager det et session-low = sweep
             if not tapped and lo < low:
                 low, lowT = lo, t
-                hit = [nm for nm, v in lvl.items() if lo < sgn * v and nm not in gone and t >= lvE[nm]] if t >= ws else []
+                hit = [nm for nm, v in lvl.items() if lo < sgn * v and nm not in gone and t >= lvE[nm] + MIN_LIQ_AGE] if t >= ws else []
                 if OWN_LEG and hit:
                     def own(nm):
                         y = d[topT:lvE[nm] - pd.Timedelta(seconds=1)]
