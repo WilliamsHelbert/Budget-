@@ -54,7 +54,7 @@ Valgt for mindst drawdown over 2022–2026 (597 trades, +140,6R, max drawdown �
 
 De gamle regler køres med `--alle-liq --alle-trades --flyt-tp --ingen-trail` (oktober giver så igen 24 trades, +13,65R).
 
-`--rr MIN MAX` tager kun trades, hvor RR til start-TP ligger mellem MIN og MAX. Et setup udenfor springes over, og dagens næste setup kan tages. Over 2022–2026 gav `--rr 2 99` +155,0R (DD −15,3R) og `--rr 1.5 99` +147,6R (DD −14,4R); et loft (max 6/10) smider de store vindere væk og gør det værre.
+Standard er `--rr 1.5 99` (fra 28/10-2026). `--rr MIN MAX` tager kun trades, hvor RR til start-TP ligger mellem MIN og MAX. Et setup udenfor springes over, og dagens næste setup kan tages. Over 2022–2026 gav `--rr 2 99` +155,0R (DD −15,3R) og `--rr 1.5 99` +147,6R (DD −14,4R); et loft (max 6/10) smider de store vindere væk og gør det værre.
 
 ## Reglerne
 

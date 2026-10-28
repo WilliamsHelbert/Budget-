@@ -43,7 +43,7 @@ SL_CUT = (30, 40, 50, 60)   # SL-varianter i CSV: SL skaaret med saa mange proce
 EXIT = "16:55"       # alt lukkes 16:55 NY = 22:55 DK
 TREND = None         # N: kun long naar NQ er steget over de seneste N afsluttede CME-dage, kun short naar den er faldet
 RANGE = None         # (dage, lav, hoej): ingen short under `lav` og ingen long over `hoej` i rangen af de seneste `dage` CME-dage, fx (10, 0.25, 0.75)
-RR_GR = None         # (min, max): kun trades hvor RR til start-TP ligger i intervallet; ellers springes setuppet over, og dagens naeste setup kan tages
+RR_GR = (1.5, 99.0)   # (min, max): kun trades hvor RR til start-TP ligger i intervallet; ellers springes setuppet over, og dagens naeste setup kan tages
 
 d = None             # 15s-data, saettes af load()
 _orig_levels = f.levels
@@ -404,9 +404,9 @@ if __name__ == "__main__":
     ap.add_argument("--trend", type=int, default=None, metavar="DAGE",
                     help="kun long naar NQ er steget over de seneste DAGE dage, kun short naar den er faldet, fx --trend 10")
     ap.add_argument("--rr", type=float, nargs=2, metavar=("MIN", "MAX"), default=None,
-                    help="kun trades med RR til start-TP mellem MIN og MAX, fx --rr 1.5 10")
+                    help="kun trades med RR til start-TP mellem MIN og MAX (standard 1.5 99: over 99R er risk kun faa punkter; --rr 0 9999 slaar det fra)")
     a = ap.parse_args()
-    RR_GR = tuple(a.rr) if a.rr else None
+    RR_GR = tuple(a.rr) if a.rr else RR_GR
     TREND = a.trend
     KUN_1_LIQ = not a.alle_liq; FOERSTE_TRADE = not a.alle_trades; FAST_TP = not a.flyt_tp
     if a.ingen_trail:
@@ -428,7 +428,7 @@ if __name__ == "__main__":
     if not a.ingen_rapport:
         import rapport
         rapport.d = d
-        rapport.REGLER = dict(kun1=KUN_1_LIQ, foerste=FOERSTE_TRADE, fast_tp=FAST_TP, trail=TRAIL)
+        rapport.REGLER = dict(rr=RR_GR, kun1=KUN_1_LIQ, foerste=FOERSTE_TRADE, fast_tp=FAST_TP, trail=TRAIL)
         if a.charts:
             rapport.MAX_CHARTS = a.charts
         open(os.path.join(a.ud, "rapport.html"), "w").write(rapport.html_rapport(rows, a.titel or f"NQ {a.fra} – {a.til}", a.fra, a.til, gp=ENTRY_GP, partial=PARTIAL, h4=H4_TP))
