@@ -34,6 +34,7 @@ ENTRY_GP = 0.705     # limit-entry: 0,705 af vejen fra signal-entry tilbage mod 
 PARTIAL = False      # True: 25% ud paa high/low af en 4h-candle der lukker mens tradet er aabent
 H4_TP = False        # True: 4h-niveauer som TP, hvis der ingen session-liq er
 OLD_SESS = True      # intet nyt liq -> naermeste gamle session, der ikke er taget, uanset hvor langt tilbage
+SL_CUT = (30, 40, 50, 60)   # SL-varianter i CSV: SL skaaret med saa mange procent
 EXIT = "16:55"       # alt lukkes 16:55 NY = 22:55 DK
 TREND = None         # N: kun long naar NQ er steget over de seneste N afsluttede CME-dage, kun short naar den er faldet
 RANGE = None         # (dage, lav, hoej): ingen short under `lav` og ingen long over `hoej` i rangen af de seneste `dage` CME-dage, fx (10, 0.25, 0.75)
@@ -278,7 +279,8 @@ def resultat(r):
     c4 = [(t + pd.Timedelta(hours=4), q.low if short else q.high) for t, q in c4.iterrows() if r["ts"] < t + pd.Timedelta(hours=4) <= end]
     r["tp_start"] = tp                          # TP ved entry (foer en session lavet i tradet kan flytte den)
 
-    def sim(tp, tpn, partial):
+    def sim(tp, tpn, partial, sl=None):
+        sl = r["sl"] if sl is None else sl; rk = abs(sl - entry)
         ss = list(sess); R, how, tx, part = None, "", None, None
         for ts, b in d[r["ts"]:end].iterrows():
             while ss and ts >= ss[0][0]:
@@ -289,17 +291,17 @@ def resultat(r):
                 v = x.low.min() if short else x.high.max()
                 if ((v < entry) and v > tp) if short else ((v > entry) and v < tp):
                     tp, tpn = v, f"{nm} (lavet i tradet)"
-            if (b.high >= r["sl"]) if short else (b.low <= r["sl"]):
+            if (b.high >= sl) if short else (b.low <= sl):
                 R, how, tx = -1.0, "SL", ts; break
             if (b.low <= tp) if short else (b.high >= tp):
-                R, how, tx = abs(tp - entry) / risk, "TP", ts; break
+                R, how, tx = abs(tp - entry) / rk, "TP", ts; break
             if partial and part is None:
                 for e, v in c4:
                     if ts >= e and ((v < entry) if short else (v > entry)) and ((b.low <= v) if short else (b.high >= v)):
-                        part = (v, ts, abs(v - entry) / risk); break
+                        part = (v, ts, abs(v - entry) / rk); break
         if R is None:
             x = d[r["ts"]:end]; cl = x.close.iloc[-1]; tx = x.index[-1]
-            R = ((entry - cl) if short else (cl - entry)) / risk; how = "Lukket 22:55"
+            R = ((entry - cl) if short else (cl - entry)) / rk; how = "Lukket 22:55"
         return R, how, tx, tp, tpn, part
 
     R, how, tx, tp, tpn, part = sim(tp, tpn, PARTIAL)
@@ -311,6 +313,9 @@ def resultat(r):
     r["tp_4h3"] = tp3
     q = sim(tp3, tpn, False); r["R_4h3"] = round(q[0], 2)
     q = sim(tp3, tpn, True); r["R_4h3_partial"] = alt(q[0], q[5])
+    # SL skaaret med p: samme entry og start-TP, SL p naermere entry
+    for pc in SL_CUT:
+        q = sim(r["tp_start"], tpn, False, entry + (1 - pc / 100) * (r["sl"] - entry)); r[f"R_sl{pc}"] = round(q[0], 2)
     r["R_uden"] = round(R, 2)
     if part:
         R = 0.25 * part[2] + 0.75 * R
@@ -352,7 +357,7 @@ def tabel(rows):
         dato=f"{r['ts'] + DK:%Y-%m-%d}", signal_dk=f"{r['signal_ts'] + DK:%H:%M}", signal_entry=r["signal_entry"], entry_dk=f"{r['ts'] + DK:%H:%M}", sweep_dk=f"{r['sweep_ts'] + DK:%H:%M}", retning=r["retning"],
         sweep=r["sweep"].replace("i gaar", "i går"), tf=r["fvg_tf"], entry=r["entry"], sl=r["sl"], risk=round(r["risk"], 2), tp=r["tp"], tp_navn=r["tp_navn"], tp_start=r["tp_start"], rr=round(abs(r["tp_start"] - r["entry"]) / r["risk"], 2),
         udfald=r["udfald"], exit_dk=r["exit_dk"], partial_25=(r["partial"][0] if r["partial"] else None), R_uden_partial=r["R_uden"], R=r["R"], R_fuld_tp=r["R_fuld"],
-        R_partial=r["R_alt_partial"], tp_4h3=r["tp_4h3"], R_4h3=r["R_4h3"], R_4h3_partial=r["R_4h3_partial"]) for r in rows])
+        R_partial=r["R_alt_partial"], tp_4h3=r["tp_4h3"], R_4h3=r["R_4h3"], R_4h3_partial=r["R_4h3_partial"], **{f"R_sl{pc}": r[f"R_sl{pc}"] for pc in SL_CUT}) for r in rows])
 
 
 if __name__ == "__main__":
@@ -370,10 +375,13 @@ if __name__ == "__main__":
     ap.add_argument("--gp", type=float, default=ENTRY_GP, help="limit-entry i GP (0 = entry paa signalet)")
     ap.add_argument("--partial", action="store_true", help="25%% ud paa 4h high/low")
     ap.add_argument("--h4tp", action="store_true", help="4h-niveauer som TP, hvis der ingen session-liq er")
+    ap.add_argument("--nyeste", action="store_true", help="entry paa inversion af det NYESTE gap i reaktionen (foerste inversion), ikke det aeldste")
     ap.add_argument("--trend", type=int, default=None, metavar="DAGE",
                     help="kun long naar NQ er steget over de seneste DAGE dage, kun short naar den er faldet, fx --trend 10")
     a = ap.parse_args()
     TREND = a.trend
+    if a.nyeste:
+        CFG["OLDEST"] = False
     ENTRY_GP = a.gp or None; PARTIAL = a.partial; H4_TP = a.h4tp
     RANGE = (int(a.range[0]), a.range[1], a.range[2]) if a.range else None
     CFG["TFS"] = sorted(set(a.tf) | {5}, reverse=True)   # 5m bruges altid til ben og sweep
