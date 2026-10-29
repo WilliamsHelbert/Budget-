@@ -56,6 +56,17 @@ De gamle regler køres med `--alle-liq --alle-trades --flyt-tp --ingen-trail` (o
 
 Standard er `--rr 1.5 99` (fra 28/10-2026). `--rr MIN MAX` tager kun trades, hvor RR til start-TP ligger mellem MIN og MAX. Et setup udenfor springes over, og dagens næste setup kan tages. Over 2022–2026 gav `--rr 2 99` +155,0R (DD −15,3R) og `--rr 1.5 99` +147,6R (DD −14,4R); et loft (max 6/10) smider de store vindere væk og gør det værre.
 
+## Standard fra 29/10-2026
+
+Oven i reglerne ovenfor:
+
+- **Min 1,5R til start-TP** (`RR_GR = (1.5, 99)`). Under 1,5R (eller over 99R, hvor SL kun er få punkter) springes setuppet over, og dagens næste setup kan tages.
+- **Spring dagen over 08–14 DK** (`SKIP_TID = (8, 14)`). Ligger dagens første setup fra 08:00 til 14:00 DK, tages der intet den dag. Slås fra med `--skip-tid 0 0`.
+
+Over 2022–2026: 379 trades, +144,6R, max drawdown −10,5R (2025–26: +71,7R, DD −10,0R).
+
+Test-flag (standard slået fra): `--liq-alder MIN` (liq skal være mindst MIN min gammelt), `--ingen-tid FRA TIL` (ingen entries i tidsrummet, men dagens næste setup kan tages), `--max-sl PCT` (loft på SL i % af prisen). Ingen af dem hjalp.
+
 ## Reglerne
 
 Short er beskrevet her. Long er det samme spejlvendt. Forløbet for en short: benet går ned og sweeper et low, reaktionen går op ind i benets gaps, og der shortes på inversion af et gap i reaktionen.

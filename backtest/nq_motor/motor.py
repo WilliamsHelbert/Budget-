@@ -44,6 +44,7 @@ EXIT = "16:55"       # alt lukkes 16:55 NY = 22:55 DK
 TREND = None         # N: kun long naar NQ er steget over de seneste N afsluttede CME-dage, kun short naar den er faldet
 RANGE = None         # (dage, lav, hoej): ingen short under `lav` og ingen long over `hoej` i rangen af de seneste `dage` CME-dage, fx (10, 0.25, 0.75)
 RR_GR = (1.5, 99.0)   # (min, max): kun trades hvor RR til start-TP ligger i intervallet; ellers springes setuppet over, og dagens naeste setup kan tages
+SKIP_TID = (8, 14)   # (fra, til): ligger dagens foerste setup her (DK), tages der intet den dag; None = slaaet fra
 NO_TID = None        # (fra, til): ingen entries fra kl. fra til kl. til DK, fx (8, 14)
 MAX_SL = None        # ingen trades med SL over saa mange % af prisen, fx 0.25
 
@@ -179,7 +180,12 @@ def setups(day):
         vals = [(lv[n][1] if short else lv[n][0]) for n in r["sweep"].split(" + ") if n in lv]
         out.append(dict(r, dag=day, entry_dk=f"{r['ts'] + DK:%d/%m %H:%M}", lvl=(min(vals) if short else max(vals)) if vals else r["ben_low"]))
     out.sort(key=lambda r: r["ts"])
-    return out[:1] if FOERSTE_TRADE else out
+    if FOERSTE_TRADE:
+        out = out[:1]
+        # ligger dagens foerste setup i SKIP_TID (DK), tages der intet den dag
+        if SKIP_TID and out and SKIP_TID[0] <= (out[0]["ts"] + DK).hour < SKIP_TID[1]:
+            return []
+    return out
 
 
 # ---------------------------------------------------------------- TP og udfald
@@ -415,7 +421,10 @@ if __name__ == "__main__":
                     help="liq skal vaere mindst MIN minutter gammelt (fra niveauet blev faerdigt) for at et sweep taeller")
     ap.add_argument("--ingen-tid", type=int, nargs=2, metavar=("FRA", "TIL"), default=None, help="ingen entries fra FRA til TIL DK, fx --ingen-tid 8 14")
     ap.add_argument("--max-sl", type=float, default=None, metavar="PCT", help="ingen trades med SL over PCT %% af prisen, fx 0.25")
+    ap.add_argument("--skip-tid", type=int, nargs=2, metavar=("FRA", "TIL"), default=None, help="spring dagen over, hvis dagens foerste setup ligger fra FRA til TIL DK (standard 8 14; --skip-tid 0 0 slaar det fra)")
     a = ap.parse_args()
+    if a.skip_tid:
+        SKIP_TID = tuple(a.skip_tid) if a.skip_tid[1] > a.skip_tid[0] else None
     NO_TID = tuple(a.ingen_tid) if a.ingen_tid else None; MAX_SL = a.max_sl
     CFG["MIN_LIQ_AGE"] = pd.Timedelta(minutes=a.liq_alder)
     RR_GR = tuple(a.rr) if a.rr else RR_GR
@@ -440,7 +449,7 @@ if __name__ == "__main__":
     if not a.ingen_rapport:
         import rapport
         rapport.d = d
-        rapport.REGLER = dict(rr=RR_GR, kun1=KUN_1_LIQ, foerste=FOERSTE_TRADE, fast_tp=FAST_TP, trail=TRAIL)
+        rapport.REGLER = dict(skip=SKIP_TID, rr=RR_GR, kun1=KUN_1_LIQ, foerste=FOERSTE_TRADE, fast_tp=FAST_TP, trail=TRAIL)
         if a.charts:
             rapport.MAX_CHARTS = a.charts
         open(os.path.join(a.ud, "rapport.html"), "w").write(rapport.html_rapport(rows, a.titel or f"NQ {a.fra} – {a.til}", a.fra, a.til, gp=ENTRY_GP, partial=PARTIAL, h4=H4_TP))
