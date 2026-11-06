@@ -14,7 +14,8 @@ Alt starter ved market open 09:30 NY, og entry skal ske senest 12:00.
   2. og 3. som step 3 og 4 i 4-step.
 SL: naermeste 1m swing low under entry, der ikke er taget. TP: naermeste uberoerte NY PRE / London / Asia
 high eller 4h high (10 dage tilbage). Er naermeste liq under 0,9R, bruges
-naeste liq. Intet liq i sigte: TP 3R. Een trade ad gangen, foerst til moelle. Setups doer ikke og nulstilles ikke.
+naeste liq. Intet liq i sigte: TP 3R.
+Dagsregel: maks 2 trades, og faerdig for dagen efter en vinder. Een trade ad gangen, foerst til moelle. Setups doer ikke og nulstilles ikke.
 Swing = high/low hoejere/lavere end candlen foer og efter, kendt foerst naar candlen efter er lukket.
 """
 import argparse, json, os
@@ -23,6 +24,8 @@ import pandas as pd
 NY = "America/New_York"
 DATA = "/mnt/project-files/data/NQ_samlet_15s.parquet"
 MIN_RR = 0.9
+MAX_TRADES = 2          # maks trades pr. dag
+STOP_EFTER_WIN = True   # faerdig for dagen efter en vinder
 ENTRY_FRA, ENTRY_TIL = "09:30", "12:00"
 EXIT_SENEST = "16:59"
 H4_DAGE = 10
@@ -302,6 +305,8 @@ def run_day(day, d, rule="A"):
                 r["_exit_ts"] = ex
                 trades.append(r)
                 busy_til = ex
+                if len(trades) >= MAX_TRADES or (STOP_EFTER_WIN and R > 0):
+                    return trades
                 for z in S:
                     z.reset()
                 break
@@ -334,7 +339,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("fra"); ap.add_argument("til")
     ap.add_argument("--ud", default="/mnt/project-files/backtest/tjr/jan-mar2026")
+    ap.add_argument("--uden-dagsregel", action="store_true", help="ingen maks 2 trades / stop efter win")
     a = ap.parse_args()
+    global MAX_TRADES, STOP_EFTER_WIN
+    if a.uden_dagsregel:
+        MAX_TRADES, STOP_EFTER_WIN = 99, False
     d = load(a.fra, a.til)
     os.makedirs(a.ud, exist_ok=True)
     alle = []
