@@ -15,6 +15,7 @@ Alt starter ved market open 09:30 NY, og entry skal ske senest 12:00.
 SL: naermeste 1m swing low under entry, der ikke er taget. TP: naermeste uberoerte NY PRE / London / Asia
 high eller 4h high (10 dage tilbage). Er naermeste liq under 0,9R, bruges
 naeste liq. Intet liq i sigte: TP 3R.
+Liq lavet i 5m-candlen 09:25-09:30 (lige op ad market open) taeller ikke.
 Dagsregel: maks 2 trades, og faerdig for dagen efter en vinder. Een trade ad gangen, foerst til moelle. Setups doer ikke og nulstilles ikke.
 Swing = high/low hoejere/lavere end candlen foer og efter, kendt foerst naar candlen efter er lukket.
 """
@@ -179,6 +180,8 @@ def run_day(day, d, rule="A"):
     liq = session_levels(day, x) + nypre_swings(day, x)
     # kun liq der ikke er taget foer market open
     liq = [L for L in liq if L["klar"] <= e0 and untaken(L["pris"], L["kind"], L["klar"], e0, x)]
+    # liq lavet i 5m-candlen lige op ad market open (09:25-09:30) taeller ikke
+    liq = [L for L in liq if not (e0 - pd.Timedelta(minutes=5) <= L["dannet"] < e0)]
     taken = set()          # wick igennem (4-step sweep)
     closed = set()         # 5m close igennem (3-step BOS)
     S = [Setup(True, 4), Setup(False, 4), Setup(True, 3), Setup(False, 3)]
