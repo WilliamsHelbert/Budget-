@@ -1,18 +1,21 @@
-"""TJR-modellen, 4-step vejen, paa NQ 15s-data.
+"""TJR-modellen paa NQ 15s-data: 4-step (reversal) og 3-step (continuation).
 
-Step 1 (5m-liq): en 1m-candle handler under et uberoert liq-low (long) / over et liq-high (short).
-    Liq = dagens Asia (20:00-02:00), London (02:00-08:00) og NY PRE (08:00-09:30) high/low,
-    plus 5m swing highs/lows inde i NY PRE, som ogsaa er high/low i et 15m swing.
-Step 2 (5m): en 5m-candle lukker over et 5m swing high (long), der er dannet efter sweepet.
-Step 3 (1m): enten lukker en 1m-candle under et bullish 1m FVG (inversion), eller under
-    det seneste 1m swing low (BOS mod tradet). Det der sker foerst.
-Step 4 (1m): en 1m-candle lukker over det seneste 1m swing high -> market entry paa close.
-SL: naermeste 1m swing low under entry (long). TP: naermeste uberoerte NY PRE / London /
-    Asia high eller 4h high. Tradet er kun gyldigt, hvis TP er mindst 0,9R vaek.
-Entry kun 09:30-12:00 NY. Setuppet doer ikke; man venter til alle steps er gennemfoert.
+Liq = dagens Asia (20:00-02:00), London (02:00-08:00) og NY PRE (08:00-09:30) high/low, plus 5m swings inde i
+NY PRE, som ogsaa er high/low i et 15m swing. Kun liq der ikke er taget foer 09:30 taeller.
+Alt starter ved market open 09:30 NY, og entry skal ske senest 12:00.
 
-Swing = high/low hoejere/lavere end candlen foer og efter. Det er foerst kendt, naar candlen
-efter er lukket (ingen lookahead). Short er spejlvendt.
+4-step (long, short spejlvendt):
+  1. 1m handler under et liq-low (sweep).
+  2. 5m close over et 5m swing high dannet efter sweepet.
+  3. 1m close under et bullish 1m FVG (iFVG) eller under seneste 1m swing low.
+  4. 1m close over seneste 1m swing high -> market entry paa close.
+3-step (long):
+  1. 5m close over et liq-high.
+  2. og 3. som step 3 og 4 i 4-step.
+SL: naermeste 1m swing low under entry, der ikke er taget. TP: naermeste uberoerte NY PRE / London / Asia
+high eller 4h high (10 dage tilbage). Regel A: skip hvis TP < 0,9R. Regel B: naermeste liq >= 0,9R.
+Intet liq i sigte: TP 3R. Een trade ad gangen, foerst til moelle. Setups doer ikke og nulstilles ikke.
+Swing = high/low hoejere/lavere end candlen foer og efter, kendt foerst naar candlen efter er lukket.
 """
 import argparse, json, os
 import pandas as pd
@@ -21,7 +24,6 @@ NY = "America/New_York"
 DATA = "/mnt/project-files/data/NQ_samlet_15s.parquet"
 MIN_RR = 0.9
 ENTRY_FRA, ENTRY_TIL = "09:30", "12:00"
-STEP_FRA = "08:00"          # step 1-3 maa ske fra NY PRE start, entry kun i entry-vinduet
 EXIT_SENEST = "16:59"
 H4_DAGE = 10
 
@@ -150,21 +152,20 @@ def find_tp(ts, entry, long, risk, d, day):
 
 
 class Setup:
-    def __init__(self, long):
-        self.long = long
+    def __init__(self, long, model):
+        self.long = long; self.model = model
         self.reset()
 
     def reset(self):
         self.step = 0
-        self.sweep = None       # (ts, navn, pris)
-        self.t2 = self.t3 = None
+        self.anchor = None      # step 2-4 (4-step) / 2-3 (3-step) skal dannes efter dette tidspunkt
         self.info = {}
         self.lv = {}
 
 
-def run_day(day, d):
+def run_day(day, d, rule="A"):
+    """rule A: TP = naermeste liq, skip hvis < 0,9R. rule B: TP = naermeste liq >= 0,9R. Intet liq: 3R."""
     dd = pd.Timestamp(day.date(), tz=NY)
-    w0 = dd + pd.Timedelta(hours=int(STEP_FRA[:2]), minutes=int(STEP_FRA[3:]))
     e0 = dd + pd.Timedelta(hours=9, minutes=30)
     e1 = dd + pd.Timedelta(hours=12)
     x = d[(d.index >= dd - pd.Timedelta(hours=6)) & (d.index < dd + pd.Timedelta(hours=17))]
@@ -172,21 +173,17 @@ def run_day(day, d):
         return []
     b1 = mk(x, 1); b5 = mk(x, 5)
     sw1 = swings(b1); sw5 = swings(b5)
-    sess = session_levels(day, x)
-    liq = [L for L in sess] + nypre_swings(day, x)
-    taken = set()          # liq-niveauer der er taget (kan ikke sweeps igen)
-    # Asia/London: tjek om de allerede er taget mellem session-slut og STEP_FRA
-    for i, L in enumerate(liq):
-        if L["klar"] < w0 and not untaken(L["pris"], L["kind"], L["klar"], w0, x):
-            taken.add(i)
-    S = {True: Setup(True), False: Setup(False)}
+    liq = session_levels(day, x) + nypre_swings(day, x)
+    # kun liq der ikke er taget foer market open
+    liq = [L for L in liq if L["klar"] <= e0 and untaken(L["pris"], L["kind"], L["klar"], e0, x)]
+    taken = set()          # wick igennem (4-step sweep)
+    closed = set()         # 5m close igennem (3-step BOS)
+    S = [Setup(True, 4), Setup(False, 4), Setup(True, 3), Setup(False, 3)]
     trades = []
     busy_til = None
-    # bullish 1m FVGs: (dannet_close_tid, bund, top)
     fvg = []
-    for t in b1[(b1.index >= w0) & (b1.index < e1)].index:
+    for t in b1[(b1.index >= e0) & (b1.index < e1)].index:
         c = b1.loc[t]; close_t = t + pd.Timedelta(minutes=1)
-        # FVG paa 1m med c som 3. candle
         i = b1.index.get_loc(t)
         if i >= 2 and b1.index[i - 2] == t - pd.Timedelta(minutes=2):
             a = b1.iloc[i - 2]
@@ -194,65 +191,65 @@ def run_day(day, d):
                 fvg.append((close_t, a.high, c.low, "bull"))
             if c.high < a.low:
                 fvg.append((close_t, c.high, a.low, "bear"))
-        # liq taget i dette minut
         nyt = []
         for k, L in enumerate(liq):
-            if k in taken or L["klar"] > t:
+            if k in taken:
                 continue
             if (L["kind"] == "L" and c.low < L["pris"]) or (L["kind"] == "H" and c.high > L["pris"]):
                 taken.add(k); nyt.append(L)
+        bos5 = []
+        c5 = None
+        if close_t.minute % 5 == 0 and (close_t - pd.Timedelta(minutes=5)) in b5.index:
+            t5 = close_t - pd.Timedelta(minutes=5); c5 = b5.loc[t5]
+            for k, L in enumerate(liq):
+                if k in closed:
+                    continue
+                if (L["kind"] == "H" and c5.close > L["pris"]) or (L["kind"] == "L" and c5.close < L["pris"]):
+                    closed.add(k); bos5.append(L)
         if busy_til is not None and close_t <= busy_til:
             continue
         busy_til = None
-        for long in (True, False):
-            s = S[long]
-            sweeps = [L for L in nyt if L["kind"] == ("L" if long else "H")]
+        for s in S:
+            long = s.long
             if s.step == 0:
-                if sweeps:
-                    L = sweeps[0]
-                    s.step = 1; s.sweep = (t, L["navn"], L["pris"])
-                    s.ext = c.low if long else c.high; s.anchor = t
-                    s.info["sweep"] = f"{t:%H:%M} {L['navn']} {L['pris']}"
-                    s.info["alle_sweeps"] = ", ".join(q["navn"] for q in sweeps)
-                    s.lv = dict(sweep=(L["dannet"], t, L["pris"], L["navn"]))
+                if s.model == 4:
+                    sweeps = [L for L in nyt if L["kind"] == ("L" if long else "H")]
+                    if sweeps:
+                        L = sweeps[0]
+                        s.step = 1; s.anchor = t
+                        s.info["step1"] = f"{t:%H:%M} sweep af {L['navn']} {L['pris']}"
+                        s.info["liq"] = L["navn"]
+                        s.lv = dict(sweep=(L["dannet"], t, L["pris"], L["navn"]))
+                else:
+                    br = [L for L in bos5 if L["kind"] == ("H" if long else "L")]
+                    if br:
+                        L = br[0]; t5 = close_t - pd.Timedelta(minutes=5)
+                        s.step = 2; s.anchor = t5
+                        s.info["step1"] = f"{close_t:%H:%M} 5m close {c5.close} {'over' if long else 'under'} {L['navn']} {L['pris']}"
+                        s.info["liq"] = L["navn"]
+                        s.lv = dict(sweep=(L["dannet"], t5, L["pris"], L["navn"]))
                 continue
-            # nyt ekstrem efter sweepet (lavere low for long): setuppet lever, men step 2-4 skal ske efter det
-            if (c.low < s.ext) if long else (c.high > s.ext):
-                s.ext = c.low if long else c.high; s.anchor = t
-                if s.step > 1:
-                    s.info["nulstillet"] = s.info.get("nulstillet", 0) + 1
-                s.step = 1
             st = s.anchor
             if s.step == 1:
-                # 5m close over swing high dannet efter sweepet (kun ved 5m close)
-                if close_t.minute % 5 == 0:
+                if c5 is not None:
                     t5 = close_t - pd.Timedelta(minutes=5)
-                    if t5 in b5.index:
-                        c5 = b5.loc[t5]
-                        piv = [q for q in sw5 if q[3] == ("H" if long else "L") and q[0] >= st.floor("5min")
-                               and q[1] <= t5 + pd.Timedelta(minutes=5) and q[0] < t5]
-                        # 5m-candlen der bryder skal lukke over et swing der var bekraeftet foer den lukkede
-                        piv = [q for q in piv if q[1] <= close_t and q[0] + pd.Timedelta(minutes=5) < close_t]
-                        hit = [q for q in piv if (c5.close > q[2] if long else c5.close < q[2])]
-                        if hit:
-                            q = hit[-1]
-                            s.step = 2; s.t2 = close_t
-                            s.lv["s2"] = (q[0], close_t, q[2])
-                            s.info["step2"] = f"{close_t:%H:%M} 5m close {c5.close} over swing {q[0]:%H:%M} {q[2]}" if long else \
-                                f"{close_t:%H:%M} 5m close {c5.close} under swing {q[0]:%H:%M} {q[2]}"
+                    piv = [q for q in sw5 if q[3] == ("H" if long else "L") and q[0] >= st.floor("5min")
+                           and q[1] <= t5 and q[0] < t5]
+                    hit = [q for q in piv if (c5.close > q[2] if long else c5.close < q[2])]
+                    if hit:
+                        q = hit[-1]
+                        s.step = 2
+                        s.lv["s2"] = (q[0], close_t, q[2])
+                        s.info["step2"] = f"{close_t:%H:%M} 5m close {c5.close} {'over' if long else 'under'} swing {q[0]:%H:%M} {q[2]}"
                 continue
             if s.step == 2:
-                # (a) FVG i tradets retning, dannet efter sweepet, lukkes igennem
                 fk = "bull" if long else "bear"
                 inv = None
                 for (ft, lo, hi, k) in fvg:
-                    if k != fk or ft - pd.Timedelta(minutes=3) < st:
-                        continue
-                    if ft >= close_t:
+                    if k != fk or ft - pd.Timedelta(minutes=3) < st or ft >= close_t:
                         continue
                     if (c.close < lo) if long else (c.close > hi):
                         inv = (ft, lo, hi); break
-                # (b) BOS mod tradet: close under seneste bekraeftede 1m swing low dannet efter sweepet
                 kk = "L" if long else "H"
                 piv = [q for q in sw1 if q[3] == kk and q[1] <= t and q[0] >= st]
                 bos = None
@@ -261,10 +258,11 @@ def run_day(day, d):
                     if (c.close < q[2]) if long else (c.close > q[2]):
                         bos = q
                 if inv or bos:
-                    s.step = 3; s.t3 = close_t
+                    s.step = 3
                     s.lv["s3"] = (inv[0] - pd.Timedelta(minutes=3), close_t, inv[1], inv[2], "fvg") if inv else (bos[0], close_t, bos[2], bos[2], "bos")
-                    s.info["step3"] = (f"{close_t:%H:%M} FVG-inversion {inv[1]}-{inv[2]} (dannet {inv[0] - pd.Timedelta(minutes=1):%H:%M})"
-                                       if inv else f"{close_t:%H:%M} 1m BOS mod tradet, swing {bos[0]:%H:%M} {bos[2]}")
+                    s.info["pullback"] = (f"{close_t:%H:%M} iFVG {inv[1]}-{inv[2]} (dannet {inv[0] - pd.Timedelta(minutes=1):%H:%M})"
+                                          if inv else f"{close_t:%H:%M} 1m BOS mod tradet, swing {bos[0]:%H:%M} {bos[2]}")
+                    s.info["pullback_type"] = "iFVG" if inv else "BOS"
                 continue
             if s.step == 3:
                 kk = "H" if long else "L"
@@ -274,15 +272,9 @@ def run_day(day, d):
                 q = piv[-1]
                 if not ((c.close > q[2]) if long else (c.close < q[2])):
                     continue
-                if close_t <= e0 or close_t > e1:
-                    # signal uden for entry-vinduet: vent paa et nyt step 3 + 4
-                    s.step = 2
-                    s.info["foer_vindue"] = f"{close_t:%H:%M}"
-                    continue
                 entry = c.close
                 lows = [p for p in sw1 if p[3] == ("L" if long else "H") and p[1] <= close_t and
-                        ((p[2] < entry) if long else (p[2] > entry)) and
-                        not brudt(b1, p, close_t, long)]
+                        ((p[2] < entry) if long else (p[2] > entry)) and not brudt(b1, p, close_t, long)]
                 if not lows:
                     continue
                 slp = max(lows, key=lambda p: p[2]) if long else min(lows, key=lambda p: p[2])
@@ -290,27 +282,29 @@ def run_day(day, d):
                 if risk <= 0:
                     continue
                 naer, min09 = find_tp(close_t, entry, long, risk, d, day)
-                r = dict(dato=f"{dd:%Y-%m-%d}", retning="long" if long else "short", entry_tid=f"{close_t:%H:%M}",
-                         entry=entry, sl=sl, sl_swing=f"{slp[0]:%H:%M}", risk=round(risk, 2), **s.info,
-                         step4=f"{close_t:%H:%M} 1m close {c.close} {'over' if long else 'under'} swing {q[0]:%H:%M} {q[2]}")
-                for tag, tp in (("A", naer), ("B", min09)):
-                    if tp is None:
-                        r[f"tp_{tag}"] = None; r[f"tp_{tag}_navn"] = "intet liq"; r[f"rr_{tag}"] = None
-                        r[f"R_{tag}"] = None; r[f"exit_{tag}"] = None; continue
-                    rr = tp[0] / risk
-                    r[f"tp_{tag}"] = tp[1]; r[f"tp_{tag}_navn"] = tp[2]; r[f"rr_{tag}"] = round(rr, 2)
-                    if rr < MIN_RR:
-                        r[f"R_{tag}"] = None; r[f"exit_{tag}"] = f"skip (TP {rr:.2f}R < {MIN_RR}R)"; continue
-                    R, ex, how = sim(x, close_t, entry, sl, tp[1], long, dd)
-                    r[f"R_{tag}"] = round(R, 2); r[f"exit_{tag}"] = f"{ex:%H:%M} {how}"
-                    r[f"_exit_ts_{tag}"] = ex
-                r["_ts"] = close_t; r["_sweep_ts"] = s.sweep[0]
+                tp = naer if rule == "A" else min09
+                r = dict(dato=f"{dd:%Y-%m-%d}", model=f"{s.model}-step", retning="long" if long else "short",
+                         entry_tid=f"{close_t:%H:%M}", entry=entry, sl=sl, sl_swing=f"{slp[0]:%H:%M}", risk=round(risk, 2), **s.info,
+                         entry_bos=f"{close_t:%H:%M} 1m close {c.close} {'over' if long else 'under'} swing {q[0]:%H:%M} {q[2]}")
+                if naer is None:                      # intet liq i sigte (ATH/ATL): fast 3R
+                    tp = (3 * risk, entry + 3 * risk if long else entry - 3 * risk, "3R (intet liq)")
+                if tp is None:
+                    tp = naer
+                rr = tp[0] / risk
+                r.update(tp=tp[1], tp_navn=tp[2], rr=round(rr, 2))
+                r["_ts"] = close_t
                 r["_lv"] = dict(s.lv, s4=(q[0], close_t, q[2]), slp=(slp[0], slp[2]))
+                if rr < MIN_RR - 1e-9:
+                    r.update(R=None, exit=f"skip (TP {rr:.2f}R < {MIN_RR}R)", status="skip")
+                    trades.append(r)
+                    s.reset()
+                    continue
+                R, ex, how = sim(x, close_t, entry, sl, tp[1], long, dd)
+                r.update(R=round(R, 2), exit=f"{ex:%H:%M} {how}", status=how)
+                r["_exit_ts"] = ex
                 trades.append(r)
-                # en trade ad gangen (efter regel A); begge setups starter forfra
-                if r.get("_exit_ts_A") is not None:
-                    busy_til = r["_exit_ts_A"]
-                for z in S.values():
+                busy_til = ex
+                for z in S:
                     z.reset()
                 break
     return trades
@@ -344,16 +338,20 @@ def main():
     ap.add_argument("--ud", default="/mnt/project-files/backtest/tjr/jan-mar2026")
     a = ap.parse_args()
     d = load(a.fra, a.til)
-    rows = []
-    for day in pd.date_range(a.fra, a.til, freq="B", tz=NY):
-        rows += run_day(day, d)
     os.makedirs(a.ud, exist_ok=True)
-    df = pd.DataFrame(rows)
+    alle = []
+    for rule in "AB":
+        rows = []
+        for day in pd.date_range(a.fra, a.til, freq="B", tz=NY):
+            rows += run_day(day, d, rule)
+        df = pd.DataFrame(rows); df.insert(0, "regel", rule)
+        alle.append(df)
+        z = df[df.status != "skip"]
+        print(rule, "trades", len(z), "win%", round((z.R > 0).mean() * 100, 1), "sum R", round(z.R.sum(), 2),
+              z.groupby("model").R.agg(["count", "sum"]).round(2).to_dict())
+    df = pd.concat(alle, ignore_index=True)
     df.drop(columns=[c for c in df.columns if c.startswith("_")]).to_csv(os.path.join(a.ud, "trades.csv"), index=False)
     df.to_pickle(os.path.join(a.ud, "trades.pkl"))
-    for tag in "AB":
-        z = df[f"R_{tag}"].dropna()
-        print(tag, "trades", len(z), "win%", round((z > 0).mean() * 100, 1) if len(z) else 0, "sum R", round(z.sum(), 2))
 
 
 if __name__ == "__main__":
