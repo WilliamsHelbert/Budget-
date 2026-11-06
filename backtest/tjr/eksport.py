@@ -29,8 +29,29 @@ for _, r in df.iterrows():
     if lv["sweep"][0].date() != r["_ts"].date():
         t["lv"]["liq"][0] = 0
     trades.append(t)
+# match mod Williams journal
+import match as M
+w = M.load_j()
+par, used = M.match(df, w)
+pm = {j: i for i, j, _ in par}
+sidste = w.dato.max()
+for t, (j, r) in zip(trades, df.iterrows()):
+    if j in pm:
+        q = w.loc[pm[j]]; t["journal"] = "enig"; t["w_tid"] = q.ny; t["w_R"] = float(q.r)
+    else:
+        t["journal"] = "kun_motor" if r.dato <= sidste else "ikke_tjekket"
+pi = {i for i, _, _ in par}
+for i, q in w.iterrows():
+    if i in pi:
+        continue
+    mm = df[df.dato == q.dato]
+    trades.append(dict(regel=df.regel.iloc[0], dato=q.dato, model="William", retning=q.retning, entry_tid=q.ny,
+                       R=float(q.r), status="william", journal="kun_william", liq="", tp_navn="", pullback_type="",
+                       t_entry=int(q.ny[:2]) * 60 + int(q.ny[3:]), lv=None,
+                       motor_dag="; ".join(f"{a.entry_tid} {a.retning} {a.model} {a.R:+.2f}R" for _, a in mm.iterrows()) or "ingen"))
+trades.sort(key=lambda t: (t["dato"], t["entry_tid"]))
 bars = {}
-for dato in sorted(df.dato.unique()):
+for dato in sorted(set(t["dato"] for t in trades)):
     dd = pd.Timestamp(dato, tz=tjr.NY)
     x = d[(d.index >= dd + pd.Timedelta(hours=7)) & (d.index < dd + pd.Timedelta(hours=17))]
     b = tjr.bars(x, 1)

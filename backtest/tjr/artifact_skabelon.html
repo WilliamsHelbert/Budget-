@@ -87,6 +87,8 @@ ol.steps code{font-family:var(--f-mono);font-size:12px}
       <button id="fr0" aria-pressed="true" data-v="">Alle</button><button id="frl" aria-pressed="false" data-v="long">Long</button><button id="frs" aria-pressed="false" data-v="short">Short</button></div></div>
     <div class="ctl"><span class="lbl">Udfald</span><div class="seg" id="fu">
       <button id="fu0" aria-pressed="true" data-v="">Alle</button><button id="fuw" aria-pressed="false" data-v="w">Vind</button><button id="ful" aria-pressed="false" data-v="l">Tab</button></div></div>
+    <div class="ctl"><span class="lbl">Din journal</span><div class="seg" id="fj">
+      <button id="fj0" aria-pressed="true" data-v="">Alle motor</button><button id="fje" aria-pressed="false" data-v="enig">Enige</button><button id="fjm" aria-pressed="false" data-v="kun_motor">Kun motor</button><button id="fjw" aria-pressed="false" data-v="kun_william">Kun William</button></div></div>
   </div>
 
   <section class="main">
@@ -106,14 +108,14 @@ ol.steps code{font-family:var(--f-mono);font-size:12px}
 const DATA = __DATA__;
 const $ = s => document.querySelector(s);
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const st = {regel:"B", model:"", retning:"", udfald:"", sel:0};
+const st = {journal:"", regel:"B", model:"", retning:"", udfald:"", sel:0};
 const fmt = (v,d=2) => v==null ? "–" : v.toLocaleString("da-DK",{minimumFractionDigits:d,maximumFractionDigits:d});
 const hm = m => String(Math.floor(m/60)).padStart(2,"0")+":"+String(Math.round(m%60)).padStart(2,"0");
 const dage = ["søn","man","tir","ons","tor","fre","lør"];
 const dlab = d => { const t=new Date(d+"T12:00:00"); return dage[t.getDay()]+" "+t.getDate()+"/"+(t.getMonth()+1); };
 
 function rows(){
-  return DATA.trades.filter(t => t.regel===st.regel && (!st.model||t.model===st.model) && (!st.retning||t.retning===st.retning) &&
+  return DATA.trades.filter(t => t.regel===st.regel && (st.journal==="kun_william" ? t.journal==="kun_william" : t.journal!=="kun_william" && (!st.journal||t.journal===st.journal)) && (!st.model||t.model===st.model||t.model==="William") && (!st.retning||t.retning===st.retning) &&
     (!st.udfald || (st.udfald==="s" ? t.status==="skip" : t.status!=="skip" && (st.udfald==="w" ? t.R>0 : t.R<=0))));
 }
 function kpis(){
@@ -146,14 +148,15 @@ function drawEq(R){
   g.beginPath(); g.arc(x(pts.length-1),y(last),3,0,7); g.fillStyle=col; g.fill();
   $("#eqlast").textContent=(last>0?"+":"")+fmt(last)+" R";
 }
+const jtag = t => t.journal==="enig" ? ` · <b class="w">enig</b> (din ${t.w_tid}, ${t.w_R>0?"+":""}${fmt(t.w_R)}R)` : t.journal==="kun_motor" ? ` · <b class="l">ikke i din journal</b>` : t.journal==="ikke_tjekket" ? " · ikke tjekket endnu" : "";
 function list(){
   const rs=rows(); if(st.sel>=rs.length) st.sel=Math.max(0,rs.length-1);
   $("#list").innerHTML = rs.length ? rs.map((t,i)=>{
     const sk=t.status==="skip", c=sk?"sk":t.R>0?"w":"l";
     return `<div class="row" role="option" tabindex="0" aria-selected="${i===st.sel}" data-i="${i}">
-      <span class="d">${dlab(t.dato)} ${t.entry_tid}<span class="pill ${t.retning==="long"?"L":"S"}">${t.retning}</span><span class="pill">${t.model[0]}-step</span></span>
+      <span class="d">${dlab(t.dato)} ${t.entry_tid}<span class="pill ${t.retning==="long"?"L":"S"}">${t.retning}</span><span class="pill">${t.model==="William"?"William":t.model[0]+"-step"}</span></span>
       <span class="r ${c}">${sk?"skip":(t.R>0?"+":"")+fmt(t.R)+"R"}</span>
-      <span class="m">${t.liq} · ${t.pullback_type} · TP ${t.tp_navn}</span></div>`}).join("")
+      <span class="m">${t.model==="William" ? "Motor samme dag: "+t.motor_dag : `${t.liq} · ${t.pullback_type} · TP ${t.tp_navn}`}${jtag(t)}</span></div>`}).join("")
     : `<div class="row"><span class="m">Ingen trades med de filtre.</span></div>`;
   show();
 }
@@ -162,6 +165,14 @@ function show(){
   document.querySelectorAll(".row").forEach(r=>r.setAttribute("aria-selected", +r.dataset.i===st.sel));
   if(!t){ $("#vt").textContent="–"; return; }
   const sk=t.status==="skip";
+  if(t.model==="William"){
+    $("#vt").textContent=`${dlab(t.dato)} 2026 · ${t.retning} ${t.entry_tid}`;
+    $("#vs").textContent=`Kun i din journal · ${st.sel+1} af ${rs.length}`;
+    $("#vr").textContent=(t.R>0?"+":"")+fmt(t.R)+" R"; $("#vr").className="res "+(t.R>0?"w":"l");
+    $("#facts").innerHTML=[["Din entry (NY)",t.entry_tid],["Retning",t.retning],["Dit R",fmt(t.R)],["Motor samme dag",t.motor_dag]].map(([a,b])=>`<div><span>${a}</span><b>${b}</b></div>`).join("");
+    $("#steps").innerHTML=`<li><i style="background:var(--accent)">W</i><span>Motoren fandt ikke et setup i den retning inden for 10 min af din entry. Den lodrette linje er dit entry-tidspunkt.</span></li>`;
+    drawChart(t); return;
+  }
   $("#vt").textContent=`${dlab(t.dato)} 2026 · ${t.retning} ${t.entry_tid}`;
   $("#vs").textContent=`${t.model} ${t.model==="3-step"?"(continuation)":"(reversal)"} · ${st.sel+1} af ${rs.length}`;
   $("#vr").textContent= sk ? "skip" : (t.R>0?"+":"")+fmt(t.R)+" R"; $("#vr").className="res "+(sk?"sk":t.R>0?"w":"l");
@@ -176,13 +187,13 @@ function show(){
 function drawChart(t){
   const [g,W,H]=setupCanvas($("#chart")); g.clearRect(0,0,W,H);
   const B=DATA.bars[t.dato], lv=t.lv, ex=t.t_exit ?? t.t_entry+20;
-  let a=Math.min(lv.liq[1], lv.s2?lv.s2[0]:1e9, lv.s3[0])-15; a=Math.max(a, t.t_entry-240, B.t0);
+  let a=lv ? Math.min(lv.liq[1], lv.s2?lv.s2[0]:1e9, lv.s3[0])-15 : Math.max(570, t.t_entry-60); a=Math.max(a, t.t_entry-240, B.t0);
   let z=Math.min(Math.max(ex+12, t.t_entry+35), t.t_entry+240);
   const idx=[]; B.m.forEach((m,i)=>{const tm=B.t0+m; if(tm>=a&&tm<=z) idx.push(i)});
   if(!idx.length) return;
   const per=Math.max(1,Math.ceil(idx.length/150));          // flet candles naar vinduet er langt
   const cs=[]; for(let k=0;k<idx.length;k+=per){const s=idx.slice(k,k+per); cs.push({t:B.t0+B.m[s[0]],o:B.o[s[0]],c:B.c[s[s.length-1]],h:Math.max(...s.map(i=>B.h[i])),l:Math.min(...s.map(i=>B.l[i]))});}
-  const ps=[...cs.map(c=>c.h),...cs.map(c=>c.l),t.sl,lv.liq[2]]; if(t.tp!=null) ps.push(t.tp);
+  const ps=[...cs.map(c=>c.h),...cs.map(c=>c.l)]; if(lv){ps.push(t.sl,lv.liq[2]); if(t.tp!=null) ps.push(t.tp);}
   let lo=Math.min(...ps), hi=Math.max(...ps); const pd=(hi-lo)*.05; lo-=pd; hi+=pd;
   const L=8,R=W<500?62:96,T=8,Bt=22, t0=cs[0].t, span=(cs[cs.length-1].t+per)-t0, cw=(W-L-R)/cs.length;
   const X=m=>L+(m-t0)/span*(W-L-R), Y=p=>T+(hi-p)/(hi-lo)*(H-T-Bt);
@@ -192,12 +203,15 @@ function drawChart(t){
   const tick=[15,30,60][[15,30,60].findIndex(s=>span/s<=8)] || 60;
   for(let m=Math.ceil(t0/tick)*tick;m<t0+span;m+=tick){g.fillText(hm(m),X(m)-14,H-6);}
   const x0=X(t.t_entry), x1=Math.max(X(ex),x0+3);
+  if(!lv){ g.strokeStyle=css("--accent"); g.lineWidth=2; g.setLineDash([4,3]); g.beginPath(); g.moveTo(x0,T); g.lineTo(x0,H-Bt); g.stroke(); g.setLineDash([]);
+    g.fillStyle=css("--accent"); g.font="600 11px "+css("--f-body"); g.fillText("Din entry "+t.entry_tid,x0+5,T+12); }
   if(t.tp!=null){g.fillStyle=css("--upz");g.fillRect(x0,Math.min(Y(t.tp),Y(t.entry)),x1-x0,Math.abs(Y(t.tp)-Y(t.entry)));}
   g.fillStyle=css("--dnz"); g.fillRect(x0,Math.min(Y(t.sl),Y(t.entry)),x1-x0,Math.abs(Y(t.sl)-Y(t.entry)));
   const up=css("--up"), dn=css("--dn");
   cs.forEach(c=>{const cx=X(c.t)+cw/2, col=c.c>=c.o?up:dn; g.strokeStyle=col; g.fillStyle=col;
     g.beginPath(); g.moveTo(cx,Y(c.h)); g.lineTo(cx,Y(c.l)); g.stroke();
     const y1=Y(Math.max(c.o,c.c)), y2=Y(Math.min(c.o,c.c)); g.fillRect(cx-cw*.36,y1,Math.max(cw*.72,1),Math.max(y2-y1,1));});
+  if(!lv) return;
   const line=(m0,m1,p,col,lab,dash)=>{const a_=Math.max(X(m0),L), b_=Math.min(X(m1),W-R); g.save(); g.strokeStyle=col; g.lineWidth=1.6; if(dash) g.setLineDash([5,4]);
     g.beginPath(); g.moveTo(a_,Y(p)); g.lineTo(b_,Y(p)); g.stroke(); g.restore(); if(lab){g.fillStyle=col; g.font="600 10.5px "+css("--f-body"); g.fillText(lab,Math.min(b_+4,W-R-60),Y(p)-4);} };
   const f4=t.model==="4-step";
@@ -215,7 +229,7 @@ function drawChart(t){
 function seg(id,key,cb){ $(id).addEventListener("click",e=>{const b=e.target.closest("button"); if(!b) return;
   $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b)); st[key]=b.dataset.v; st.sel=0; cb();});}
 const all=()=>{kpis();list();};
-seg("#fm","model",all); seg("#fr","retning",all); seg("#fu","udfald",all);
+seg("#fm","model",all); seg("#fj","journal",all); seg("#fr","retning",all); seg("#fu","udfald",all);
 $("#list").addEventListener("click",e=>{const r=e.target.closest(".row[data-i]"); if(r){st.sel=+r.dataset.i; show();}});
 $("#list").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=e.target.closest(".row[data-i]"); if(r){st.sel=+r.dataset.i; show();}}});
 const go=d=>{const n=rows().length; if(!n) return; st.sel=(st.sel+d+n)%n; show(); const el=document.querySelector(`.row[data-i="${st.sel}"]`); el&&el.scrollIntoView({block:"nearest"});};
