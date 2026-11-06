@@ -13,8 +13,8 @@ Alt starter ved market open 09:30 NY, og entry skal ske senest 12:00.
   1. 5m close over et liq-high.
   2. og 3. som step 3 og 4 i 4-step.
 SL: naermeste 1m swing low under entry, der ikke er taget. TP: naermeste uberoerte NY PRE / London / Asia
-high eller 4h high (10 dage tilbage). Regel A: skip hvis TP < 0,9R. Regel B: naermeste liq >= 0,9R.
-Intet liq i sigte: TP 3R. Een trade ad gangen, foerst til moelle. Setups doer ikke og nulstilles ikke.
+high eller 4h high (10 dage tilbage). Er naermeste liq under 0,9R, bruges
+naeste liq. Intet liq i sigte: TP 3R. Een trade ad gangen, foerst til moelle. Setups doer ikke og nulstilles ikke.
 Swing = high/low hoejere/lavere end candlen foer og efter, kendt foerst naar candlen efter er lukket.
 """
 import argparse, json, os
@@ -286,10 +286,8 @@ def run_day(day, d, rule="A"):
                 r = dict(dato=f"{dd:%Y-%m-%d}", model=f"{s.model}-step", retning="long" if long else "short",
                          entry_tid=f"{close_t:%H:%M}", entry=entry, sl=sl, sl_swing=f"{slp[0]:%H:%M}", risk=round(risk, 2), **s.info,
                          entry_bos=f"{close_t:%H:%M} 1m close {c.close} {'over' if long else 'under'} swing {q[0]:%H:%M} {q[2]}")
-                if naer is None:                      # intet liq i sigte (ATH/ATL): fast 3R
+                if tp is None:                        # intet liq (>= 0,9R) i sigte, fx ATH: fast 3R
                     tp = (3 * risk, entry + 3 * risk if long else entry - 3 * risk, "3R (intet liq)")
-                if tp is None:
-                    tp = naer
                 rr = tp[0] / risk
                 r.update(tp=tp[1], tp_navn=tp[2], rr=round(rr, 2))
                 r["_ts"] = close_t
@@ -340,7 +338,7 @@ def main():
     d = load(a.fra, a.til)
     os.makedirs(a.ud, exist_ok=True)
     alle = []
-    for rule in "AB":
+    for rule in "B":
         rows = []
         for day in pd.date_range(a.fra, a.til, freq="B", tz=NY):
             rows += run_day(day, d, rule)

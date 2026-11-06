@@ -71,13 +71,7 @@ ol.steps code{font-family:var(--f-mono);font-size:12px}
   <header>
     <div>
       <h1>TJR Trade Journal · NQ</h1>
-      <p class="sub">Backtest 2. jan – 31. mar 2026 · entry 09:30–12:00 NY · 3-step (continuation) og 4-step (reversal)</p>
-    </div>
-    <div class="ctl"><span class="lbl">TP-regel</span>
-      <div class="seg" id="regel">
-        <button id="rA" aria-pressed="true" data-v="A" title="Nærmeste liq. Under 0,9R springes over">A · nærmeste liq</button>
-        <button id="rB" aria-pressed="false" data-v="B" title="Nærmeste liq der er mindst 0,9R væk">B · liq ≥ 0,9R</button>
-      </div>
+      <p class="sub">Backtest 2. jan – 31. mar 2026 · entry 09:30–12:00 NY · 3-step (continuation) og 4-step (reversal) · TP = nærmeste liq mindst 0,9R væk, ellers 3R</p>
     </div>
   </header>
 
@@ -112,7 +106,7 @@ ol.steps code{font-family:var(--f-mono);font-size:12px}
 const DATA = __DATA__;
 const $ = s => document.querySelector(s);
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const st = {regel:"A", model:"", retning:"", udfald:"", sel:0};
+const st = {regel:"B", model:"", retning:"", udfald:"", sel:0};
 const fmt = (v,d=2) => v==null ? "–" : v.toLocaleString("da-DK",{minimumFractionDigits:d,maximumFractionDigits:d});
 const hm = m => String(Math.floor(m/60)).padStart(2,"0")+":"+String(Math.round(m%60)).padStart(2,"0");
 const dage = ["søn","man","tir","ons","tor","fre","lør"];
@@ -221,7 +215,7 @@ function drawChart(t){
 function seg(id,key,cb){ $(id).addEventListener("click",e=>{const b=e.target.closest("button"); if(!b) return;
   $(id).querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b)); st[key]=b.dataset.v; st.sel=0; cb();});}
 const all=()=>{kpis();list();};
-seg("#regel","regel",all); seg("#fm","model",all); seg("#fr","retning",all); seg("#fu","udfald",all);
+seg("#fm","model",all); seg("#fr","retning",all); seg("#fu","udfald",all);
 $("#list").addEventListener("click",e=>{const r=e.target.closest(".row[data-i]"); if(r){st.sel=+r.dataset.i; show();}});
 $("#list").addEventListener("keydown",e=>{if(e.key==="Enter"){const r=e.target.closest(".row[data-i]"); if(r){st.sel=+r.dataset.i; show();}}});
 const go=d=>{const n=rows().length; if(!n) return; st.sel=(st.sel+d+n)%n; show(); const el=document.querySelector(`.row[data-i="${st.sel}"]`); el&&el.scrollIntoView({block:"nearest"});};
