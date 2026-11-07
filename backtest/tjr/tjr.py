@@ -17,6 +17,7 @@ high (dagens sessions, ingen 4h). Er naermeste liq under 0,9R, bruges
 naeste liq. Intet gyldigt liq: foerste uberoerte 15m swing bagud i tid >= 0,9R. Ellers 3R.
 Liq lavet i 5m-candlen 09:25-09:30 (lige op ad market open) taeller ikke.
 Dagsregel: maks 2 trades, og faerdig for dagen efter en vinder. Een trade ad gangen, foerst til moelle. Setups doer ikke og nulstilles ikke.
+Hvert step skal ske efter det forrige: FVG/swing i step 3 dannes efter step 2, swing i step 4 efter step 3.
 Swing = high/low hoejere/lavere end candlen foer og efter, kendt foerst naar candlen efter er lukket.
 """
 import argparse, json, os
@@ -25,6 +26,8 @@ import pandas as pd
 NY = "America/New_York"
 DATA = "/mnt/project-files/data/NQ_samlet_15s.parquet"
 MIN_RR = 0.9
+RAEKKE = "frisk"        # "streng": FVG/swing i step 3 dannes efter step 2, swing i step 4 efter step 3
+                        # "frisk": FVG/swing maa vaere fra efter sweepet, men maa ikke vaere lukket igennem foer
 MAX_TRADES = 2          # maks trades pr. dag
 STOP_EFTER_WIN = True   # faerdig for dagen efter en vinder
 ENTRY_FRA, ENTRY_TIL = "09:30", "12:00"
@@ -245,7 +248,7 @@ def run_day(day, d, rule="A"):
                     br = [L for L in bos5 if L["kind"] == ("H" if long else "L")]
                     if br:
                         L = br[0]; t5 = close_t - pd.Timedelta(minutes=5)
-                        s.step = 2; s.anchor = t5
+                        s.step = 2; s.anchor = t5; s.t2 = close_t
                         s.info["step1"] = f"{close_t:%H:%M} 5m close {c5.close} {'over' if long else 'under'} {L['navn']} {L['pris']}"
                         s.info["liq"] = L["navn"]
                         s.lv = dict(sweep=(L["dannet"], t5, L["pris"], L["navn"]))
@@ -262,12 +265,12 @@ def run_day(day, d, rule="A"):
                            and g[1] <= t5 and ((c5.close > g[3]) if long else (c5.close < g[2]))]
                     if not hit and ifv:
                         g = ifv[-1]
-                        s.step = 2
+                        s.step = 2; s.t2 = close_t
                         s.lv["s2"] = (g[0], close_t, g[3] if long else g[2])
                         s.info["step2"] = f"{close_t:%H:%M} 5m close {c5.close} {'over' if long else 'under'} 5m FVG {g[2]}-{g[3]} (iFVG, dannet {g[0]:%H:%M})"
                     if hit:
                         q = hit[-1]
-                        s.step = 2
+                        s.step = 2; s.t2 = close_t
                         s.lv["s2"] = (q[0], close_t, q[2])
                         s.info["step2"] = f"{close_t:%H:%M} 5m close {c5.close} {'over' if long else 'under'} swing {q[0]:%H:%M} {q[2]}"
                 continue
@@ -275,19 +278,26 @@ def run_day(day, d, rule="A"):
                 fk = "bull" if long else "bear"
                 inv = None
                 for (ft, lo, hi, k) in fvg:
-                    if k != fk or ft - pd.Timedelta(minutes=3) < st or ft >= close_t:
+                    if k != fk or ft >= close_t:
+                        continue
+                    if RAEKKE == "streng" and ft - pd.Timedelta(minutes=3) < s.t2:
+                        continue
+                    if RAEKKE == "frisk" and (ft - pd.Timedelta(minutes=3) < st or lukket(b1, ft, t, lo if long else hi, not long)):
                         continue
                     if (c.close < lo) if long else (c.close > hi):
                         inv = (ft, lo, hi); break
                 kk = "L" if long else "H"
-                piv = [q for q in sw1 if q[3] == kk and q[1] <= t and q[0] >= st]
+                fra2 = s.t2 if RAEKKE == "streng" else st
+                piv = [q for q in sw1 if q[3] == kk and q[1] <= t and q[0] >= fra2]
+                if RAEKKE == "frisk":
+                    piv = [q for q in piv if not lukket(b1, q[1], t, q[2], not long)]
                 bos = None
                 if piv:
                     q = piv[-1]
                     if (c.close < q[2]) if long else (c.close > q[2]):
                         bos = q
                 if inv or bos:
-                    s.step = 3
+                    s.step = 3; s.t3 = close_t
                     s.lv["s3"] = (inv[0] - pd.Timedelta(minutes=3), close_t, inv[1], inv[2], "fvg") if inv else (bos[0], close_t, bos[2], bos[2], "bos")
                     s.info["pullback"] = (f"{close_t:%H:%M} iFVG {inv[1]}-{inv[2]} (dannet {inv[0] - pd.Timedelta(minutes=1):%H:%M})"
                                           if inv else f"{close_t:%H:%M} 1m BOS mod tradet, swing {bos[0]:%H:%M} {bos[2]}")
@@ -295,14 +305,17 @@ def run_day(day, d, rule="A"):
                 continue
             if s.step == 3:
                 kk = "H" if long else "L"
-                piv = [q for q in sw1 if q[3] == kk and q[1] <= t and q[0] >= st]
+                fra3 = s.t3 - pd.Timedelta(minutes=1) if RAEKKE == "streng" else st
+                piv = [q for q in sw1 if q[3] == kk and q[1] <= t and q[0] >= fra3]
+                if RAEKKE == "frisk":
+                    piv = [q for q in piv if not lukket(b1, q[1], t, q[2], long)]
                 if not piv:
                     continue
                 q = piv[-1]
                 if not ((c.close > q[2]) if long else (c.close < q[2])):
                     continue
                 if busy:                              # i et andet trade: vent paa en ny pullback + BOS
-                    s.step = 2
+                    s.step = 2; s.t2 = close_t
                     continue
                 entry = c.close
                 lows = [p for p in sw1 if p[3] == ("L" if long else "H") and p[1] <= close_t and
@@ -359,6 +372,14 @@ def swing15(ts, entry, long, risk, d):
     return None
 
 
+def lukket(b1, fra, til, lvl, over):
+    """Har en 1m-candle lukket over (over=True) / under lvl i [fra, til)?"""
+    y = b1[(b1.index >= fra) & (b1.index < til)]
+    if not len(y):
+        return False
+    return (y.close > lvl).any() if over else (y.close < lvl).any()
+
+
 def brudt(b1, p, til, long):
     """Er swinget handlet igennem (wick) efter pivot-candlen og foer entry?"""
     y = b1[(b1.index > p[0]) & (b1.index < til)]
@@ -386,10 +407,12 @@ def main():
     ap.add_argument("fra"); ap.add_argument("til")
     ap.add_argument("--ud", default="/mnt/project-files/backtest/tjr/jan-mar2026")
     ap.add_argument("--uden-dagsregel", action="store_true", help="ingen maks 2 trades / stop efter win")
+    ap.add_argument("--raekke", default="frisk", choices=["streng", "frisk"])
     ap.add_argument("--h4-kun-dag", action="store_true", help="kun dagens 4h-candles som TP")
     a = ap.parse_args()
-    global MAX_TRADES, STOP_EFTER_WIN, H4_KUN_DAG
+    global MAX_TRADES, STOP_EFTER_WIN, H4_KUN_DAG, RAEKKE
     H4_KUN_DAG = a.h4_kun_dag
+    RAEKKE = a.raekke
     if a.uden_dagsregel:
         MAX_TRADES, STOP_EFTER_WIN = 99, False
     d = load(a.fra, a.til)
