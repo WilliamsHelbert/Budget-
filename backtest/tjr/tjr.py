@@ -13,7 +13,7 @@ Alt starter ved market open 09:30 NY, og entry skal ske senest 12:00.
   1. 5m close over et liq-high.
   2. og 3. som step 3 og 4 i 4-step.
 SL: naermeste 1m swing low under entry, der ikke er taget. TP: naermeste uberoerte NY PRE / London / Asia
-high (dagens sessions, ingen 4h). Er naermeste liq under 0,9R, bruges
+high eller dagens 5m swing high (ingen 4h). Ellers 15m swing bagud. Er naermeste liq under 0,9R, bruges
 naeste liq. Intet gyldigt liq: foerste uberoerte 15m swing bagud i tid >= 0,9R. Ellers 3R.
 Liq lavet i 5m-candlen 09:25-09:30 (lige op ad market open) taeller ikke.
 Dagsregel: maks 2 trades, og faerdig for dagen efter en vinder. Een trade ad gangen, foerst til moelle. Setups doer ikke og nulstilles ikke.
@@ -148,6 +148,12 @@ def find_tp(ts, entry, long, risk, d, day):
         if L["kind"] != kind or L["klar"] > ts:
             continue
         cands.append((L["pris"], L["navn"], L["klar"]))
+    # dagens 5m swing highs/lows (fra 18:00 dagen foer), bekraeftet foer entry
+    dd = pd.Timestamp(day.date(), tz=NY)
+    x5 = d[(d.index >= dd - pd.Timedelta(hours=6)) & (d.index < ts)]
+    for t0, conf, p, k in swings(mk(x5, 5)):
+        if k == kind and conf <= ts:
+            cands.append((p, f"5m swing {t0:%H:%M}", conf))
     for q in (h4_levels(ts, d) if BRUG_4H else []):
         cands.append((q[kind], q["navn"], q["klar"]))
     ok = []
