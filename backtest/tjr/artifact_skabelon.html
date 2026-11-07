@@ -179,7 +179,7 @@ function show(){
   $("#facts").innerHTML=[["Entry",fmt(t.entry)],["SL",fmt(t.sl)+" ("+t.sl_swing+")"],["TP",t.tp==null?"–":fmt(t.tp)],["Risk",fmt(t.risk)+" pt"],
     ["TP-mål",t.tp_navn],["RR",fmt(t.rr)],["Exit",t.exit],["Liq",t.liq]].map(([a,b])=>`<div><span>${a}</span><b>${b}</b></div>`).join("");
   const S=t.model==="4-step"
-    ? [["1","--s1","Sweep af liq (5m)",t.step1],["2","--s2","5m BOS",t.step2],["3","--s3","1m "+(t.pullback_type==="iFVG"?"FVG inversed":"BOS mod tradet"),t.pullback],["4","--s4","1m BOS → entry",t.entry_bos]]
+    ? [["1","--s1","Sweep af liq (5m)",t.step1],["2","--s2",(t.step2&&t.step2.includes("iFVG")?"5m iFVG":"5m BOS"),t.step2],["3","--s3","1m "+(t.pullback_type==="iFVG"?"FVG inversed":"BOS mod tradet"),t.pullback],["4","--s4","1m BOS → entry",t.entry_bos]]
     : [["1","--s1","5m BOS af liq",t.step1],["2","--s3","1m "+(t.pullback_type==="iFVG"?"FVG inversed":"BOS mod tradet"),t.pullback],["3","--s4","1m BOS → entry",t.entry_bos]];
   $("#steps").innerHTML=S.map(([n,c,h,txt])=>`<li><i style="background:var(${c})">${n}</i><span><b>${h}</b> · <code>${txt||""}</code></span></li>`).join("");
   drawChart(t);

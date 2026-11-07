@@ -6,7 +6,7 @@ Alt starter ved market open 09:30 NY, og entry skal ske senest 12:00.
 
 4-step (long, short spejlvendt):
   1. 1m handler under et liq-low (sweep).
-  2. 5m close over et 5m swing high dannet efter sweepet.
+  2. 5m close over et 5m swing high dannet efter sweepet, eller 5m close over et bearish 5m FVG (iFVG).
   3. 1m close under et bullish 1m FVG (iFVG) eller under seneste 1m swing low.
   4. 1m close over seneste 1m swing high -> market entry paa close.
 3-step (long):
@@ -193,6 +193,16 @@ def run_day(day, d, rule="A"):
     trades = []
     busy_til = None
     fvg = []
+    # 5m FVGs (til 4-step step 2: inversion af 5m FVG): (start 1. candle, close 3. candle, bund, top, type)
+    fvg5 = []
+    for j in range(2, len(b5)):
+        a5, c3 = b5.iloc[j - 2], b5.iloc[j]
+        if b5.index[j] - b5.index[j - 2] != pd.Timedelta(minutes=10):
+            continue
+        if c3.low > a5.high:
+            fvg5.append((b5.index[j - 2], b5.index[j] + pd.Timedelta(minutes=5), a5.high, c3.low, "bull"))
+        if c3.high < a5.low:
+            fvg5.append((b5.index[j - 2], b5.index[j] + pd.Timedelta(minutes=5), c3.high, a5.low, "bear"))
     for t in b1[(b1.index >= e0) & (b1.index < e1)].index:
         c = b1.loc[t]; close_t = t + pd.Timedelta(minutes=1)
         i = b1.index.get_loc(t)
@@ -217,9 +227,9 @@ def run_day(day, d, rule="A"):
                     continue
                 if (L["kind"] == "H" and c5.close > L["pris"]) or (L["kind"] == "L" and c5.close < L["pris"]):
                     closed.add(k); bos5.append(L)
-        if busy_til is not None and close_t <= busy_til:
-            continue
-        busy_til = None
+        busy = busy_til is not None and close_t <= busy_til
+        if not busy:
+            busy_til = None
         for s in S:
             long = s.long
             if s.step == 0:
@@ -247,6 +257,14 @@ def run_day(day, d, rule="A"):
                     piv = [q for q in sw5 if q[3] == ("H" if long else "L") and q[0] >= st.floor("5min")
                            and q[1] <= t5 and q[0] < t5]
                     hit = [q for q in piv if (c5.close > q[2] if long else c5.close < q[2])]
+                    # ... eller en 5m-candle lukker igennem et 5m FVG i modsat retning (inversion), dannet op til 1 time foer sweepet
+                    ifv = [g for g in fvg5 if g[4] == ("bear" if long else "bull") and g[0] >= st - pd.Timedelta(hours=1)
+                           and g[1] <= t5 and ((c5.close > g[3]) if long else (c5.close < g[2]))]
+                    if not hit and ifv:
+                        g = ifv[-1]
+                        s.step = 2
+                        s.lv["s2"] = (g[0], close_t, g[3] if long else g[2])
+                        s.info["step2"] = f"{close_t:%H:%M} 5m close {c5.close} {'over' if long else 'under'} 5m FVG {g[2]}-{g[3]} (iFVG, dannet {g[0]:%H:%M})"
                     if hit:
                         q = hit[-1]
                         s.step = 2
@@ -283,6 +301,9 @@ def run_day(day, d, rule="A"):
                 q = piv[-1]
                 if not ((c.close > q[2]) if long else (c.close < q[2])):
                     continue
+                if busy:                              # i et andet trade: vent paa en ny pullback + BOS
+                    s.step = 2
+                    continue
                 entry = c.close
                 lows = [p for p in sw1 if p[3] == ("L" if long else "H") and p[1] <= close_t and
                         ((p[2] < entry) if long else (p[2] > entry)) and not brudt(b1, p, close_t, long)]
@@ -317,8 +338,7 @@ def run_day(day, d, rule="A"):
                 busy_til = ex
                 if len(trades) >= MAX_TRADES or (STOP_EFTER_WIN and R > 0):
                     return trades
-                for z in S:
-                    z.reset()
+                s.reset()                             # kun det setup der handlede starter forfra
                 break
     return trades
 
