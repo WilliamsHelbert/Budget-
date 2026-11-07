@@ -14,7 +14,7 @@ Alt starter ved market open 09:30 NY, og entry skal ske senest 12:00.
   2. og 3. som step 3 og 4 i 4-step.
 SL: naermeste 1m swing low under entry, der ikke er taget. TP: naermeste uberoerte NY PRE / London / Asia
 high eller 4h high (10 dage tilbage). Er naermeste liq under 0,9R, bruges
-naeste liq. Intet liq i sigte: TP 3R.
+naeste liq. Intet gyldigt liq: foerste uberoerte 15m swing bagud i tid >= 0,9R. Ellers 3R.
 Liq lavet i 5m-candlen 09:25-09:30 (lige op ad market open) taeller ikke.
 Dagsregel: maks 2 trades, og faerdig for dagen efter en vinder. Een trade ad gangen, foerst til moelle. Setups doer ikke og nulstilles ikke.
 Swing = high/low hoejere/lavere end candlen foer og efter, kendt foerst naar candlen efter er lukket.
@@ -30,6 +30,7 @@ STOP_EFTER_WIN = True   # faerdig for dagen efter en vinder
 ENTRY_FRA, ENTRY_TIL = "09:30", "12:00"
 EXIT_SENEST = "16:59"
 H4_DAGE = 10
+H4_KUN_DAG = False      # True: kun 4h-candles fra den aktuelle handelsdag (fra 18:00 dagen foer)
 
 _raw = None
 
@@ -114,7 +115,10 @@ def nypre_swings(day, d):
 
 def h4_levels(ts, d):
     """4h-candles (TradingView CME: 18,22,02,06,10,14 NY) de sidste H4_DAGE dage, der er lukket foer ts."""
-    x = d[(d.index >= ts - pd.Timedelta(days=H4_DAGE)) & (d.index < ts)]
+    fra = ts - pd.Timedelta(days=H4_DAGE)
+    if H4_KUN_DAG:
+        fra = ts.normalize() - pd.Timedelta(hours=6)
+    x = d[(d.index >= fra) & (d.index < ts)]
     h = x.resample("4h", origin=pd.Timestamp("2000-01-01 18:00", tz=NY), label="left", closed="left").agg(
         {"high": "max", "low": "min"}).dropna()
     out = []
@@ -292,7 +296,9 @@ def run_day(day, d, rule="A"):
                 r = dict(dato=f"{dd:%Y-%m-%d}", model=f"{s.model}-step", retning="long" if long else "short",
                          entry_tid=f"{close_t:%H:%M}", entry=entry, sl=sl, sl_swing=f"{slp[0]:%H:%M}", risk=round(risk, 2), **s.info,
                          entry_bos=f"{close_t:%H:%M} 1m close {c.close} {'over' if long else 'under'} swing {q[0]:%H:%M} {q[2]}")
-                if tp is None:                        # intet liq (>= 0,9R) i sigte, fx ATH: fast 3R
+                if tp is None:                        # intet gyldigt liq: foerste 15m swing bagud i tid, der er >= 0,9R
+                    tp = swing15(close_t, entry, long, risk, d)
+                if tp is None:                        # stadig intet (fx ATH): fast 3R
                     tp = (3 * risk, entry + 3 * risk if long else entry - 3 * risk, "3R (intet liq)")
                 rr = tp[0] / risk
                 r.update(tp=tp[1], tp_navn=tp[2], rr=round(rr, 2))
@@ -314,6 +320,22 @@ def run_day(day, d, rule="A"):
                     z.reset()
                 break
     return trades
+
+
+def swing15(ts, entry, long, risk, d):
+    """Kig tilbage paa 15m: det foerste (nyeste) swing high (long) / low (short), der ikke er taget og er >= 0,9R vaek."""
+    x = d[(d.index >= ts - pd.Timedelta(days=H4_DAGE)) & (d.index < ts)]
+    b = mk(x, 15)
+    kk = "H" if long else "L"
+    for t0, conf, p, k in reversed(swings(b)):
+        if k != kk or conf > ts:
+            continue
+        if abs(p - entry) < MIN_RR * risk or ((p <= entry) if long else (p >= entry)):
+            continue
+        if not untaken(p, kk, t0 + pd.Timedelta(minutes=15), ts, x):
+            continue
+        return (abs(p - entry), p, f"15m swing {t0:%d/%m %H:%M}")
+    return None
 
 
 def brudt(b1, p, til, long):
@@ -343,8 +365,10 @@ def main():
     ap.add_argument("fra"); ap.add_argument("til")
     ap.add_argument("--ud", default="/mnt/project-files/backtest/tjr/jan-mar2026")
     ap.add_argument("--uden-dagsregel", action="store_true", help="ingen maks 2 trades / stop efter win")
+    ap.add_argument("--h4-kun-dag", action="store_true", help="kun dagens 4h-candles som TP")
     a = ap.parse_args()
-    global MAX_TRADES, STOP_EFTER_WIN
+    global MAX_TRADES, STOP_EFTER_WIN, H4_KUN_DAG
+    H4_KUN_DAG = a.h4_kun_dag
     if a.uden_dagsregel:
         MAX_TRADES, STOP_EFTER_WIN = 99, False
     d = load(a.fra, a.til)
