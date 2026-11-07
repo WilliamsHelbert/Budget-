@@ -11,6 +11,12 @@ for t in d["trades"]:
     n, vundet = dag.get(t["dato"], (0, False))
     t["efter_regel"] = n >= 2 or vundet
     dag[t["dato"]] = (n + 1, vundet or (t["R"] or 0) > 0)
+# efter et win, vi er enige om, stopper vi begge for dagen: senere trades vises ikke
+stop = {}
+for t in d["trades"]:
+    if t["journal"] == "enig" and (t["R"] or 0) > 0 and (t.get("w_R") or 0) > 0:
+        stop[t["dato"]] = min(stop.get(t["dato"], "99:99"), t["entry_tid"])
+d["trades"] = [t for t in d["trades"] if not (t["dato"] in stop and t["entry_tid"] > stop[t["dato"]])]
 d["trades"] = [t for t in d["trades"] if t["journal"] in ("kun_motor", "kun_william")]
 dage = {t["dato"] for t in d["trades"]}
 d["bars"] = {k: v for k, v in d["bars"].items() if k in dage}
