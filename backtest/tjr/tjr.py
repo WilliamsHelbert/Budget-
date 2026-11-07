@@ -13,7 +13,7 @@ Alt starter ved market open 09:30 NY, og entry skal ske senest 12:00.
   1. 5m close over et liq-high.
   2. og 3. som step 3 og 4 i 4-step.
 SL: naermeste 1m swing low under entry, der ikke er taget. TP: naermeste uberoerte NY PRE / London / Asia
-high eller 4h high (10 dage tilbage). Er naermeste liq under 0,9R, bruges
+high (dagens sessions, ingen 4h). Er naermeste liq under 0,9R, bruges
 naeste liq. Intet gyldigt liq: foerste uberoerte 15m swing bagud i tid >= 0,9R. Ellers 3R.
 Liq lavet i 5m-candlen 09:25-09:30 (lige op ad market open) taeller ikke.
 Dagsregel: maks 2 trades, og faerdig for dagen efter en vinder. Een trade ad gangen, foerst til moelle. Setups doer ikke og nulstilles ikke.
@@ -30,6 +30,7 @@ STOP_EFTER_WIN = True   # faerdig for dagen efter en vinder
 ENTRY_FRA, ENTRY_TIL = "09:30", "12:00"
 EXIT_SENEST = "16:59"
 H4_DAGE = 10
+BRUG_4H = False         # 4h-liq bruges ikke som TP (William 7/11): session-liq, ellers 15m swing bagud
 H4_KUN_DAG = False      # True: kun 4h-candles fra den aktuelle handelsdag (fra 18:00 dagen foer)
 
 _raw = None
@@ -144,7 +145,7 @@ def find_tp(ts, entry, long, risk, d, day):
         if L["kind"] != kind or L["klar"] > ts:
             continue
         cands.append((L["pris"], L["navn"], L["klar"]))
-    for q in h4_levels(ts, d):
+    for q in (h4_levels(ts, d) if BRUG_4H else []):
         cands.append((q[kind], q["navn"], q["klar"]))
     ok = []
     for p, nm, klar in cands:
