@@ -58,5 +58,33 @@ for dato in sorted(set(t["dato"] for t in trades)):
     bars[dato] = dict(t0=mins(b.index[0]), o=b.open.round(2).tolist(), h=b.high.round(2).tolist(),
                       l=b.low.round(2).tolist(), c=b.close.round(2).tolist(),
                       m=[int(mins(t) - mins(b.index[0])) for t in b.index])
+# alle klokkeslaet i tekst -> dansk tid (chart-geometri bliver i NY-minutter, aksen faar dk-offset)
+import re
+def dk_off(dato):
+    t = pd.Timestamp(dato + " 12:00", tz=tjr.NY)
+    return int((t.tz_convert("Europe/Copenhagen").utcoffset() - t.utcoffset()).total_seconds() // 60)
+def til_dk(txt, dato):
+    if not isinstance(txt, str):
+        return txt
+    y0 = int(dato[:4]); m0 = int(dato[5:7])
+    def full(m):
+        dd, mm, hh, mi = map(int, m.groups()); y = y0 - 1 if (mm == 12 and m0 == 1) else y0
+        t = pd.Timestamp(year=y, month=mm, day=dd, hour=hh, minute=mi, tz=tjr.NY).tz_convert("Europe/Copenhagen")
+        return f"{t:%d/%m %H:%M}"
+    txt = re.sub(r"(\d{2})/(\d{2}) (\d{2}):(\d{2})", lambda m: "\x00" + full(m), txt)
+    def kort(m):
+        hh, mi = int(m.group(1)), int(m.group(2)); tot = hh * 60 + mi + dk_off(dato)
+        return f"{tot // 60 % 24:02d}:{tot % 60:02d}"
+    parts = txt.split("\x00")
+    out = [re.sub(r"(?<![\d/])(\d{2}):(\d{2})(?!\d)", kort, parts[0])]
+    for q in parts[1:]:
+        out.append(q[:11] + re.sub(r"(?<![\d/])(\d{2}):(\d{2})(?!\d)", kort, q[11:]))
+    return "".join(out)
+for t in trades:
+    for k, v in list(t.items()):
+        if k != "dato" and isinstance(v, str):
+            t[k] = til_dk(v, t["dato"])
+for k in bars:
+    bars[k]["dk"] = dk_off(k)
 json.dump(dict(trades=trades, bars=bars), open(os.path.join(ud, "artifact_data.json"), "w"), separators=(",", ":"))
 print(len(trades), "trades", len(bars), "dage", os.path.getsize(os.path.join(ud, "artifact_data.json")) // 1024, "KB")

@@ -71,7 +71,7 @@ ol.steps code{font-family:var(--f-mono);font-size:12px}
   <header>
     <div>
       <h1>TJR Trade Journal · NQ</h1>
-      <p class="sub">Backtest 2. jan – 31. mar 2026 · entry 09:30–12:00 NY · 3-step (continuation) og 4-step (reversal) · TP = nærmeste liq mindst 0,9R væk, ellers 3R · liq fra 09:25-candlen tæller ikke · maks 2 trades om dagen, stop efter en vinder</p>
+      <p class="sub">Backtest 2. jan – 31. mar 2026 · entry 15:30–18:00 dansk tid (14:30–17:00 fra 9.–27. marts) · 3-step (continuation) og 4-step (reversal) · TP = nærmeste liq mindst 0,9R væk, ellers 3R · liq fra 5m-candlen lige før market open tæller ikke · maks 2 trades om dagen, stop efter en vinder</p>
     </div>
   </header>
 
@@ -99,7 +99,7 @@ ol.steps code{font-family:var(--f-mono);font-size:12px}
       <canvas id="chart"></canvas>
       <div class="facts" id="facts"></div>
       <ol class="steps" id="steps"></ol>
-      <p class="note">1m-candles. Grøn/rød zone = TP/SL fra entry til exit. Rammer SL og TP samme 15s-bar, tæller det som SL. Brug ← → til at bladre.</p>
+      <p class="note">1m-candles. Grøn/rød zone = TP/SL fra entry til exit. Rammer SL og TP samme 15s-bar, tæller det som SL. Alle tider er dansk tid. Brug ← → til at bladre.</p>
     </div>
   </section>
 </div>
@@ -169,7 +169,7 @@ function show(){
     $("#vt").textContent=`${dlab(t.dato)} 2026 · ${t.retning} ${t.entry_tid}`;
     $("#vs").textContent=`Kun i din journal · ${st.sel+1} af ${rs.length}`;
     $("#vr").textContent=(t.R>0?"+":"")+fmt(t.R)+" R"; $("#vr").className="res "+(t.R>0?"w":"l");
-    $("#facts").innerHTML=[["Din entry (NY)",t.entry_tid],["Retning",t.retning],["Dit R",fmt(t.R)],["Motor samme dag",t.motor_dag]].map(([a,b])=>`<div><span>${a}</span><b>${b}</b></div>`).join("");
+    $("#facts").innerHTML=[["Din entry",t.entry_tid],["Retning",t.retning],["Dit R",fmt(t.R)],["Motor samme dag",t.motor_dag]].map(([a,b])=>`<div><span>${a}</span><b>${b}</b></div>`).join("");
     $("#steps").innerHTML=`<li><i style="background:var(--accent)">W</i><span>Motoren fandt ikke et setup i den retning inden for 10 min af din entry. Den lodrette linje er dit entry-tidspunkt.</span></li>`;
     drawChart(t); return;
   }
@@ -201,7 +201,7 @@ function drawChart(t){
   const nice=[1,2,2.5,5,10,20,25,50,100,200,250,500]; const st_=nice.find(s=>(hi-lo)/s<=7)||1000;
   for(let p=Math.ceil(lo/st_)*st_;p<=hi;p+=st_){g.beginPath();g.moveTo(L,Y(p));g.lineTo(W-R,Y(p));g.stroke();g.fillText(fmt(p,0),W-R+4,Y(p)+3);}
   const tick=[15,30,60][[15,30,60].findIndex(s=>span/s<=8)] || 60;
-  for(let m=Math.ceil(t0/tick)*tick;m<t0+span;m+=tick){g.fillText(hm(m),X(m)-14,H-6);}
+  for(let m=Math.ceil(t0/tick)*tick;m<t0+span;m+=tick){g.fillText(hm(m+(B.dk||0)),X(m)-14,H-6);}
   const x0=X(t.t_entry), x1=Math.max(X(ex),x0+3);
   if(!lv){ g.strokeStyle=css("--accent"); g.lineWidth=2; g.setLineDash([4,3]); g.beginPath(); g.moveTo(x0,T); g.lineTo(x0,H-Bt); g.stroke(); g.setLineDash([]);
     g.fillStyle=css("--accent"); g.font="600 11px "+css("--f-body"); g.fillText("Din entry "+t.entry_tid,x0+5,T+12); }
