@@ -100,9 +100,10 @@ def session_levels(day, d):
 
 
 def nypre_swings(day, d):
-    """5m swings inde i NY PRE, som ogsaa er high/low i et 15m swing."""
+    """5m swings fra NY PRE (08:00) til 12:00, som ogsaa er high/low i et 15m swing.
+    Swings efter market open bliver liq, naar de er bekraeftet (William 8/11: lowet lavet 09:30 er ogsaa gyldigt)."""
     dd = pd.Timestamp(day.date(), tz=NY)
-    a, b = dd + pd.Timedelta(hours=8), dd + pd.Timedelta(hours=9, minutes=30)
+    a, b = dd + pd.Timedelta(hours=8), dd + pd.Timedelta(hours=12)
     x = d[(d.index >= a - pd.Timedelta(hours=1)) & (d.index < b + pd.Timedelta(minutes=30))]
     b5, b15 = mk(x, 5), mk(x, 15)
     s15 = swings(b15)
@@ -112,7 +113,8 @@ def nypre_swings(day, d):
             continue
         for t15, c15, p15, k15 in s15:
             if k15 == k5 and t15 <= t5 < t15 + pd.Timedelta(minutes=15) and p15 == p5:
-                out.append(dict(navn=f"NY PRE 5m/15m swing {'high' if k5 == 'H' else 'low'} {t5:%H:%M}",
+                nm = "NY PRE" if t5 < dd + pd.Timedelta(hours=9, minutes=30) else "NY"
+                out.append(dict(navn=f"{nm} 5m/15m swing {'high' if k5 == 'H' else 'low'} {t5:%H:%M}",
                                 pris=p5, kind=k5, klar=max(c5, c15), dannet=t5))
     return out
 
@@ -193,7 +195,8 @@ def run_day(day, d, rule="A"):
     sw1 = swings(b1); sw5 = swings(b5)
     liq = session_levels(day, x) + nypre_swings(day, x)
     # kun liq der ikke er taget foer market open
-    liq = [L for L in liq if L["klar"] <= e0 and untaken(L["pris"], L["kind"], L["klar"], e0, x)]
+    liq = [L for L in liq if (L["klar"] <= e0 and untaken(L["pris"], L["kind"], L["klar"], e0, x)) or
+           (L["klar"] > e0 and untaken(L["pris"], L["kind"], L["dannet"] + pd.Timedelta(minutes=5), L["klar"], x))]
     # liq lavet i 5m-candlen lige op ad market open (09:25-09:30) taeller ikke
     liq = [L for L in liq if not (e0 - pd.Timedelta(minutes=5) <= L["dannet"] < e0)]
     taken = set()          # wick igennem (4-step sweep)
@@ -223,7 +226,7 @@ def run_day(day, d, rule="A"):
                 fvg.append((close_t, c.high, a.low, "bear"))
         nyt = []
         for k, L in enumerate(liq):
-            if k in taken:
+            if k in taken or L["klar"] > t:
                 continue
             if (L["kind"] == "L" and c.low < L["pris"]) or (L["kind"] == "H" and c.high > L["pris"]):
                 taken.add(k); nyt.append(L)
@@ -232,7 +235,7 @@ def run_day(day, d, rule="A"):
         if close_t.minute % 5 == 0 and (close_t - pd.Timedelta(minutes=5)) in b5.index:
             t5 = close_t - pd.Timedelta(minutes=5); c5 = b5.loc[t5]
             for k, L in enumerate(liq):
-                if k in closed:
+                if k in closed or L["klar"] > t5:
                     continue
                 if (L["kind"] == "H" and c5.close > L["pris"]) or (L["kind"] == "L" and c5.close < L["pris"]):
                     closed.add(k); bos5.append(L)
