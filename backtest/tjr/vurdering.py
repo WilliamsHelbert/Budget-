@@ -46,9 +46,18 @@ for j, r in m[~m.index.isin(used)].iterrows():
         q = inde.iloc[0]; pts.append(f"du var selv i en {q.retning}-trade fra {dk(q.ts)}, så du kunne ikke tage den")
     elif len(wd[(wd.ts < ts) & (wd.r > 0)]):
         pts.append("du havde allerede et win den dag (din dagsregel)")
+    elif len(wd[wd.ts < ts]) >= 2:
+        pts.append("du havde allerede taget 2 trades den dag (din dagsregel)")
+    if ts.hour >= 11 and not len(inde):
+        pts.append("entry efter 17:00 dansk: du har kun 7 af 82 trades efter det tidspunkt")
+    mod = wd[wd.retning != r.retning]
+    if len(mod) and not len(wd[wd.retning == r.retning]):
+        pts.append("du handlede kun den modsatte retning den dag (" + ", ".join(dk(x) for x in mod.ts) + "), så din bias var anden vej")
     same = wd[wd.retning == r.retning]
     if len(same) and not len(inde):
-        pts.append("du tog samme retning kl. " + ", ".join(dk(x) for x in same.ts) + " (mere end 10 min fra)")
+        dm = min(abs((x - ts).total_seconds()) / 60 for x in same.ts)
+        pts.append("du tog samme retning kl. " + ", ".join(dk(x) for x in same.ts) +
+                   (f" ({dm:.0f} min fra: sandsynligvis samme setup med en anden entry-BOS)" if dm <= 30 else " (mere end 10 min fra)"))
     if not pts:
         pts.append("jeg kan ikke se noget ugyldigt i reglerne: tjek chartet, måske en du har overset")
     dom = "sandsynligvis ugyldig" if svag >= 2 else ("tvivlsom" if svag == 1 else ("ok, men du var optaget" if len(inde) else "ser gyldig ud"))
