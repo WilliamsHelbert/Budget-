@@ -62,6 +62,8 @@ ol.steps{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:6px}
 ol.steps li{display:grid;grid-template-columns:22px 1fr;gap:8px;font-size:13px;align-items:baseline}
 ol.steps i{font-style:normal;font:600 11px var(--f-mono);width:20px;height:20px;border-radius:50%;display:grid;place-items:center;color:var(--panel)}
 ol.steps code{font-family:var(--f-mono);font-size:12px}
+.vurd:empty{display:none}
+.vurd{margin-top:14px;padding:10px 12px;border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent);font-size:13px;line-height:1.5;border-radius:4px}
 .note{font-size:12px;color:var(--mut);margin-top:14px}
 @media (max-width:860px){.top,.main{grid-template-columns:minmax(0,1fr)}.list{max-height:340px}.facts{grid-template-columns:repeat(2,minmax(0,1fr))}#chart{height:340px}}
 @media (max-width:480px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -99,6 +101,7 @@ ol.steps code{font-family:var(--f-mono);font-size:12px}
       <canvas id="chart"></canvas>
       <div class="facts" id="facts"></div>
       <ol class="steps" id="steps"></ol>
+      <div class="vurd" id="vurd"></div>
       <p class="note">1m-candles. Grøn/rød zone = TP/SL fra entry til exit. Rammer SL og TP samme 15s-bar, tæller det som SL. Alle tider er dansk tid. Brug ← → til at bladre.</p>
     </div>
   </section>
@@ -148,7 +151,7 @@ function drawEq(R){
   g.beginPath(); g.arc(x(pts.length-1),y(last),3,0,7); g.fillStyle=col; g.fill();
   $("#eqlast").textContent=(last>0?"+":"")+fmt(last)+" R";
 }
-const jtag = t => t.journal==="enig" ? ` · <b class="w">enig</b> (din ${t.w_tid}, ${t.w_R>0?"+":""}${fmt(t.w_R)}R)` : t.journal==="kun_motor" ? ` · <b class="l">ikke i din journal</b>` : t.journal==="ikke_tjekket" ? " · ikke tjekket endnu" : "";
+const jtag = t => t.journal==="enig" ? ` · <b class="w">enig</b> (din ${t.w_tid}, ${t.w_R>0?"+":""}${fmt(t.w_R)}R)` : t.journal==="kun_motor" ? ` · <b class="l">ikke i din journal</b>${t.vurdering?" · "+t.vurdering.split(":")[0]:""}` : t.journal==="ikke_tjekket" ? " · ikke tjekket endnu" : "";
 function list(){
   const rs=rows(); if(st.sel>=rs.length) st.sel=Math.max(0,rs.length-1);
   $("#list").innerHTML = rs.length ? rs.map((t,i)=>{
@@ -170,6 +173,7 @@ function show(){
     $("#vs").textContent=`Kun i din journal · ${st.sel+1} af ${rs.length}`;
     $("#vr").textContent=(t.R>0?"+":"")+fmt(t.R)+" R"; $("#vr").className="res "+(t.R>0?"w":"l");
     $("#facts").innerHTML=[["Din entry",t.entry_tid],["Retning",t.retning],["Dit R",fmt(t.R)],["Motor samme dag",t.motor_dag]].map(([a,b])=>`<div><span>${a}</span><b>${b}</b></div>`).join("");
+    $("#vurd").innerHTML=t.vurdering?`<b>Min vurdering:</b> ${t.vurdering}`:"";
     $("#steps").innerHTML=`<li><i style="background:var(--accent)">W</i><span>Motoren fandt ikke et setup i den retning inden for 10 min af din entry. Den lodrette linje er dit entry-tidspunkt.</span></li>`;
     drawChart(t); return;
   }
@@ -181,6 +185,7 @@ function show(){
   const S=t.model==="4-step"
     ? [["1","--s1","Sweep af liq (5m)",t.step1],["2","--s2",(t.step2&&t.step2.includes("iFVG")?"5m iFVG":"5m BOS"),t.step2],["3","--s3","1m "+(t.pullback_type==="iFVG"?"FVG inversed":"BOS mod tradet"),t.pullback],["4","--s4","1m BOS → entry",t.entry_bos]]
     : [["1","--s1","5m BOS af liq",t.step1],["2","--s3","1m "+(t.pullback_type==="iFVG"?"FVG inversed":"BOS mod tradet"),t.pullback],["3","--s4","1m BOS → entry",t.entry_bos]];
+  $("#vurd").innerHTML=t.vurdering?`<b>Min vurdering:</b> ${t.vurdering}`:"";
   $("#steps").innerHTML=S.map(([n,c,h,txt])=>`<li><i style="background:var(${c})">${n}</i><span><b>${h}</b> · <code>${txt||""}</code></span></li>`).join("");
   drawChart(t);
 }

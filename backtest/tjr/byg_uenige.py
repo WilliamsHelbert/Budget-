@@ -24,6 +24,13 @@ except FileNotFoundError:
     ok = set()
 d["trades"] = [t for t in d["trades"] if t["dato"] not in ok]
 d["trades"] = [t for t in d["trades"] if t["journal"] in ("kun_motor", "kun_william")]
+# min vurdering af hver uenig trade (fra vurdering.py)
+try:
+    V = json.load(open(data.replace("artifact_data.json", "vurdering.json")))
+except FileNotFoundError:
+    V = {}
+for t in d["trades"]:
+    t["vurdering"] = V.get(f'{t["dato"]}|{t["retning"]}|{int(t["t_entry"])}|{"w" if t["model"] == "William" else "m"}', "")
 dage = {t["dato"] for t in d["trades"]}
 d["bars"] = {k: v for k, v in d["bars"].items() if k in dage}
 def rep(a, b):
@@ -36,7 +43,7 @@ rep('''(st.journal==="kun_william" ? t.journal==="kun_william" : t.journal!=="ku
     '''(!st.journal||t.journal===st.journal)''')
 rep('''<span class="lbl">Din journal</span>''', '''<span class="lbl">Uenige</span>''')
 rep('''Backtest 2. jan – 31. mar 2026''', '''Kun de trades vi er uenige om, 2. jan – 26. mar 2026 · motoren uden dagsregel, så alle setups ses · nøgletal gælder de trades, filteret viser''')
-rep('t.journal==="kun_motor" ? ` · <b class="l">ikke i din journal</b>`', 't.journal==="kun_motor" ? ` · <b class="l">ikke i din journal</b>${t.efter_regel?" · <b>efter dagsregel</b>":""}`')
+rep('<b class="l">ikke i din journal</b>${', '<b class="l">ikke i din journal</b>${t.efter_regel?" · <b>efter dagsregel</b>":""}${')
 rep(" · maks 2 trades om dagen, stop efter en vinder", "")
 rep("Kun de trades vi er uenige om", f"Kun de trades vi er uenige om ({len(ok)} dage bekræftet og fjernet)")
 rep("<title>TJR Trade Journal NQ</title>", "<title>TJR Uenige Trades</title>")
