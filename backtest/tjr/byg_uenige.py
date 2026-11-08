@@ -17,6 +17,12 @@ for t in d["trades"]:
     if t["journal"] == "enig" and (t["R"] or 0) > 0 and (t.get("w_R") or 0) > 0:
         stop[t["dato"]] = min(stop.get(t["dato"], "99:99"), t["entry_tid"])
 d["trades"] = [t for t in d["trades"] if not (t["dato"] in stop and t["entry_tid"] > stop[t["dato"]])]
+# dage William har gennemgaaet og bekraeftet, er loest og vises ikke
+try:
+    ok = set(json.load(open("/mnt/project-files/backtest/tjr/journal/bekraeftet.json"))["dage"])
+except FileNotFoundError:
+    ok = set()
+d["trades"] = [t for t in d["trades"] if t["dato"] not in ok]
 d["trades"] = [t for t in d["trades"] if t["journal"] in ("kun_motor", "kun_william")]
 dage = {t["dato"] for t in d["trades"]}
 d["bars"] = {k: v for k, v in d["bars"].items() if k in dage}
@@ -32,6 +38,7 @@ rep('''<span class="lbl">Din journal</span>''', '''<span class="lbl">Uenige</spa
 rep('''Backtest 2. jan – 31. mar 2026''', '''Kun de trades vi er uenige om, 2. jan – 26. mar 2026 · motoren uden dagsregel, så alle setups ses · nøgletal gælder de trades, filteret viser''')
 rep('t.journal==="kun_motor" ? ` · <b class="l">ikke i din journal</b>`', 't.journal==="kun_motor" ? ` · <b class="l">ikke i din journal</b>${t.efter_regel?" · <b>efter dagsregel</b>":""}`')
 rep(" · maks 2 trades om dagen, stop efter en vinder", "")
+rep("Kun de trades vi er uenige om", f"Kun de trades vi er uenige om ({len(ok)} dage bekræftet og fjernet)")
 rep("<title>TJR Trade Journal NQ</title>", "<title>TJR Uenige Trades</title>")
 rep("<h1>TJR Trade Journal · NQ</h1>", "<h1>TJR · uenige trades</h1>")
 s = s.replace('__DATA__', json.dumps(d, separators=(",", ":")))
