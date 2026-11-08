@@ -34,6 +34,7 @@ MAX_FRA = "t1"          # MAX_MIN maales fra step 1 ("t1") eller fra step 2 ("t2
 TILBAGE3 = False        # 3-step ugyldigt, hvis en 5m candle lukker tilbage gennem det brudte liq foer entry
 TILBAGE4 = False        # 4-step ugyldigt, hvis en 5m candle efter step 2 lukker tilbage paa forkert side af det sweepede liq
 ENTRY_SIDE = False      # entry skal ligge paa rigtig side af liq-niveauet (long over, short under); "reset" dræber setuppet
+BLOKERET = "reset"      # entry mens man er i et andet trade: "reset" = setuppet er brugt, "vent" = vent paa ny pullback + BOS
 MAX_MIN = 0             # >0: setup ugyldigt hvis entry kommer mere end MAX_MIN minutter efter step 1       # 3-step er ugyldigt, hvis et 4-step i modsat retning allerede har klaret step 2
 EFTER_OPEN = "open5m"   # liq efter 09:30: "open5m" = kun 5m swing high/low i market open-candlen (09:30),
                         # "15m" = alle 5m swings til 12:00, der ogsaa er 15m swings, "ingen"
@@ -389,9 +390,12 @@ def run_day(day, d, rule="A"):
                     log(close_t, s, "3-step ugyldigt (modsat 4-step step 2)", "")
                     s.reset()
                     continue
-                if busy:                              # i et andet trade: vent paa en ny pullback + BOS
-                    s.step = 2; s.t2 = close_t
+                if busy:                              # i et andet trade: setuppet er brugt (William 8/11: "man maa ikke bare sige naeste gang")
                     log(close_t, s, "entry blokeret (i trade)", "")
+                    if BLOKERET == "vent":            # gammel regel: vent paa en ny pullback + BOS
+                        s.step = 2; s.t2 = close_t
+                    else:
+                        s.reset()
                     continue
                 entry = c.close
                 lows = [p for p in sw1 if p[3] == ("L" if long else "H") and p[1] <= close_t and
