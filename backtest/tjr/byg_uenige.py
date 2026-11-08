@@ -12,9 +12,13 @@ for t in d["trades"]:
     t["efter_regel"] = n >= 2 or vundet
     dag[t["dato"]] = (n + 1, vundet or (t["R"] or 0) > 0)
 # efter et win, vi er enige om, stopper vi begge for dagen: senere trades vises ikke
-stop = {}
-for t in d["trades"]:
-    if t["journal"] == "enig" and (t["R"] or 0) > 0 and (t.get("w_R") or 0) > 0:
+# ... og det samme efter 2 trades, vi er enige om
+stop = {}; n_enig = {}
+for t in sorted(d["trades"], key=lambda t: (t["dato"], t["entry_tid"])):
+    if t["journal"] != "enig":
+        continue
+    n_enig[t["dato"]] = n_enig.get(t["dato"], 0) + 1
+    if ((t["R"] or 0) > 0 and (t.get("w_R") or 0) > 0) or n_enig[t["dato"]] >= 2:
         stop[t["dato"]] = min(stop.get(t["dato"], "99:99"), t["entry_tid"])
 d["trades"] = [t for t in d["trades"] if not (t["dato"] in stop and t["entry_tid"] > stop[t["dato"]])]
 # dage William har gennemgaaet og bekraeftet, er loest og vises ikke

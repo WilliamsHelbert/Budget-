@@ -40,6 +40,9 @@ for j, r in m[~m.index.isin(used)].iterrows():
         pts.append(f"entry {dist:.0f} pts fra liq (din vens 100-pts regel)"); svag += 1
     if resweep:
         pts.append("sweep-ekstremen blev taget igen før entry (din vens regel 2)"); svag += 1
+    lvl = lv["sweep"][2]
+    if (r.entry < lvl) if long else (r.entry > lvl):
+        pts.append(f"entry {abs(r.entry - lvl):.0f} pts på forkert side af {r.liq} ({lvl}): prisen er tilbage gennem niveauet")
     wd = w[w.dato == r.dato]
     inde = wd[(wd.ts <= ts) & (wd.exit_ts > ts)]
     if len(inde):

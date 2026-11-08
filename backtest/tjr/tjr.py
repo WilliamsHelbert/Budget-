@@ -31,6 +31,9 @@ GENTAG_EFTER_SL = False # efter SL: samme setup venter paa ny pullback + BOS (i 
 MOD_4STEP = False
 OPDATER = False         # nyt sweep/5m-liq-brud i samme retning foer step 2 (4-step) / foer pullback (3-step) flytter step 1 frem
 MAX_FRA = "t1"          # MAX_MIN maales fra step 1 ("t1") eller fra step 2 ("t2")
+TILBAGE3 = False        # 3-step ugyldigt, hvis en 5m candle lukker tilbage gennem det brudte liq foer entry
+TILBAGE4 = False        # 4-step ugyldigt, hvis en 5m candle efter step 2 lukker tilbage paa forkert side af det sweepede liq
+ENTRY_SIDE = False      # entry skal ligge paa rigtig side af liq-niveauet (long over, short under); "reset" dræber setuppet
 MAX_MIN = 0             # >0: setup ugyldigt hvis entry kommer mere end MAX_MIN minutter efter step 1       # 3-step er ugyldigt, hvis et 4-step i modsat retning allerede har klaret step 2
 EFTER_OPEN = "open5m"   # liq efter 09:30: "open5m" = kun 5m swing high/low i market open-candlen (09:30),
                         # "15m" = alle 5m swings til 12:00, der ogsaa er 15m swings, "ingen"
@@ -297,6 +300,18 @@ def run_day(day, d, rule="A"):
                     s.info["liq"] = L["navn"]
                     s.lv = dict(sweep=(L["dannet"], t5, L["pris"], L["navn"]))
                     continue
+            if TILBAGE3 and s.model == 3 and c5 is not None and s.lv:
+                lvl = s.lv["sweep"][2]
+                if (c5.close < lvl) if long else (c5.close > lvl):
+                    log(close_t, s, "3-step ugyldigt (5m close tilbage gennem liq)", "")
+                    s.reset()
+                    continue
+            if TILBAGE4 and s.model == 4 and s.lv:
+                lvl = s.lv["sweep"][2]
+                if c5 is not None and ((c5.close < lvl) if long else (c5.close > lvl)) and s.step >= 2:
+                    log(close_t, s, "4-step ugyldigt (5m close tilbage under sweep-level)", "")
+                    s.reset()
+                    continue
             st = s.anchor
             if s.step == 1:
                 if c5 is not None:
@@ -364,6 +379,11 @@ def run_day(day, d, rule="A"):
                 if MAX_MIN and (close_t - (s.t2 if MAX_FRA == "t2" else s.t1)) > pd.Timedelta(minutes=int(MAX_MIN)):
                     log(close_t, s, "for gammelt setup", "")
                     s.reset()
+                    continue
+                if ENTRY_SIDE and s.lv and ((c.close < s.lv["sweep"][2]) if long else (c.close > s.lv["sweep"][2])):
+                    log(close_t, s, "entry paa forkert side af liq", "")
+                    if ENTRY_SIDE == "reset":
+                        s.reset()
                     continue
                 if MOD_4STEP and s.model == 3 and any(z.model == 4 and z.long != long and z.step >= 2 for z in S):
                     log(close_t, s, "3-step ugyldigt (modsat 4-step step 2)", "")
