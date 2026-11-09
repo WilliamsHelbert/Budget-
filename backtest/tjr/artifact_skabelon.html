@@ -203,7 +203,7 @@ function drawChart(t){
   const k=v==="samlet"?"s":(v==="1"?"liq":(f4_?{"2":"s2","3":"s3","4":"s4"}:{"2":"s3","3":"s4"})[v]);
   let a, z, lvp=[];
   if(!lv){ a=Math.max(570, t.t_entry-60); z=t.t_entry+35; }
-  else if(k==="s"){ a=Math.min(lv.liq[0], lv.liq[1], lv.s2?lv.s2[0]:1e9, lv.s3[0])-15; z=Math.max(ex+12, t.t_entry+35); lvp=[t.sl,lv.liq[2]].concat(t.tp!=null?[t.tp]:[]); }
+  else if(k==="s"){ a=Math.min(lv.liq[1], lv.s2?lv.s2[0]:1e9, lv.s3[0])-20; z=Math.max(ex+12, t.t_entry+35); lvp=[t.sl,lv.liq[2]].concat(t.tp!=null?[t.tp]:[]); }
   else if(k==="liq"){ a=lv.liq[0]-30; z=lv.liq[1]+35; lvp=[lv.liq[2]]; }
   else if(k==="s2"){ a=Math.min(lv.liq[1], lv.s2[0])-15; z=lv.s2[1]+15; lvp=[lv.liq[2], lv.s2[2]]; }
   else if(k==="s3"){ a=Math.min(lv.s3[0], f4_&&lv.s2?lv.s2[1]:lv.liq[1])-10; z=lv.s3[1]+12; lvp=[lv.s3[2], lv.s3[3]]; }
@@ -211,8 +211,10 @@ function drawChart(t){
   a=Math.max(a, B.t0); const full=(k==="s"||k==="s4");
   const idx=[]; B.m.forEach((m,i)=>{const tm=B.t0+m; if(tm>=a&&tm<=z) idx.push(i)});
   if(!idx.length) return;
-  const per=Math.max(1,Math.ceil(idx.length/150));          // flet candles naar vinduet er langt
-  const cs=[]; for(let k=0;k<idx.length;k+=per){const s=idx.slice(k,k+per); cs.push({t:B.t0+B.m[s[0]],o:B.o[s[0]],c:B.c[s[s.length-1]],h:Math.max(...s.map(i=>B.h[i])),l:Math.min(...s.map(i=>B.l[i]))});}
+  // 5m-steps (sweep / 5m BOS) vises paa 5m, resten paa 1m; meget lange vinduer flettes
+  const tf5=(k==="liq"||k==="s2"), per=tf5?5:Math.max(1,Math.ceil(idx.length/400));
+  const grp=new Map(); idx.forEach(i=>{const tm=B.t0+B.m[i], key=Math.floor(tm/per)*per; if(!grp.has(key)) grp.set(key,[]); grp.get(key).push(i);});
+  const cs=[...grp.entries()].map(([key,s])=>({t:key,o:B.o[s[0]],c:B.c[s[s.length-1]],h:Math.max(...s.map(i=>B.h[i])),l:Math.min(...s.map(i=>B.l[i]))}));
   const ps=[...cs.map(c=>c.h),...cs.map(c=>c.l),...lvp];
   let lo=Math.min(...ps), hi=Math.max(...ps); const pd=(hi-lo)*.05; lo-=pd; hi+=pd;
   const L=8,R=W<500?62:96,T=8,Bt=22, t0=cs[0].t, span=(cs[cs.length-1].t+per)-t0, cw=(W-L-R)/cs.length;
@@ -224,6 +226,7 @@ function drawChart(t){
   for(let m=Math.ceil(t0/tick)*tick;m<t0+span;m+=tick){g.fillText(hm(m+(B.dk||0)),X(m)-14,H-6);}
   g.save(); g.beginPath(); g.rect(L,T,W-L-R,H-T-Bt); g.clip();
   const x0=X(t.t_entry), x1=Math.max(X(ex),x0+3);
+  g.fillStyle=css("--mut"); g.font="600 12px "+css("--f-mono"); g.fillText(per===1?"1m":per+"m",L+4,T+14);
   if(!lv){ g.strokeStyle=css("--accent"); g.lineWidth=2; g.setLineDash([4,3]); g.beginPath(); g.moveTo(x0,T); g.lineTo(x0,H-Bt); g.stroke(); g.setLineDash([]);
     g.fillStyle=css("--accent"); g.font="600 11px "+css("--f-body"); g.fillText("Din entry "+t.entry_tid,x0+5,T+12); }
   if(lv&&full){ if(t.tp!=null){g.fillStyle=css("--upz");g.fillRect(x0,Math.min(Y(t.tp),Y(t.entry)),x1-x0,Math.abs(Y(t.tp)-Y(t.entry)));}
@@ -233,8 +236,11 @@ function drawChart(t){
     g.beginPath(); g.moveTo(cx,Y(c.h)); g.lineTo(cx,Y(c.l)); g.stroke();
     const y1=Y(Math.max(c.o,c.c)), y2=Y(Math.min(c.o,c.c)); g.fillRect(cx-cw*.36,y1,Math.max(cw*.72,1),Math.max(y2-y1,1));});
   if(!lv){ g.restore(); return; }
+  const placed=[];
   const badge=(x,y,col,lab)=>{const [n,...r]=lab.split(" "), txt=r.join(" "); g.font="600 11px "+css("--f-body");
-    const w=g.measureText(txt).width; g.fillStyle=css("--panel"); g.globalAlpha=.85; g.fillRect(x,y-8,w+26,16); g.globalAlpha=1;
+    const w=g.measureText(txt).width;
+    for(let k=0;k<8 && placed.some(q=>x<q[0]+q[2]&&x+w+26>q[0]&&Math.abs(y-q[1])<17);k++) y+=(k%2?-1:1)*18*(k+1);
+    placed.push([x,y,w+26]); g.fillStyle=css("--panel"); g.globalAlpha=.85; g.fillRect(x,y-8,w+26,16); g.globalAlpha=1;
     g.fillStyle=col; g.beginPath(); g.arc(x+8,y,7.5,0,7); g.fill(); g.fillStyle=css("--panel"); g.fillText(n,x+5,y+4); g.fillStyle=col; g.fillText(txt,x+19,y+4);};
   const line=(m0,m1,p,col,lab,dash)=>{const a_=Math.max(X(m0),L), b_=Math.min(X(m1),W-R); g.save(); g.strokeStyle=col; g.lineWidth=1.6; if(dash) g.setLineDash([5,4]);
     g.beginPath(); g.moveTo(a_,Y(p)); g.lineTo(b_,Y(p)); g.stroke(); g.restore(); if(lab) badge(Math.min(b_+4,W-R-90),Y(p)-11,col,lab); };
