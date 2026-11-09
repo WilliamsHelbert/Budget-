@@ -233,18 +233,22 @@ function drawChart(t){
     g.beginPath(); g.moveTo(cx,Y(c.h)); g.lineTo(cx,Y(c.l)); g.stroke();
     const y1=Y(Math.max(c.o,c.c)), y2=Y(Math.min(c.o,c.c)); g.fillRect(cx-cw*.36,y1,Math.max(cw*.72,1),Math.max(y2-y1,1));});
   if(!lv){ g.restore(); return; }
+  const badge=(x,y,col,lab)=>{const [n,...r]=lab.split(" "), txt=r.join(" "); g.font="600 11px "+css("--f-body");
+    const w=g.measureText(txt).width; g.fillStyle=css("--panel"); g.globalAlpha=.85; g.fillRect(x,y-8,w+26,16); g.globalAlpha=1;
+    g.fillStyle=col; g.beginPath(); g.arc(x+8,y,7.5,0,7); g.fill(); g.fillStyle=css("--panel"); g.fillText(n,x+5,y+4); g.fillStyle=col; g.fillText(txt,x+19,y+4);};
   const line=(m0,m1,p,col,lab,dash)=>{const a_=Math.max(X(m0),L), b_=Math.min(X(m1),W-R); g.save(); g.strokeStyle=col; g.lineWidth=1.6; if(dash) g.setLineDash([5,4]);
-    g.beginPath(); g.moveTo(a_,Y(p)); g.lineTo(b_,Y(p)); g.stroke(); g.restore(); if(lab){g.fillStyle=col; g.font="600 10.5px "+css("--f-body"); g.fillText(lab,Math.min(b_+4,W-R-60),Y(p)-4);} };
+    g.beginPath(); g.moveTo(a_,Y(p)); g.lineTo(b_,Y(p)); g.stroke(); g.restore(); if(lab) badge(Math.min(b_+4,W-R-90),Y(p)-11,col,lab); };
   const f4=t.model==="4-step";
-  line(lv.liq[0], lv.liq[1]+5, lv.liq[2], css("--s1"), "1 "+(lv.liq[3]||"liq"), true);
+  const op=t.retning==="long";
+  line(lv.liq[0], lv.liq[1]+5, lv.liq[2], css("--s1"), f4 ? "1 sweep" : "1 5m BOS", true);
   g.fillStyle=css("--s1"); g.beginPath(); g.arc(X(lv.liq[0])+cw/2, Y(lv.liq[2]), 4, 0, 7); g.fill();
-  g.font="600 10.5px "+css("--f-body"); g.fillText(lv.liq[3]+" lavet "+hm(lv.liq[0]+(B.dk||0)), X(lv.liq[0])+8, Y(lv.liq[2])+(t.retning==="long"?14:-8));
+  g.font="600 10.5px "+css("--f-body"); {const tx=String(lv.liq[3]).replace(/ \d\d:\d\d$/,"")+" ("+hm(lv.liq[0]+(B.dk||0))+")", w=g.measureText(tx).width, yy=Y(lv.liq[2])+(t.retning==="long"?16:-8); g.fillStyle=css("--panel"); g.globalAlpha=.85; g.fillRect(X(lv.liq[0])+6,yy-11,w+6,15); g.globalAlpha=1; g.fillStyle=css("--s1"); g.fillText(tx, X(lv.liq[0])+9, yy);}
   g.beginPath(); g.moveTo(X(lv.liq[1])+cw/2, Y(lv.liq[2])); g.lineTo(X(lv.liq[1])+cw/2, Y(lv.liq[2])+(t.retning==="long"?16:-16)); g.strokeStyle=css("--s1"); g.lineWidth=2; g.stroke();
-  if(f4&&lv.s2) line(lv.s2[0], lv.s2[1], lv.s2[2], css("--s2"), "2 5m BOS");
+  if(f4&&lv.s2) line(lv.s2[0], lv.s2[1], lv.s2[2], css("--s2"), (t.step2&&t.step2.includes("iFVG"))?"2 5m iFVG":"2 5m BOS");
   const s3=lv.s3, n3=f4?"3":"2";
   if(s3[4]==="fvg"){g.fillStyle=css("--s3"); g.globalAlpha=.3; g.fillRect(X(s3[0]),Y(s3[3]),Math.max(X(s3[1])-X(s3[0]),2),Math.max(Y(s3[2])-Y(s3[3]),1.5)); g.globalAlpha=1;
-    g.font="600 10.5px "+css("--f-body"); g.fillText(n3+" iFVG",X(s3[1])+4,Y(s3[3])-3);}
-  else line(s3[0], s3[1], s3[2], css("--s3"), n3+" BOS");
+    g.font="600 10.5px "+css("--f-body"); badge(X(s3[1])+4,Y(s3[3])-11,css("--s3"),n3+" pullback");}
+  else line(s3[0], s3[1], s3[2], css("--s3"), n3+" pullback");
   line(lv.s4[0], lv.s4[1], lv.s4[2], css("--s4"), (f4?"4":"3")+" entry");
   g.restore();
   const tag=(p,col,txt)=>{g.fillStyle=col; g.fillRect(W-R+1,Y(p)-8,R-2,16); g.fillStyle=css("--panel"); g.font="600 10px "+css("--f-mono"); g.fillText(txt,W-R+4,Y(p)+3.5);};
