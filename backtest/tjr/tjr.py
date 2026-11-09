@@ -35,6 +35,7 @@ TILBAGE3 = False        # 3-step ugyldigt, hvis en 5m candle lukker tilbage genn
 TILBAGE4 = False        # 4-step ugyldigt, hvis en 5m candle efter step 2 lukker tilbage paa forkert side af det sweepede liq
 ENTRY_SIDE = False      # entry skal ligge paa rigtig side af liq-niveauet (long over, short under); "reset" dræber setuppet
 BLOKERET = "reset"      # entry mens man er i et andet trade: "reset" = setuppet er brugt, "vent" = vent paa ny pullback + BOS
+TRE_STEP = "liq"        # 3-step step 1: "liq" = 5m close gennem session-liq, "bos5" = 5m BOS af seneste 5m swing / 5m iFVG (ingen liq)
 MAX_MIN = 0             # >0: setup ugyldigt hvis entry kommer mere end MAX_MIN minutter efter step 1       # 3-step er ugyldigt, hvis et 4-step i modsat retning allerede har klaret step 2
 EFTER_OPEN = "open5m"   # liq efter 09:30: "open5m" = kun 5m swing high/low i market open-candlen (09:30),
                         # "15m" = alle 5m swings til 12:00, der ogsaa er 15m swings, "ingen"
@@ -272,6 +273,31 @@ def run_day(day, d, rule="A"):
                         s.info["step1"] = f"{t:%H:%M} sweep af {L['navn']} {L['pris']}"
                         s.info["liq"] = L["navn"]
                         s.lv = dict(sweep=(L["dannet"], t, L["pris"], L["navn"]))
+                elif TRE_STEP == "bos5":
+                    # 3-step uden liq: 5m close over seneste 5m swing high (long) / under swing low, som ikke er lukket igennem, eller 5m iFVG
+                    if c5 is not None and t >= e0 + pd.Timedelta(minutes=4):
+                        t5 = close_t - pd.Timedelta(minutes=5); kk = "H" if long else "L"
+                        piv = [q for q in sw5 if q[3] == kk and q[1] <= t5 and q[0] >= dd + pd.Timedelta(hours=7)]
+                        piv = [q for q in piv if not ((b5.loc[q[1]:t5 - pd.Timedelta(minutes=5)].close > q[2]).any() if long
+                                                     else (b5.loc[q[1]:t5 - pd.Timedelta(minutes=5)].close < q[2]).any())]
+                        hit = None
+                        if piv:
+                            q = piv[-1]
+                            if (c5.close > q[2]) if long else (c5.close < q[2]):
+                                hit = (q[0], q[2], f"5m swing {'high' if long else 'low'} {q[0]:%H:%M}")
+                        if hit is None:
+                            ifv = [g for g in fvg5 if g[4] == ("bear" if long else "bull") and g[0] >= t5 - pd.Timedelta(hours=1)
+                                   and g[1] <= t5 and ((c5.close > g[3]) if long else (c5.close < g[2]))
+                                   and not ((b5.loc[g[1]:t5 - pd.Timedelta(minutes=5)].close > g[3]).any() if long
+                                            else (b5.loc[g[1]:t5 - pd.Timedelta(minutes=5)].close < g[2]).any())]
+                            if ifv:
+                                g = ifv[-1]; hit = (g[0], g[3] if long else g[2], f"5m FVG {g[2]}-{g[3]} (iFVG)")
+                        if hit:
+                            s.step = 2; s.anchor = t5; s.t2 = close_t; s.t1 = close_t
+                            log(close_t, s, "1 5m BOS", hit[2])
+                            s.info["step1"] = f"{close_t:%H:%M} 5m close {c5.close} {'over' if long else 'under'} {hit[2]} {hit[1]}"
+                            s.info["liq"] = hit[2].split(" (")[0] if "FVG" not in hit[2] else "5m iFVG"
+                            s.lv = dict(sweep=(hit[0], t5, hit[1], hit[2]))
                 else:
                     br = [L for L in bos5 if L["kind"] == ("H" if long else "L")]
                     if br:
