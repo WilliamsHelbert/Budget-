@@ -98,6 +98,7 @@ ol.steps code{font-family:var(--f-mono);font-size:12px}
     <div class="view">
       <div class="vh"><h2 id="vt"></h2><div class="nav"><button id="prev" aria-label="Forrige trade">← Forrige</button><button id="next" aria-label="Næste trade">Næste →</button></div></div>
       <div class="vh" style="margin-top:4px"><span id="vs" class="sub" style="margin:0"></span><span id="vr" class="res"></span></div>
+      <div class="seg" id="tabs" role="tablist" aria-label="Chart-visning" style="margin:10px 0 6px"></div>
       <canvas id="chart"></canvas>
       <div class="facts" id="facts"></div>
       <ol class="steps" id="steps"></ol>
@@ -111,9 +112,9 @@ ol.steps code{font-family:var(--f-mono);font-size:12px}
 const DATA = __DATA__;
 const $ = s => document.querySelector(s);
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const st = {journal:"", regel:"B", model:"", retning:"", udfald:"", sel:0};
+const st = {journal:"", regel:"B", model:"", retning:"", udfald:"", sel:0, view:"samlet"};
 const fmt = (v,d=2) => v==null ? "–" : v.toLocaleString("da-DK",{minimumFractionDigits:d,maximumFractionDigits:d});
-const hm = m => String(Math.floor(m/60)).padStart(2,"0")+":"+String(Math.round(m%60)).padStart(2,"0");
+const hm = m0 => { const m=((m0%1440)+1440)%1440; return String(Math.floor(m/60)).padStart(2,"0")+":"+String(Math.round(m%60)).padStart(2,"0"); };
 const dage = ["søn","man","tir","ons","tor","fre","lør"];
 const dlab = d => { const t=new Date(d+"T12:00:00"); return dage[t.getDay()]+" "+t.getDate()+"/"+(t.getMonth()+1); };
 
@@ -175,7 +176,7 @@ function show(){
     $("#facts").innerHTML=[["Din entry",t.entry_tid],["Retning",t.retning],["Dit R",fmt(t.R)],["Motor samme dag",t.motor_dag]].map(([a,b])=>`<div><span>${a}</span><b>${b}</b></div>`).join("");
     $("#vurd").innerHTML=t.vurdering?`<b>Min vurdering:</b> ${t.vurdering}`:"";
     $("#steps").innerHTML=`<li><i style="background:var(--accent)">W</i><span>Motoren fandt ikke et setup i den retning inden for 10 min af din entry. Den lodrette linje er dit entry-tidspunkt.</span></li>`;
-    drawChart(t); return;
+    tabs(t); drawChart(t); return;
   }
   $("#vt").textContent=`${dlab(t.dato)} 2026 · ${t.retning} ${t.entry_tid}`;
   $("#vs").textContent=`${t.model} ${t.model==="3-step"?"(continuation)":"(reversal)"} · ${st.sel+1} af ${rs.length}`;
@@ -187,18 +188,32 @@ function show(){
     : [["1","--s1","5m BOS af liq",t.step1],["2","--s3","1m "+(t.pullback_type==="iFVG"?"FVG inversed":"BOS mod tradet"),t.pullback],["3","--s4","1m BOS → entry",t.entry_bos]];
   $("#vurd").innerHTML=t.vurdering?`<b>Min vurdering:</b> ${t.vurdering}`:"";
   $("#steps").innerHTML=S.map(([n,c,h,txt])=>`<li><i style="background:var(${c})">${n}</i><span><b>${h}</b> · <code>${txt||""}</code></span></li>`).join("");
-  drawChart(t);
+  tabs(t); drawChart(t);
+}
+function views(t){ return t.model==="William" ? ["samlet"] : t.model==="4-step" ? ["samlet","1","2","3","4"] : ["samlet","1","2","3"]; }
+function tabs(t){
+  const v=views(t); if(!v.includes(st.view)) st.view=v[v.length-1];
+  $("#tabs").innerHTML=v.map(k=>`<button role="tab" aria-pressed="${k===st.view}" data-v="${k}">${k==="samlet"?"Samlet":"Step "+k}</button>`).join("");
+  $("#tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{st.view=b.dataset.v; tabs(t); drawChart(t);});
 }
 function drawChart(t){
   const [g,W,H]=setupCanvas($("#chart")); g.clearRect(0,0,W,H);
   const B=DATA.bars[t.dato], lv=t.lv, ex=t.t_exit ?? t.t_entry+20;
-  let a=lv ? Math.min(lv.liq[1], lv.s2?lv.s2[0]:1e9, lv.s3[0])-15 : Math.max(570, t.t_entry-60); a=Math.max(a, t.t_entry-240, B.t0);
-  let z=Math.min(Math.max(ex+12, t.t_entry+35), t.t_entry+240);
+  const f4_=t.model==="4-step", v=lv?st.view:"samlet";
+  const k=v==="samlet"?"s":(v==="1"?"liq":(f4_?{"2":"s2","3":"s3","4":"s4"}:{"2":"s3","3":"s4"})[v]);
+  let a, z, lvp=[];
+  if(!lv){ a=Math.max(570, t.t_entry-60); z=t.t_entry+35; }
+  else if(k==="s"){ a=Math.min(lv.liq[0], lv.liq[1], lv.s2?lv.s2[0]:1e9, lv.s3[0])-15; z=Math.max(ex+12, t.t_entry+35); lvp=[t.sl,lv.liq[2]].concat(t.tp!=null?[t.tp]:[]); }
+  else if(k==="liq"){ a=lv.liq[0]-30; z=lv.liq[1]+35; lvp=[lv.liq[2]]; }
+  else if(k==="s2"){ a=Math.min(lv.liq[1], lv.s2[0])-15; z=lv.s2[1]+15; lvp=[lv.liq[2], lv.s2[2]]; }
+  else if(k==="s3"){ a=Math.min(lv.s3[0], f4_&&lv.s2?lv.s2[1]:lv.liq[1])-10; z=lv.s3[1]+12; lvp=[lv.s3[2], lv.s3[3]]; }
+  else { a=lv.s4[0]-15; z=Math.max(ex+10, t.t_entry+20); lvp=[t.entry,t.sl].concat(t.tp!=null?[t.tp]:[]); }
+  a=Math.max(a, B.t0); const full=(k==="s"||k==="s4");
   const idx=[]; B.m.forEach((m,i)=>{const tm=B.t0+m; if(tm>=a&&tm<=z) idx.push(i)});
   if(!idx.length) return;
   const per=Math.max(1,Math.ceil(idx.length/150));          // flet candles naar vinduet er langt
   const cs=[]; for(let k=0;k<idx.length;k+=per){const s=idx.slice(k,k+per); cs.push({t:B.t0+B.m[s[0]],o:B.o[s[0]],c:B.c[s[s.length-1]],h:Math.max(...s.map(i=>B.h[i])),l:Math.min(...s.map(i=>B.l[i]))});}
-  const ps=[...cs.map(c=>c.h),...cs.map(c=>c.l)]; if(lv){ps.push(t.sl,lv.liq[2]); if(t.tp!=null) ps.push(t.tp);}
+  const ps=[...cs.map(c=>c.h),...cs.map(c=>c.l),...lvp];
   let lo=Math.min(...ps), hi=Math.max(...ps); const pd=(hi-lo)*.05; lo-=pd; hi+=pd;
   const L=8,R=W<500?62:96,T=8,Bt=22, t0=cs[0].t, span=(cs[cs.length-1].t+per)-t0, cw=(W-L-R)/cs.length;
   const X=m=>L+(m-t0)/span*(W-L-R), Y=p=>T+(hi-p)/(hi-lo)*(H-T-Bt);
@@ -207,27 +222,33 @@ function drawChart(t){
   for(let p=Math.ceil(lo/st_)*st_;p<=hi;p+=st_){g.beginPath();g.moveTo(L,Y(p));g.lineTo(W-R,Y(p));g.stroke();g.fillText(fmt(p,0),W-R+4,Y(p)+3);}
   const tick=[15,30,60][[15,30,60].findIndex(s=>span/s<=8)] || 60;
   for(let m=Math.ceil(t0/tick)*tick;m<t0+span;m+=tick){g.fillText(hm(m+(B.dk||0)),X(m)-14,H-6);}
+  g.save(); g.beginPath(); g.rect(L,T,W-L-R,H-T-Bt); g.clip();
   const x0=X(t.t_entry), x1=Math.max(X(ex),x0+3);
   if(!lv){ g.strokeStyle=css("--accent"); g.lineWidth=2; g.setLineDash([4,3]); g.beginPath(); g.moveTo(x0,T); g.lineTo(x0,H-Bt); g.stroke(); g.setLineDash([]);
     g.fillStyle=css("--accent"); g.font="600 11px "+css("--f-body"); g.fillText("Din entry "+t.entry_tid,x0+5,T+12); }
-  if(t.tp!=null){g.fillStyle=css("--upz");g.fillRect(x0,Math.min(Y(t.tp),Y(t.entry)),x1-x0,Math.abs(Y(t.tp)-Y(t.entry)));}
-  g.fillStyle=css("--dnz"); g.fillRect(x0,Math.min(Y(t.sl),Y(t.entry)),x1-x0,Math.abs(Y(t.sl)-Y(t.entry)));
+  if(lv&&full){ if(t.tp!=null){g.fillStyle=css("--upz");g.fillRect(x0,Math.min(Y(t.tp),Y(t.entry)),x1-x0,Math.abs(Y(t.tp)-Y(t.entry)));}
+  g.fillStyle=css("--dnz"); g.fillRect(x0,Math.min(Y(t.sl),Y(t.entry)),x1-x0,Math.abs(Y(t.sl)-Y(t.entry))); }
   const up=css("--up"), dn=css("--dn");
   cs.forEach(c=>{const cx=X(c.t)+cw/2, col=c.c>=c.o?up:dn; g.strokeStyle=col; g.fillStyle=col;
     g.beginPath(); g.moveTo(cx,Y(c.h)); g.lineTo(cx,Y(c.l)); g.stroke();
     const y1=Y(Math.max(c.o,c.c)), y2=Y(Math.min(c.o,c.c)); g.fillRect(cx-cw*.36,y1,Math.max(cw*.72,1),Math.max(y2-y1,1));});
-  if(!lv) return;
+  if(!lv){ g.restore(); return; }
   const line=(m0,m1,p,col,lab,dash)=>{const a_=Math.max(X(m0),L), b_=Math.min(X(m1),W-R); g.save(); g.strokeStyle=col; g.lineWidth=1.6; if(dash) g.setLineDash([5,4]);
     g.beginPath(); g.moveTo(a_,Y(p)); g.lineTo(b_,Y(p)); g.stroke(); g.restore(); if(lab){g.fillStyle=col; g.font="600 10.5px "+css("--f-body"); g.fillText(lab,Math.min(b_+4,W-R-60),Y(p)-4);} };
   const f4=t.model==="4-step";
-  line(lv.liq[0]||a, lv.liq[1]+5, lv.liq[2], css("--s1"), f4?"1 liq":"1 liq (5m BOS)", true);
+  line(lv.liq[0], lv.liq[1]+5, lv.liq[2], css("--s1"), "1 "+(lv.liq[3]||"liq"), true);
+  g.fillStyle=css("--s1"); g.beginPath(); g.arc(X(lv.liq[0])+cw/2, Y(lv.liq[2]), 4, 0, 7); g.fill();
+  g.font="600 10.5px "+css("--f-body"); g.fillText(lv.liq[3]+" lavet "+hm(lv.liq[0]+(B.dk||0)), X(lv.liq[0])+8, Y(lv.liq[2])+(t.retning==="long"?14:-8));
+  g.beginPath(); g.moveTo(X(lv.liq[1])+cw/2, Y(lv.liq[2])); g.lineTo(X(lv.liq[1])+cw/2, Y(lv.liq[2])+(t.retning==="long"?16:-16)); g.strokeStyle=css("--s1"); g.lineWidth=2; g.stroke();
   if(f4&&lv.s2) line(lv.s2[0], lv.s2[1], lv.s2[2], css("--s2"), "2 5m BOS");
   const s3=lv.s3, n3=f4?"3":"2";
   if(s3[4]==="fvg"){g.fillStyle=css("--s3"); g.globalAlpha=.3; g.fillRect(X(s3[0]),Y(s3[3]),Math.max(X(s3[1])-X(s3[0]),2),Math.max(Y(s3[2])-Y(s3[3]),1.5)); g.globalAlpha=1;
     g.font="600 10.5px "+css("--f-body"); g.fillText(n3+" iFVG",X(s3[1])+4,Y(s3[3])-3);}
   else line(s3[0], s3[1], s3[2], css("--s3"), n3+" BOS");
   line(lv.s4[0], lv.s4[1], lv.s4[2], css("--s4"), (f4?"4":"3")+" entry");
+  g.restore();
   const tag=(p,col,txt)=>{g.fillStyle=col; g.fillRect(W-R+1,Y(p)-8,R-2,16); g.fillStyle=css("--panel"); g.font="600 10px "+css("--f-mono"); g.fillText(txt,W-R+4,Y(p)+3.5);};
+  if(!full) return;
   g.strokeStyle=css("--mut"); g.setLineDash([2,3]); g.beginPath(); g.moveTo(x0,Y(t.entry)); g.lineTo(x1,Y(t.entry)); g.stroke(); g.setLineDash([]);
   tag(t.sl,dn,"SL "+fmt(t.sl,2)); if(t.tp!=null) tag(t.tp,up,"TP "+fmt(t.tp,2)); tag(t.entry,css("--ink"),"E "+fmt(t.entry,2));
 }
