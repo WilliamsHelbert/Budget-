@@ -36,10 +36,10 @@ TILBAGE4 = False        # 4-step ugyldigt, hvis en 5m candle efter step 2 lukker
 ENTRY_SIDE = False      # entry skal ligge paa rigtig side af liq-niveauet (long over, short under); "reset" dræber setuppet
 BLOKERET = "reset"      # entry mens man er i et andet trade: "reset" = setuppet er brugt, "vent" = vent paa ny pullback + BOS
 TRE_STEP = "liq"        # 3-step step 1: "liq" = 5m close gennem session-liq, "bos5" = 5m BOS af seneste 5m swing / 5m iFVG (ingen liq)
-KUN_SESSION_SWEEP = True  # step 1 (4-step sweep og 3-step 5m BOS) kun paa Asia/London/NY PRE high/low, ikke NY PRE- eller open-swings
+KUN_SESSION_SWEEP = False # step 1 (4-step sweep og 3-step 5m BOS) kun paa Asia/London/NY PRE high/low, ikke NY PRE- eller open-swings
 SESSION_NAVNE = {"Asia high", "Asia low", "London high", "London low", "NY PRE high", "NY PRE low"}
 MAX_MIN = 0             # >0: setup ugyldigt hvis entry kommer mere end MAX_MIN minutter efter step 1       # 3-step er ugyldigt, hvis et 4-step i modsat retning allerede har klaret step 2
-EFTER_OPEN = "open5m"   # liq efter 09:30: "open5m" = kun 5m swing high/low i market open-candlen (09:30),
+EFTER_OPEN = "ingen"     # liq efter 09:30: "open5m" = kun 5m swing high/low i market open-candlen (09:30),
                         # "15m" = alle 5m swings til 12:00, der ogsaa er 15m swings, "ingen"
 RAEKKE = "frisk"        # "streng": FVG/swing i step 3 dannes efter step 2, swing i step 4 efter step 3
                         # "frisk": FVG/swing maa vaere fra efter sweepet, men maa ikke vaere lukket igennem foer
@@ -529,7 +529,7 @@ def main():
     ap.add_argument("fra"); ap.add_argument("til")
     ap.add_argument("--ud", default="/mnt/project-files/backtest/tjr/jan-mar2026")
     ap.add_argument("--uden-dagsregel", action="store_true", help="ingen maks 2 trades / stop efter win")
-    ap.add_argument("--efter-open", default="open5m", choices=["open5m", "15m", "ingen"])
+    ap.add_argument("--efter-open", default="ingen", choices=["open5m", "15m", "ingen"])
     ap.add_argument("--raekke", default="frisk", choices=["streng", "frisk"])
     ap.add_argument("--h4-kun-dag", action="store_true", help="kun dagens 4h-candles som TP")
     a = ap.parse_args()
