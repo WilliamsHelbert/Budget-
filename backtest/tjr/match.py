@@ -5,7 +5,15 @@ import pandas as pd
 
 J = "/mnt/project-files/backtest/tjr/journal/william_journal_jan-mar2026.json"
 def load_j():
-    w = pd.DataFrame(json.load(open(J)))
+    raw = json.load(open(J))
+    # motor-trades William har godkendt som gyldige: tael dem som om de stod i journalen
+    try:
+        for x in json.load(open(os.path.join(os.path.dirname(J), "fjernet.json"))).get("tilfoej", []):
+            y, mo, da = x["dato"].split("-")
+            raw.append(dict(date=f"{da}-{mo}-{y}", entry=x["dk"], exit="", type="TJR", dir=x["retning"].capitalize(), r=x["r"], tilfoejet=True))
+    except FileNotFoundError:
+        pass
+    w = pd.DataFrame(raw)
     w["ts"] = pd.to_datetime(w.date + " " + w.entry, format="%d-%m-%Y %H:%M").dt.tz_localize("Europe/Copenhagen").dt.tz_convert("America/New_York")
     w["dato"] = w.ts.dt.strftime("%Y-%m-%d"); w["ny"] = w.ts.dt.strftime("%H:%M"); w["retning"] = w.dir.str.lower()
     # trades William har slettet fra journalen (dato, dansk entry-tid, retning)
