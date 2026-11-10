@@ -74,6 +74,42 @@ rep('${t.model==="William" ? "Motor samme dag: "+t.motor_dag : `${t.liq} · ${t.
 rep('function kpis(){', f'''function kpis(){{
   $("#kpis").innerHTML=[["Enige",{n_enige},"w"],["Kun motor",{n_m},"l"],["Kun William",{n_w},""]].map(([n,v,c])=>`<div class="kpi"><span>${{n}}</span><b class="${{c}}">${{v}}</b></div>`).join("");
   return;''')
+# noter + flueben pr. trade, gemt i artifactens db (collection "noter"), saa Claude kan laese dem
+rep('<div class="vurd" id="vurd"></div>', '''<div class="vurd" id="vurd"></div>
+      <div class="noter" id="noter" hidden>
+        <label class="tjk"><input type="checkbox" id="ntjk"> Tjekket</label>
+        <label class="nlbl" for="ntxt">Din note: hvorfor tog du den ikke / hvad er forkert?</label>
+        <textarea id="ntxt" rows="3" placeholder="Skriv her, det gemmes automatisk"></textarea>
+        <span class="nstat" id="nstat" aria-live="polite"></span>
+      </div>''')
+rep('.vurd:empty{display:none}', '''.vurd:empty{display:none}
+.noter{margin-top:12px;display:grid;gap:6px}
+.noter textarea{width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);resize:vertical}
+.tjk{font-size:13px;font-weight:600;display:flex;gap:6px;align-items:center}
+.nlbl{font-size:12px;color:var(--mut)}
+.nstat{font-size:11px;color:var(--mut);min-height:14px}
+.nmk{margin-left:6px;font-size:11px;font-weight:600;color:var(--up)}''')
+rep('document.fonts && document.fonts.ready.then(()=>{kpis();show();});\n</script>', '''document.fonts && document.fonts.ready.then(()=>{kpis();show();});
+// ---- noter (db) ----
+const NOT={}; let NDB=null, ntimer=null, nkey=null;
+const nk=t=>`${t.dato}_${t.retning}_${Math.round(t.t_entry)}_${t.model==="William"?"w":"m"}`;
+function nfill(){ const t=rows()[st.sel]; if(!NDB||!t){ $("#noter").hidden=true; return; } $("#noter").hidden=false;
+  const k=nk(t), n=NOT[k]||{}; if(k!==nkey || document.activeElement!==$("#ntxt")) $("#ntxt").value=n.tekst||""; $("#ntjk").checked=!!n.tjekket; nkey=k; }
+function nmarks(){ const rs=rows(); document.querySelectorAll(".row[data-i]").forEach(r=>{ const t=rs[+r.dataset.i]; if(!t) return; const n=NOT[nk(t)]||{};
+  let m=r.querySelector(".nmk"); if(!m){ m=document.createElement("span"); m.className="nmk"; r.querySelector(".d").appendChild(m);} m.textContent=(n.tjekket?"✓":"")+(n.tekst?" ✎":""); }); }
+const _show=show; show=function(){ _show(); nfill(); };
+const _list=list; list=function(){ _list(); nmarks(); };
+async function nsave(){ const t=rows()[st.sel]; if(!NDB||!t) return; const k=nk(t);
+  const d={tekst:$("#ntxt").value, tjekket:$("#ntjk").checked, dato:t.dato, retning:t.retning, tid_dk:t.entry_tid, model:t.model, opdateret:new Date().toISOString()};
+  NOT[k]=d; nmarks(); $("#nstat").textContent="Gemmer…";
+  try{ await NDB.collection("noter").doc(k).set(d); $("#nstat").textContent="Gemt"; }catch(e){ $("#nstat").textContent="Kunne ikke gemme ("+(e&&e.code||"fejl")+")"; } }
+$("#ntxt").addEventListener("input",()=>{ clearTimeout(ntimer); ntimer=setTimeout(nsave,700); $("#nstat").textContent=""; });
+$("#ntxt").addEventListener("blur",()=>{ if(ntimer){ clearTimeout(ntimer); ntimer=null; nsave(); } });
+$("#ntjk").addEventListener("change",nsave);
+(async()=>{ try{ NDB=window.claude&&await claude.use("db"); }catch(e){ NDB=null; } if(!NDB) return;
+  NDB.collection("noter").onSnapshot(snap=>{ snap.docs.forEach(d=>{ NOT[d.id]=d.data(); }); nmarks(); nfill(); }, ()=>{});
+  nfill(); })();
+</script>''')
 s = s.replace('__DATA__', json.dumps(d, separators=(",", ":")))
 open(ud, "w").write(s)
 print(len(d["trades"]), sum(t["journal"] == "kun_motor" for t in d["trades"]), sum(t["journal"] == "kun_william" for t in d["trades"]))
