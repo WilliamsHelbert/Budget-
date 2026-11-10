@@ -1,3 +1,4 @@
+import os
 """Matcher Williams journal (dansk tid) mod motorens trades (NY-tid)."""
 import json, sys
 import pandas as pd
@@ -7,6 +8,13 @@ def load_j():
     w = pd.DataFrame(json.load(open(J)))
     w["ts"] = pd.to_datetime(w.date + " " + w.entry, format="%d-%m-%Y %H:%M").dt.tz_localize("Europe/Copenhagen").dt.tz_convert("America/New_York")
     w["dato"] = w.ts.dt.strftime("%Y-%m-%d"); w["ny"] = w.ts.dt.strftime("%H:%M"); w["retning"] = w.dir.str.lower()
+    # trades William har slettet fra journalen (dato, dansk entry-tid, retning)
+    try:
+        ud = json.load(open(os.path.join(os.path.dirname(J), "fjernet.json")))["trades"]
+    except FileNotFoundError:
+        ud = []
+    fj = {(x["dato"], x["dk"], x["retning"]) for x in ud}
+    w = w[[(d, e, r) not in fj for d, e, r in zip(w.dato, w.entry, w.retning)]].reset_index(drop=True)
     return w
 
 def match(m, w, tol=10):

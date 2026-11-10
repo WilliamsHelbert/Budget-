@@ -38,6 +38,7 @@ BLOKERET = "reset"      # entry mens man er i et andet trade: "reset" = setuppet
 TRE_STEP = "liq"        # 3-step step 1: "liq" = 5m close gennem session-liq, "bos5" = 5m BOS af seneste 5m swing / 5m iFVG (ingen liq)
 KUN_SESSION_SWEEP = False # step 1 (4-step sweep og 3-step 5m BOS) kun paa Asia/London/NY PRE high/low, ikke NY PRE- eller open-swings
 SESSION_NAVNE = {"Asia high", "Asia low", "London high", "London low", "NY PRE high", "NY PRE low"}
+NYESTE_SWING = True     # et swing, som den aktuelle candle bekraefter, er det seneste swing (William 13/1 17:12: BOS skal vaere paa 17:10-swinget)
 MAX_MIN = 0             # >0: setup ugyldigt hvis entry kommer mere end MAX_MIN minutter efter step 1       # 3-step er ugyldigt, hvis et 4-step i modsat retning allerede har klaret step 2
 EFTER_OPEN = "ingen"     # liq efter 09:30: "open5m" = kun 5m swing high/low i market open-candlen (09:30),
                         # "15m" = alle 5m swings til 12:00, der ogsaa er 15m swings, "ingen"
@@ -380,7 +381,7 @@ def run_day(day, d, rule="A"):
                         inv = (ft, lo, hi); break
                 kk = "L" if long else "H"
                 fra2 = s.t2 if RAEKKE == "streng" else st
-                piv = [q for q in sw1 if q[3] == kk and q[1] <= t and q[0] >= fra2]
+                piv = [q for q in sw1 if q[3] == kk and q[1] <= (close_t if NYESTE_SWING else t) and q[0] >= fra2]
                 if RAEKKE == "frisk":
                     piv = [q for q in piv if not lukket(b1, q[1], t, q[2], not long)]
                 bos = None
@@ -399,7 +400,7 @@ def run_day(day, d, rule="A"):
             if s.step == 3:
                 kk = "H" if long else "L"
                 fra3 = s.t3 - pd.Timedelta(minutes=1) if RAEKKE == "streng" else st
-                piv = [q for q in sw1 if q[3] == kk and q[1] <= t and q[0] >= fra3]
+                piv = [q for q in sw1 if q[3] == kk and q[1] <= (close_t if NYESTE_SWING else t) and q[0] >= fra3]
                 if RAEKKE == "frisk":
                     piv = [q for q in piv if not lukket(b1, q[1], t, q[2], long)]
                 if not piv:
