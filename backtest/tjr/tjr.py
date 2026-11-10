@@ -219,8 +219,16 @@ def run_day(day, d, rule="A"):
     liq = [L for L in liq if (L["klar"] <= e0 and untaken(L["pris"], L["kind"], L["klar"], e0, x)) or
            (L["klar"] > e0 and untaken(L["pris"], L["kind"], L["dannet"] + pd.Timedelta(minutes=5), L["klar"], x))]
     # liq lavet i 5m-candlen lige op ad market open (09:25-09:30) taeller ikke
+    # ... medmindre market open 5m-candlen (09:30-09:35) ikke tager den: saa er den gyldig fra 09:35 (William 10/11, 21/1)
     if SKIP_0925:
-        liq = [L for L in liq if not (e0 - pd.Timedelta(minutes=5) <= L["dannet"] < e0)]
+        e5 = e0 + pd.Timedelta(minutes=5); ny = []
+        for L in liq:
+            if e0 - pd.Timedelta(minutes=5) <= L["dannet"] < e0:
+                if not untaken(L["pris"], L["kind"], e0, e5, x):
+                    continue
+                L = dict(L, klar=max(L["klar"], e5))
+            ny.append(L)
+        liq = ny
     taken = set()          # wick igennem (4-step sweep)
     closed = set()         # 5m close igennem (3-step BOS)
     S = [Setup(True, 4), Setup(False, 4), Setup(True, 3), Setup(False, 3)]
