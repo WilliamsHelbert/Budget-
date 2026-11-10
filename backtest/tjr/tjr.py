@@ -36,6 +36,8 @@ TILBAGE4 = False        # 4-step ugyldigt, hvis en 5m candle efter step 2 lukker
 ENTRY_SIDE = False      # entry skal ligge paa rigtig side af liq-niveauet (long over, short under); "reset" dræber setuppet
 BLOKERET = "reset"      # entry mens man er i et andet trade: "reset" = setuppet er brugt, "vent" = vent paa ny pullback + BOS
 TRE_STEP = "liq"        # 3-step step 1: "liq" = 5m close gennem session-liq, "bos5" = 5m BOS af seneste 5m swing / 5m iFVG (ingen liq)
+KUN_SESSION_SWEEP = True  # 4-step: kun sweep af Asia/London/NY PRE high/low (ikke NY PRE- eller open-swings). 3-step 5m BOS uaendret
+SESSION_NAVNE = {"Asia high", "Asia low", "London high", "London low", "NY PRE high", "NY PRE low"}
 MAX_MIN = 0             # >0: setup ugyldigt hvis entry kommer mere end MAX_MIN minutter efter step 1       # 3-step er ugyldigt, hvis et 4-step i modsat retning allerede har klaret step 2
 EFTER_OPEN = "open5m"   # liq efter 09:30: "open5m" = kun 5m swing high/low i market open-candlen (09:30),
                         # "15m" = alle 5m swings til 12:00, der ogsaa er 15m swings, "ingen"
@@ -265,7 +267,8 @@ def run_day(day, d, rule="A"):
             long = s.long
             if s.step == 0:
                 if s.model == 4:
-                    sweeps = [L for L in nyt if L["kind"] == ("L" if long else "H")]
+                    sweeps = [L for L in nyt if L["kind"] == ("L" if long else "H")
+                              and (not KUN_SESSION_SWEEP or L["navn"] in SESSION_NAVNE)]
                     if sweeps:
                         L = sweeps[0]
                         s.step = 1; s.anchor = t; s.t1 = t
