@@ -26,6 +26,7 @@ import pandas as pd
 NY = "America/New_York"
 DATA = "/mnt/project-files/data/NQ_samlet_15s.parquet"
 MIN_RR = 0.9
+FAST_RR = 0     # >0: fast TP på x R i stedet for liq-TP (test)
 SKIP_0925 = True        # liq lavet i 5m-candlen 09:25-09:30 taeller ikke
 GENTAG_EFTER_SL = False # efter SL: samme setup venter paa ny pullback + BOS (i stedet for at starte forfra)
 MOD_4STEP = False
@@ -454,6 +455,8 @@ def run_day(day, d, rule="A"):
                     tp = swing15(close_t, entry, long, risk, d)
                 if tp is None:                        # stadig intet (fx ATH): fast 3R
                     tp = (3 * risk, entry + 3 * risk if long else entry - 3 * risk, "3R (intet liq)")
+                if FAST_RR:
+                    tp = (FAST_RR * risk, entry + FAST_RR * risk if long else entry - FAST_RR * risk, f"fast {FAST_RR}R")
                 rr = tp[0] / risk
                 r.update(tp=tp[1], tp_navn=tp[2], rr=round(rr, 2))
                 r["_ts"] = close_t
@@ -540,9 +543,11 @@ def main():
     ap.add_argument("--uden-dagsregel", action="store_true", help="ingen maks 2 trades / stop efter win")
     ap.add_argument("--efter-open", default="ingen", choices=["open5m", "15m", "ingen"])
     ap.add_argument("--raekke", default="frisk", choices=["streng", "frisk"])
+    ap.add_argument("--fast-rr", type=float, default=0, help="test: fast TP i R")
     ap.add_argument("--h4-kun-dag", action="store_true", help="kun dagens 4h-candles som TP")
     a = ap.parse_args()
-    global MAX_TRADES, STOP_EFTER_WIN, H4_KUN_DAG, RAEKKE, EFTER_OPEN
+    global MAX_TRADES, STOP_EFTER_WIN, H4_KUN_DAG, RAEKKE, EFTER_OPEN, FAST_RR
+    FAST_RR = a.fast_rr
     H4_KUN_DAG = a.h4_kun_dag
     RAEKKE = a.raekke
     EFTER_OPEN = a.efter_open

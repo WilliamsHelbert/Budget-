@@ -36,6 +36,19 @@ mR = m.R.sum(); wR = w.r.sum(); ne = len(par)
 eM = sum(m.loc[j, 'R'] for _, j, _ in par); eW = sum(w.loc[i, 'r'] for i, _, _ in par)
 kM = m[~m.index.isin(used)].R.sum(); kW = w[~w.index.isin(pw)].r.sum()
 ntil = int(w.tilfoejet.sum())
+import os
+def stats(z):
+    z = z[z.status != 'skip']; c = z.R.cumsum()
+    return len(z), (z.R > 0).mean() * 100, z.R.sum(), (c.cummax().clip(lower=0) - c).max(), (z.status == 'TP').sum(), (z.status == 'SL').sum()
+F3 = f'/mnt/project-files/backtest/tjr/test_fast3r_{mdr}/trades.pkl'
+test = ''
+if os.path.exists(F3):
+    t3 = pd.read_pickle(F3); t3 = t3[t3.dato.str[:7] == mdr]
+    a, b = stats(m), stats(t3)
+    rk = lambda nv, x: f'<tr><td>{nv}</td><td class="n">{x[0]}</td><td class="n">{x[1]:.0f}%</td><td class="n">{x[4]} / {x[5]}</td><td class="n {cls(x[2])}">{f(x[2])}R</td><td class="n">−{x[3]:.2f}R</td></tr>'
+    test = f'''<div class="forkl"><h2>Test: fast 3R i stedet for liq-TP</h2><table class="mini"><tr><td></td><td class="n m">Trades</td><td class="n m">Win%</td><td class="n m">TP / SL</td><td class="n m">Sum R</td><td class="n m">Maks DD</td></tr>
+{rk("Nuværende regel (TP på liq, min 0,9R)", a)}{rk("Fast 3R", b)}</table>
+<p class="m" style="margin:8px 0 0">Samme entries og SL, kun TP er ændret. Motoren er kørt helt forfra, så dagsreglen (stop efter win, maks 2) følger de nye resultater. Kun motorens trades, ikke dine. Trades der hverken rammer TP eller SL lukkes kl. 16:59 New York-tid.</p></div>'''
 navn = {"01": "Januar", "02": "Februar", "03": "Marts"}[mdr[5:]]
 H = f'''<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TJR {navn} Sammenligning</title><style>
@@ -61,6 +74,6 @@ td.why{{white-space:normal;color:var(--mut);font-size:12px;min-width:180px}}
 <tr><td>{len(m)-ne} trades kun motoren tager</td><td class="n {cls(-kM)}">{f(-kM) or '0,00'}R</td><td class="m">motorens {f(kM) or '0,00'}R, som du ikke har</td></tr>
 <tr><td>{len(w)-ne} trades kun du tager</td><td class="n {cls(kW)}">{f(kW) or '0,00'}R</td><td class="m">dit R på trades motoren ikke tager</td></tr>
 <tr class="tot"><td>I alt: dig {f(wR)} − motor {f(mR)}</td><td class="n {cls(wR-mR)}">{f(wR-mR)}R</td><td></td></tr></table></div>
-<div class="wrap"><table><thead><tr><th>Dag</th><th>Motor</th><th>Dig</th><th>Retning</th><th>Model</th><th style="text-align:right">Motor R</th><th style="text-align:right">Dit R</th><th></th><th>Hvorfor</th></tr></thead><tbody>{''.join(tr)}</tbody></table></div></main></body></html>'''
+{test}<div class="wrap"><table><thead><tr><th>Dag</th><th>Motor</th><th>Dig</th><th>Retning</th><th>Model</th><th style="text-align:right">Motor R</th><th style="text-align:right">Dit R</th><th></th><th>Hvorfor</th></tr></thead><tbody>{''.join(tr)}</tbody></table></div></main></body></html>'''
 open(ud, 'w').write(H)
 print(navn, "enige", ne, "kun motor", len(m) - ne, "kun dig", len(w) - ne, "motor", round(mR, 2), "dig", round(wR, 2))
