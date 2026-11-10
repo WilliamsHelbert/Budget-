@@ -13,6 +13,13 @@ def load_j():
         ud = json.load(open(os.path.join(os.path.dirname(J), "fjernet.json")))["trades"]
     except FileNotFoundError:
         ud = []
+    try:
+        rr = json.load(open(os.path.join(os.path.dirname(J), "fjernet.json"))).get("ret_retning", [])
+    except FileNotFoundError:
+        rr = []
+    for x in rr:
+        m = (w.dato == x["dato"]) & (w.entry == x["dk"]) & (w.retning == x["fra"])
+        w.loc[m, "retning"] = x["til"]
     fj = {(x["dato"], x["dk"], x["retning"]) for x in ud}
     w = w[[(d, e, r) not in fj for d, e, r in zip(w.dato, w.entry, w.retning)]].reset_index(drop=True)
     return w
