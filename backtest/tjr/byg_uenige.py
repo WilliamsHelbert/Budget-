@@ -110,6 +110,8 @@ $("#ntjk").addEventListener("change",nsave);
   NDB.collection("noter").onSnapshot(snap=>{ snap.docs.forEach(d=>{ NOT[d.id]=d.data(); }); nmarks(); nfill(); }, ()=>{});
   nfill(); })();
 </script>''')
+if len(sys.argv) > 4:     # valgfrit: gem de filtrerede trades (til json_uenige.py)
+    json.dump([{k: v for k, v in t.items() if k not in ("lv", "bars")} for t in d["trades"]], open(sys.argv[4], "w"), ensure_ascii=False, default=str)
 s = s.replace('__DATA__', json.dumps(d, separators=(",", ":")))
 open(ud, "w").write(s)
 print(len(d["trades"]), sum(t["journal"] == "kun_motor" for t in d["trades"]), sum(t["journal"] == "kun_william" for t in d["trades"]))
