@@ -1,7 +1,9 @@
 """Alle trades motor og William er enige om (motoren uden dagsregel) som JSON-pakke i Trade-indbakkens format.
 Brug: json_enige.py ud.json"""
 import json, sys, datetime as dt
-import match
+import match, os
+from charts import navn, step_felter
+SNAP = os.environ.get("SNAP_URL", "")
 ud = sys.argv[1]
 d = json.load(open("/mnt/project-files/backtest/tjr/jan-mar2026_alle/artifact_data.json"))
 W = match.load_j()
@@ -16,6 +18,10 @@ for t in sorted((t for t in d["trades"] if t["journal"] == "enig"), key=lambda t
                    custom={"Din entry": t["w_tid"], "Din exit": (getattr(w, "exit", "") or "") if w is not None else "",
                            "Dit R": t.get("w_R"), "Tilføjet af dig": bool(w is not None and getattr(w, "tilfoejet", False) is True),
                            "Taget?": "", "Hvorfor / hvorfor ikke": ""}))
+for t, x in zip(sorted((t for t in d["trades"] if t["journal"] == "enig"), key=lambda t: (t["dato"], t["entry_tid"])), tr):
+    x["snapshot"] = f"{SNAP}#{navn(t)}" if SNAP else ""
+    tg, hv = x["custom"].pop("Taget?"), x["custom"].pop("Hvorfor / hvorfor ikke")
+    x["custom"].update(step_felter(t)); x["custom"].update({"Taget?": tg, "Hvorfor / hvorfor ikke": hv})
 mR = sum(x["r"] for x in tr); wR = sum(x["custom"]["Dit R"] or 0 for x in tr)
 pk = dict(name="TJR · enige trades jan–mar 2026", model="TJR model", source="NQ 15s-data", precision="præcis",
           thread="TJR Trading Model", createdAt=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

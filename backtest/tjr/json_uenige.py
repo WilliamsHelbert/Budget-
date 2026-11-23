@@ -1,7 +1,9 @@
 """Uenige trades (samme filter som uenige-artifacten) som JSON-pakke i Trade-indbakkens format.
 Brug: json_uenige.py ud.json"""
 import json, sys, subprocess, tempfile, datetime as dt
-import match
+import match, os
+from charts import navn, step_felter
+SNAP = os.environ.get("SNAP_URL", "")
 ud = sys.argv[1]
 tmp = tempfile.mkdtemp()
 subprocess.run([sys.executable, "byg_uenige.py", "artifact_skabelon.html",
@@ -16,12 +18,15 @@ for t in sorted(T, key=lambda t: (t["dato"], t["entry_tid"])):
     if t["model"] == "William":
         ud_tr.append(dict(date=dato, entry=t["entry_tid"], exit=wexit.get((t["dato"], t["entry_tid"], t["retning"]), "") or "",
                           dir=t["retning"].capitalize(), type="TJR (din journal)", r=t["R"],
-                          note=t["vurdering"], custom={"uenig": "Kun dig", "motor_samme_dag": t.get("motor_dag", "")}))
+                          note=t["vurdering"], custom={"uenig": "Kun dig"}))
     else:
         ud_tr.append(dict(date=dato, entry=t["entry_tid"], exit=(t.get("exit") or "")[:5], dir=t["retning"].capitalize(),
                           type=f"TJR motor {t['model']}", r=t["R"],
-                          note=t["vurdering"], custom={"uenig": "Kun motor", "liq": t["liq"],
+                          note=t["vurdering"], custom={"uenig": "Kun motor",
                                                       "efter_dagsregel": bool(t.get("efter_regel"))}))
+for t, x in zip(sorted(T, key=lambda t: (t["dato"], t["entry_tid"])), ud_tr):
+    x["snapshot"] = f"{SNAP}#{navn(t)}" if SNAP else ""
+    x["custom"].update(step_felter(t))
 for x in ud_tr:            # tomme felter William selv udfylder (fast regel)
     x["custom"].update({"Taget?": "", "Hvorfor / hvorfor ikke": ""})
 nm = sum(x["custom"]["uenig"] == "Kun motor" for x in ud_tr)
