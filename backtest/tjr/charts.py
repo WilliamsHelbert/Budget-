@@ -3,7 +3,7 @@ import json, sys, os
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-UD = sys.argv[1]; os.makedirs(UD, exist_ok=True)
+
 d = json.load(open("/mnt/project-files/backtest/tjr/jan-mar2026_alle/artifact_data.json"))
 UP, DN, ACC = "#1f9d63", "#d64535", "#2f5bd3"
 
@@ -74,6 +74,7 @@ def tegn(t, fil):
     fig.tight_layout(); fig.savefig(fil); plt.close(fig); return True
 
 if __name__ == "__main__":
+    UD = sys.argv[1]; os.makedirs(UD, exist_ok=True)
     n = 0
     for t in d["trades"]:
         if t["journal"] in ("enig", "kun_motor", "kun_william") and t["dato"] in d["bars"]:
