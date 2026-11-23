@@ -15,12 +15,12 @@ for t in sorted(T, key=lambda t: (t["dato"], t["entry_tid"])):
     y, mth, dd = t["dato"].split("-"); dato = f"{dd}-{mth}-{y}"
     if t["model"] == "William":
         ud_tr.append(dict(date=dato, entry=t["entry_tid"], exit=wexit.get((t["dato"], t["entry_tid"], t["retning"]), "") or "",
-                          dir=t["retning"].capitalize(), type="TJR (din journal)", r=t["R"], match=True,
+                          dir=t["retning"].capitalize(), type="TJR (din journal)", r=t["R"],
                           note=t["vurdering"], custom={"uenig": "Kun dig", "motor_samme_dag": t.get("motor_dag", "")}))
     else:
         ud_tr.append(dict(date=dato, entry=t["entry_tid"], exit=(t.get("exit") or "")[:5], dir=t["retning"].capitalize(),
-                          type=f"TJR motor {t['model']}", r=t["R"], price=t["entry"], sl=t["sl"], tp=t["tp"], match=False,
-                          note=t["vurdering"], custom={"uenig": "Kun motor", "liq": t["liq"], "tp_navn": t["tp_navn"],
+                          type=f"TJR motor {t['model']}", r=t["R"],
+                          note=t["vurdering"], custom={"uenig": "Kun motor", "liq": t["liq"],
                                                       "efter_dagsregel": bool(t.get("efter_regel"))}))
 for x in ud_tr:            # tomme felter William selv udfylder (fast regel)
     x["custom"].update({"Taget?": "", "Hvorfor / hvorfor ikke": ""})
