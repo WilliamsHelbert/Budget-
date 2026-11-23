@@ -22,6 +22,8 @@ for t in sorted(T, key=lambda t: (t["dato"], t["entry_tid"])):
                           type=f"TJR motor {t['model']}", r=t["R"], price=t["entry"], sl=t["sl"], tp=t["tp"], match=False,
                           note=t["vurdering"], custom={"uenig": "Kun motor", "liq": t["liq"], "tp_navn": t["tp_navn"],
                                                       "efter_dagsregel": bool(t.get("efter_regel"))}))
+for x in ud_tr:            # tomme felter William selv udfylder (fast regel)
+    x["custom"].update({"Taget?": "", "Hvorfor / hvorfor ikke": ""})
 nm = sum(x["custom"]["uenig"] == "Kun motor" for x in ud_tr)
 pk = dict(name="TJR · uenige trades feb–mar 2026", model="TJR model", source="NQ 15s-data", precision="præcis",
           thread="TJR Trading Model", createdAt=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
